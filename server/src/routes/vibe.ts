@@ -252,10 +252,9 @@ export const vibeRoutes = new Hono()
                     sse(controller, { type: "text", content: delta.content });
                   }
 
-                  // Thinking/reasoning (show as dimmed text)
+                  // Thinking/reasoning — accumulate silently, don't flood UI
                   if (delta.reasoning_content) {
                     reasoningContent += delta.reasoning_content;
-                    sse(controller, { type: "text", content: `[思考: ${delta.reasoning_content.slice(0, 50)}...]` });
                   }
 
                   // Tool calls in stream
