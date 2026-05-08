@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { useNavigate } from "react-router-dom";
 import { client } from "@/lib/edgespark";
 
 interface ProjectConfigBarProps {
@@ -10,6 +11,7 @@ interface ProjectConfigBarProps {
 export function ProjectConfigBar({ projectId, projectName, onNameChange }: ProjectConfigBarProps) {
   const [editing, setEditing] = useState(false);
   const [nameDraft, setNameDraft] = useState(projectName);
+  const navigate = useNavigate();
 
   const handleSave = async () => {
     if (!nameDraft.trim()) return;
@@ -25,6 +27,13 @@ export function ProjectConfigBar({ projectId, projectName, onNameChange }: Proje
   return (
     <div className="bg-white border-b border-neutral-200 px-6 py-4 flex items-center justify-between">
       <div className="flex items-center gap-4">
+        <button
+          onClick={() => navigate("/dashboard")}
+          className="text-neutral-400 hover:text-blue-600 transition-colors mr-2"
+          title="返回项目列表"
+        >
+          ← 返回
+        </button>
         <span className="text-neutral-400 text-lg">⚡</span>
         <div className="flex flex-col">
           <div className="flex items-center gap-2">
