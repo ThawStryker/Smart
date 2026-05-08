@@ -174,6 +174,9 @@ export const agentRoutes = new Hono()
       },
     });
 
+    // Consume stream to execute tool loop, return full text as JSON
+    const text = await result.text;
+
     ctx.runInBackground(
       (async () => {
         await db
@@ -183,5 +186,5 @@ export const agentRoutes = new Hono()
       })()
     );
 
-    return result.toTextStreamResponse();
+    return c.json({ content: text });
   });

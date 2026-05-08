@@ -4,10 +4,11 @@ interface ChatInputProps {
   value: string;
   onChange: (value: string) => void;
   onSubmit: () => void;
+  onGenerate: () => void;
   isLoading?: boolean;
 }
 
-export function ChatInput({ value, onChange, onSubmit, isLoading }: ChatInputProps) {
+export function ChatInput({ value, onChange, onSubmit, onGenerate, isLoading }: ChatInputProps) {
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
   const handleSend = () => {
@@ -54,7 +55,11 @@ export function ChatInput({ value, onChange, onSubmit, isLoading }: ChatInputPro
                 {label}
               </button>
             ))}
-            <button className="flex items-center gap-1.5 text-xs bg-blue-50 text-blue-600 px-3 py-1 rounded hover:bg-blue-100 transition-colors">
+            <button
+              onClick={onGenerate}
+              disabled={isLoading || !value.trim()}
+              className="flex items-center gap-1.5 text-xs bg-blue-50 text-blue-600 px-3 py-1 rounded hover:bg-blue-100 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+            >
               + 创建工具
             </button>
           </div>

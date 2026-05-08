@@ -3,7 +3,7 @@ import { db, secret, vars } from "edgespark";
 import { auth } from "edgespark/http";
 import { eq, and, asc } from "drizzle-orm";
 import { projects, conversations } from "@defs";
-import { streamText } from "ai";
+import { generateText } from "ai";
 import { createOpenAI } from "@ai-sdk/openai";
 
 export const chatRoutes = new Hono()
@@ -48,20 +48,19 @@ export const chatRoutes = new Hono()
       apiKey,
     });
 
-    const result = streamText({
+    const { text } = await generateText({
       model: deepseek("deepseek-chat"),
       system:
         "你是一个 AI 工具开发助手，帮助用户生成代码和构建工具。请用中文回复。分析用户需求，如果需要生成代码，请建议用户触发代码生成。",
       messages,
-      onFinish: async ({ text }) => {
-        await db.insert(conversations).values({
-          projectId,
-          userId,
-          role: "assistant",
-          content: text,
-        });
-      },
     });
 
-    return result.toTextStreamResponse();
+    await db.insert(conversations).values({
+      projectId,
+      userId,
+      role: "assistant",
+      content: text,
+    });
+
+    return c.json({ content: text });
   });

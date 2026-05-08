@@ -1,5 +1,7 @@
 import { useState } from "react";
 import { MonacoEditor } from "@/components/preview/MonacoEditor";
+import { useQuery } from "@tanstack/react-query";
+import { client } from "@/lib/edgespark";
 
 interface PreviewPanelProps {
   projectId: number;
@@ -11,18 +13,28 @@ const tabs = [
   { key: "source", label: "源码" },
 ];
 
-export function PreviewPanel({ projectId: _projectId }: PreviewPanelProps) {
+export function PreviewPanel({ projectId }: PreviewPanelProps) {
   const [activeTab, setActiveTab] = useState("code");
 
-  const sampleCode = `// AI 生成的代码将在这里展示
-// 触发 Claude Code Agent 开始生成代码
+  const { data: steps = [] } = useQuery({
+    queryKey: ["executionSteps", projectId],
+    queryFn: async () => {
+      const res = await client.api.fetch(`/api/projects/${projectId}/steps`);
+      if (!res.ok) return [];
+      return res.json();
+    },
+    refetchInterval: 5000,
+  });
 
-function hello() {
-  console.log("Hello from Smart AI Platform");
-}
+  // Extract generated code from terminal outputs
+  const codeFromSteps = steps
+    .filter((s: { terminalOutput?: string | null }) => s.terminalOutput)
+    .map((s: { type: string; title: string | null; terminalOutput: string | null }) =>
+      `// Step: ${s.title || s.type}\n${s.terminalOutput || ""}`
+    )
+    .join("\n\n");
 
-export default hello;
-`;
+  const displayCode = codeFromSteps || "// AI 生成的代码将在这里展示\n// 在输入框描述需求，点击 「+ 创建工具」按钮触发代码生成\n";
 
   return (
     <div className="h-full flex flex-col bg-white">
@@ -47,7 +59,7 @@ export default hello;
       </div>
       <div className="flex-1 overflow-hidden">
         {activeTab === "code" && (
-          <MonacoEditor code={sampleCode} language="typescript" />
+          <MonacoEditor code={displayCode} language="typescript" />
         )}
         {activeTab === "preview" && (
           <div className="flex items-center justify-center h-full text-neutral-400 text-sm">
