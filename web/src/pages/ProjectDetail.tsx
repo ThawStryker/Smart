@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { TopNav } from "@/components/layout/TopNav";
 import { WorkspaceLayout } from "@/components/layout/WorkspaceLayout";
+import { ProjectConfigBar } from "@/components/workspace/ProjectConfigBar";
 import { useAuth } from "@/hooks/useAuth";
 import { useNavigate, useParams } from "react-router-dom";
 import { client } from "@/lib/edgespark";
@@ -41,12 +42,14 @@ export function ProjectDetail() {
       <TopNav user={user} />
       <WorkspaceLayout
         left={
-          <div className="flex-1 flex flex-col">
-            <div className="bg-white border-b border-neutral-200 px-6 py-4">
-              <h1 className="font-medium">{project.name}</h1>
-            </div>
+          <div className="flex-1 flex flex-col overflow-hidden">
+            <ProjectConfigBar
+              projectId={project.id}
+              projectName={project.name}
+              onNameChange={(name) => setProject((prev) => prev ? { ...prev, name } : null)}
+            />
             <div className="flex-1 flex items-center justify-center text-neutral-400">
-              <p>工作区开发中...</p>
+              <p>执行日志面板开发中...</p>
             </div>
           </div>
         }
