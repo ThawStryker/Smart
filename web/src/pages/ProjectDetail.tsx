@@ -5,6 +5,7 @@ import { ProjectConfigBar } from "@/components/workspace/ProjectConfigBar";
 import { useAuth } from "@/hooks/useAuth";
 import { useNavigate, useParams } from "react-router-dom";
 import { client } from "@/lib/edgespark";
+import { ChatInput } from "@/components/chat/ChatInput";
 
 interface ProjectData {
   id: number;
@@ -48,9 +49,13 @@ export function ProjectDetail() {
               projectName={project.name}
               onNameChange={(name) => setProject((prev) => prev ? { ...prev, name } : null)}
             />
-            <div className="flex-1 flex items-center justify-center text-neutral-400">
-              <p>执行日志面板开发中...</p>
+            <div className="flex-1 overflow-y-auto p-6 bg-white">
+              <div className="text-sm text-neutral-600">
+                <p className="mb-4">欢迎使用 Smart AI 工具平台！</p>
+                <p className="text-neutral-400">在下方的输入框描述你想要的工具，AI 将为你生成代码。</p>
+              </div>
             </div>
+            <ChatInput />
           </div>
         }
         right={
