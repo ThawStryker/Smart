@@ -26,6 +26,18 @@ interface SSEEvent {
   files?: string[];
 }
 
+interface StoredFile {
+  path: string;
+  language: string;
+  content: string;
+}
+
+interface OverviewTool {
+  toolId: number;
+  toolName: string;
+  files: Array<{ path: string; size: number }>;
+}
+
 export function ProjectDetail() {
   const { user, loading: authLoading } = useAuth();
   const navigate = useNavigate();
@@ -35,27 +47,67 @@ export function ProjectDetail() {
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [input, setInput] = useState("");
   const [isStreaming, setIsStreaming] = useState(false);
-  const [generatedFiles, setGeneratedFiles] = useState<Array<{ path: string; language: string; content: string }>>([]);
+  const [generatedFiles, setGeneratedFiles] = useState<StoredFile[]>([]);
   const abortRef = useRef<AbortController | null>(null);
 
   const numProjectId = projectId ? parseInt(projectId, 10) : undefined;
 
+  // Load project data + restore history on mount
   useEffect(() => {
-    if (!projectId) return;
-    fetch(`/api/projects/${projectId}`, { credentials: "include" })
-      .then((res) => res.json())
-      .then((data) => {
-        setProject(data as ProjectData);
-        setPageLoading(false);
-      })
-      .catch(() => navigate("/404"));
-  }, [projectId, navigate]);
+    if (!numProjectId) return;
+
+    const loadAll = async () => {
+      try {
+        // Load project info
+        const projRes = await fetch(`/api/projects/${numProjectId}`, { credentials: "include" });
+        if (!projRes.ok) { navigate("/404"); return; }
+        setProject((await projRes.json()) as ProjectData);
+
+        // Load conversation history
+        const convRes = await fetch(`/api/projects/${numProjectId}/conversations`, { credentials: "include" });
+        if (convRes.ok) {
+          const convData = await convRes.json() as Array<{ role: string; content: string; id?: number }>;
+          setMessages(convData.map((c, i) => ({
+            id: `hist-${c.id || i}`,
+            role: c.role as ChatMessage["role"],
+            content: c.content,
+          })));
+        }
+
+        // Load generated files from overview
+        const overviewRes = await fetch(`/api/projects/${numProjectId}/overview`, { credentials: "include" });
+        if (overviewRes.ok) {
+          const overviewData = await overviewRes.json() as OverviewTool[];
+          const allFiles: StoredFile[] = [];
+          for (const tool of overviewData) {
+            for (const f of tool.files) {
+              // Load file content
+              try {
+                const fileRes = await fetch(
+                  `/api/projects/${numProjectId}/tools/${tool.toolId}/files/${encodeURIComponent(f.path)}`,
+                  { credentials: "include" }
+                );
+                if (fileRes.ok) {
+                  const fileData = await fileRes.json() as StoredFile;
+                  allFiles.push(fileData);
+                }
+              } catch { /* skip unreadable files */ }
+            }
+          }
+          setGeneratedFiles(allFiles);
+        }
+      } catch { /* keep defaults */ }
+      setPageLoading(false);
+    };
+
+    loadAll();
+  }, [numProjectId, navigate]);
 
   const handleSend = useCallback(async () => {
     if (!input.trim() || isStreaming || !numProjectId) return;
 
     const userMessage: ChatMessage = {
-      id: Date.now().toString(),
+      id: `u-${Date.now()}`,
       role: "user",
       content: input.trim(),
     };
@@ -63,7 +115,7 @@ export function ProjectDetail() {
     setInput("");
     setIsStreaming(true);
 
-    const assistantId = (Date.now() + 1).toString();
+    const assistantId = `a-${Date.now()}`;
     setMessages((prev) => [...prev, { id: assistantId, role: "assistant", content: "", isLoading: true }]);
 
     const controller = new AbortController();
@@ -101,7 +153,6 @@ export function ProjectDetail() {
           if (!line.startsWith("data: ")) continue;
           const dataStr = line.slice(6).trim();
           if (!dataStr) continue;
-
           try {
             const event: SSEEvent = JSON.parse(dataStr);
             switch (event.type) {
@@ -112,22 +163,23 @@ export function ProjectDetail() {
                 );
                 break;
               case "file":
-                setGeneratedFiles((prev) => [...prev, {
-                  path: event.path || "",
-                  language: event.language || "",
-                  content: event.content || "",
-                }]);
+                setGeneratedFiles((prev) => {
+                  // Replace if same path, otherwise add
+                  const existing = prev.findIndex((f) => f.path === event.path);
+                  const newFile = { path: event.path || "", language: event.language || "", content: event.content || "" };
+                  if (existing >= 0) {
+                    const copy = [...prev];
+                    copy[existing] = newFile;
+                    return copy;
+                  }
+                  return [...prev, newFile];
+                });
                 break;
               case "step":
-                // Insert step notification inline in chat
                 if (event.title) {
                   setMessages((prev) => [
                     ...prev,
-                    {
-                      id: `step-${Date.now()}-${Math.random()}`,
-                      role: "system",
-                      content: `${event.status === "running" ? "🔄" : "✅"} ${event.title}`,
-                    },
+                    { id: `step-${Date.now()}-${Math.random()}`, role: "system", content: `${event.status === "running" ? "🔄" : "✅"} ${event.title}` },
                   ]);
                 }
                 break;
@@ -142,9 +194,7 @@ export function ProjectDetail() {
                 );
                 break;
             }
-          } catch {
-            // skip invalid JSON
-          }
+          } catch { /* skip */ }
         }
       }
 

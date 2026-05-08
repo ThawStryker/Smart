@@ -19,6 +19,7 @@ import { Hono } from "hono";
 import { projectsRoutes } from "./routes/projects";
 import { vibeRoutes } from "./routes/vibe";
 import { stepsRoutes } from "./routes/steps";
+import { dataRoutes } from "./routes/data";
 
 const app = new Hono()
   .get("/api/public/hello", (c) =>
@@ -26,6 +27,7 @@ const app = new Hono()
   )
   .route("/api/projects", projectsRoutes)
   .route("/api/projects", vibeRoutes)
-  .route("/api/projects", stepsRoutes);
+  .route("/api/projects", stepsRoutes)
+  .route("/api/projects", dataRoutes);
 
 export default app;
