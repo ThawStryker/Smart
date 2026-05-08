@@ -61,6 +61,5 @@ temp/
 # EdgeSpark local state
 .edgespark/
 
-# Lock files (regenerated on npm install)
-server/package-lock.json
-web/package-lock.json
+# Lock files - committed for reproducible builds
+# server/package-lock.json and web/package-lock.json are intentionally committed
