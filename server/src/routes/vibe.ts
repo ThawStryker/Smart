@@ -210,7 +210,8 @@ export const vibeRoutes = new Hono()
 
             if (!response.ok) {
               const errText = await response.text();
-              sse(controller, { type: "error", content: `API error: ${response.status}` });
+              console.error("DeepSeek API error:", response.status, errText.slice(0, 300));
+              sse(controller, { type: "error", content: `API ${response.status}: ${errText.slice(0, 150)}` });
               break;
             }
 
@@ -219,11 +220,12 @@ export const vibeRoutes = new Hono()
             const decoder = new TextDecoder();
             let buffer = "";
             let assistantContent = "";
-            let toolCalls: Array<{
+            let reasoningContent = "";
+            const toolCalls: Array<{
               id: string;
               function: { name: string; arguments: string };
             }> = [];
-            let currentToolCall: { id: string; name: string; args: string } | null = null;
+            const toolCallMap = new Map<number, { id: string; name: string; args: string }>();
 
             while (true) {
               const { done, value } = await reader.read();
@@ -241,48 +243,48 @@ export const vibeRoutes = new Hono()
                 try {
                   const parsed = JSON.parse(data);
                   const delta = parsed.choices?.[0]?.delta;
+                  if (!delta) continue;
 
-                  if (delta?.content) {
+                  // Text content
+                  if (delta.content) {
                     assistantContent += delta.content;
                     fullResponse += delta.content;
                     sse(controller, { type: "text", content: delta.content });
                   }
 
-                  // Handle tool calls in stream
-                  if (delta?.tool_calls) {
+                  // Thinking/reasoning (show as dimmed text)
+                  if (delta.reasoning_content) {
+                    reasoningContent += delta.reasoning_content;
+                    sse(controller, { type: "text", content: `[思考: ${delta.reasoning_content.slice(0, 50)}...]` });
+                  }
+
+                  // Tool calls in stream
+                  if (delta.tool_calls) {
                     for (const tc of delta.tool_calls) {
-                      if (tc.id) {
-                        // New tool call starting
-                        const fn = tc.function || {};
-                        currentToolCall = {
-                          id: tc.id,
-                          name: fn.name || "",
-                          args: fn.arguments || "",
-                        };
-                        toolCalls.push({
-                          id: tc.id,
-                          function: {
-                            name: fn.name || "",
-                            arguments: fn.arguments || "",
-                          },
-                        });
-                        sse(controller, {
-                          type: "tool_start",
-                          toolCallId: tc.id,
-                          name: fn.name || "",
-                        });
-                      } else if (currentToolCall && tc.function?.arguments) {
-                        // Append arguments
-                        currentToolCall.args += tc.function.arguments;
-                        const idx = toolCalls.findIndex((t) => t.id === currentToolCall!.id);
-                        if (idx >= 0) {
-                          toolCalls[idx].function.arguments = currentToolCall.args;
+                      if (tc.index != null) {
+                        if (tc.id) {
+                          // Start of new tool call
+                          toolCallMap.set(tc.index, {
+                            id: tc.id,
+                            name: tc.function?.name || "",
+                            args: tc.function?.arguments || "",
+                          });
+                          sse(controller, { type: "tool_start", toolCallId: tc.id, name: tc.function?.name || "" });
+                        } else if (tc.function?.arguments) {
+                          // Continuation of arguments
+                          const existing = toolCallMap.get(tc.index);
+                          if (existing) existing.args += tc.function.arguments;
                         }
                       }
                     }
                   }
-                } catch { /* skip partial JSON */ }
+                } catch { /* skip partial chunks */ }
               }
+            }
+
+            // Collect tool calls from map
+            for (const [, tc] of toolCallMap) {
+              toolCalls.push({ id: tc.id, function: { name: tc.name, arguments: tc.args } });
             }
 
             // If no tool calls, agent is done
@@ -290,12 +292,18 @@ export const vibeRoutes = new Hono()
               break;
             }
 
-            // Build assistant message with tool calls
+            // Build assistant message — DeepSeek requires reasoning_content echo when tool calls present
             const assistantMsg: Record<string, unknown> = {
               role: "assistant",
-              content: assistantContent || null,
             };
+            if (assistantContent) {
+              assistantMsg.content = assistantContent;
+            }
+            if (reasoningContent) {
+              assistantMsg.reasoning_content = reasoningContent;
+            }
             if (toolCalls.length > 0) {
+              assistantMsg.content = assistantContent || "";
               assistantMsg.tool_calls = toolCalls.map((tc) => ({
                 id: tc.id,
                 type: "function",
@@ -313,6 +321,7 @@ export const vibeRoutes = new Hono()
               let args: Record<string, string> = {};
               try { args = JSON.parse(argsStr); } catch { /* invalid JSON */ }
 
+              sse(controller, { type: "tool_start", toolCallId: tc.id, name });
               sse(controller, {
                 type: "tool_exec",
                 toolCallId: tc.id,
