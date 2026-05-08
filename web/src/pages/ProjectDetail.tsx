@@ -32,12 +32,6 @@ interface StoredFile {
   content: string;
 }
 
-interface OverviewTool {
-  toolId: number;
-  toolName: string;
-  files: Array<{ path: string; language: string }>;
-}
-
 export function ProjectDetail() {
   const { user, loading: authLoading } = useAuth();
   const navigate = useNavigate();
@@ -72,26 +66,26 @@ export function ProjectDetail() {
             role: c.role as ChatMessage["role"],
             content: c.content,
           })));
-        }
 
-        // Load generated files from overview
-        const overviewRes = await fetch(`/api/projects/${numProjectId}/overview`, { credentials: "include" });
-        if (overviewRes.ok) {
-          const overviewData = await overviewRes.json() as OverviewTool[];
-          const allFiles: StoredFile[] = [];
-          for (const tool of overviewData) {
-            for (const f of tool.files) {
-              try {
-                const url = `/api/projects/${numProjectId}/tools/${tool.toolId}/files/${f.path}`;
-                const fileRes = await fetch(url, { credentials: "include" });
-                if (fileRes.ok) {
-                  const fileData = await fileRes.json() as StoredFile;
-                  allFiles.push(fileData);
-                }
-              } catch { /* skip unreadable files */ }
+          // Parse code blocks from assistant messages to restore files
+          const codeBlockRegex = /```(\w+)?:?(\S+)?\n([\s\S]*?)```/g;
+          const restoredFiles: StoredFile[] = [];
+          const seen = new Set<string>();
+          for (const c of convData) {
+            if (c.role !== "assistant") continue;
+            let match;
+            while ((match = codeBlockRegex.exec(c.content)) !== null) {
+              const path = match[2] || `code.${match[1] || "txt"}`;
+              if (seen.has(path)) continue;
+              seen.add(path);
+              restoredFiles.push({
+                path,
+                language: match[1] || "text",
+                content: match[3],
+              });
             }
           }
-          setGeneratedFiles(allFiles);
+          if (restoredFiles.length > 0) setGeneratedFiles(restoredFiles);
         }
       } catch { /* keep defaults */ }
       setPageLoading(false);
