@@ -8,8 +8,18 @@ import { ChatInput } from "@/components/chat/ChatInput";
 import { PreviewPanel } from "@/components/preview/PreviewPanel";
 import { useAuth } from "@/hooks/useAuth";
 import { useNavigate, useParams } from "react-router-dom";
-import { client } from "@/lib/edgespark";
 import { useQueryClient } from "@tanstack/react-query";
+
+async function apiFetch(path: string, options?: RequestInit) {
+  return fetch(path, {
+    ...options,
+    credentials: "include",
+    headers: {
+      "Content-Type": "application/json",
+      ...options?.headers,
+    },
+  });
+}
 
 interface ProjectData {
   id: number;
@@ -33,7 +43,7 @@ export function ProjectDetail() {
 
   useEffect(() => {
     if (!projectId) return;
-    client.api.fetch(`/api/projects/${projectId}`)
+    apiFetch(`/api/projects/${projectId}`)
       .then((res) => res.json())
       .then((data) => {
         setProject(data as ProjectData);
@@ -60,14 +70,15 @@ export function ProjectDetail() {
     setMessages((prev) => [...prev, { id: assistantId, role: "assistant", content: "", isLoading: true }]);
 
     try {
-      const res = await client.api.fetch(`/api/projects/${numProjectId}/chat`, {
+      const res = await apiFetch(`/api/projects/${numProjectId}/chat`, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ message: userMessage.content }),
       });
 
       if (!res.ok) {
-        setMessages((prev) => prev.map((m) => m.id === assistantId ? { ...m, content: "AI 请求失败", isLoading: false } : m));
+        const errText = await res.text();
+        setMessages((prev) => prev.map((m) => m.id === assistantId ? { ...m, content: `请求失败: ${res.status}`, isLoading: false } : m));
+        console.error("Chat error:", errText);
         setIsStreaming(false);
         return;
       }
@@ -76,8 +87,8 @@ export function ProjectDetail() {
       setMessages((prev) =>
         prev.map((m) => m.id === assistantId ? { ...m, content: data.content, isLoading: false } : m)
       );
-    } catch {
-      setMessages((prev) => prev.map((m) => m.id === assistantId ? { ...m, content: "请求失败，请重试", isLoading: false } : m));
+    } catch (err) {
+      setMessages((prev) => prev.map((m) => m.id === assistantId ? { ...m, content: `请求失败: ${String(err)}`, isLoading: false } : m));
     } finally {
       setIsStreaming(false);
     }
@@ -86,10 +97,11 @@ export function ProjectDetail() {
   const handleGenerate = useCallback(async () => {
     if (!input.trim() || isStreaming || !numProjectId) return;
 
+    const msg = input.trim();
     const userMessage: ChatMessage = {
       id: Date.now().toString(),
       role: "user",
-      content: input.trim(),
+      content: msg,
     };
     setMessages((prev) => [...prev, userMessage]);
     setIsStreaming(true);
@@ -98,28 +110,33 @@ export function ProjectDetail() {
     setMessages((prev) => [...prev, { id: assistantId, role: "assistant", content: "正在生成代码...", isLoading: true }]);
 
     try {
-      const res = await client.api.fetch(`/api/projects/${numProjectId}/generate`, {
+      const res = await apiFetch(`/api/projects/${numProjectId}/generate`, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ message: userMessage.content }),
+        body: JSON.stringify({ message: msg }),
       });
 
       if (!res.ok) {
-        setMessages((prev) => prev.map((m) => m.id === assistantId ? { ...m, content: "代码生成失败", isLoading: false } : m));
+        const errText = await res.text();
+        setMessages((prev) => prev.map((m) => m.id === assistantId ? { ...m, content: `生成失败: ${res.status}`, isLoading: false } : m));
+        console.error("Generate error:", errText);
         setIsStreaming(false);
         return;
       }
 
       const data = await res.json();
+      const fileList = data.files?.length
+        ? `已生成 ${data.files.length} 个文件:\n${data.files.map((f: string) => `  - ${f}`).join("\n")}`
+        : "代码已生成";
       setMessages((prev) =>
-        prev.map((m) => m.id === assistantId ? { ...m, content: data.content || "代码已生成，查看右侧面板", isLoading: false } : m)
+        prev.map((m) => m.id === assistantId ? { ...m, content: fileList, isLoading: false } : m)
       );
       setInput("");
 
-      // Refresh execution steps
+      // Refresh steps and files
       queryClient.invalidateQueries({ queryKey: ["executionSteps", numProjectId] });
-    } catch {
-      setMessages((prev) => prev.map((m) => m.id === assistantId ? { ...m, content: "代码生成失败，请重试", isLoading: false } : m));
+      queryClient.invalidateQueries({ queryKey: ["projectFiles", numProjectId] });
+    } catch (err) {
+      setMessages((prev) => prev.map((m) => m.id === assistantId ? { ...m, content: `生成失败: ${String(err)}`, isLoading: false } : m));
     } finally {
       setIsStreaming(false);
     }

@@ -49,7 +49,7 @@ export const chatRoutes = new Hono()
     });
 
     const { text } = await generateText({
-      model: deepseek("deepseek-chat"),
+      model: deepseek("deepseek-v4-pro"),
       system:
         "你是一个 AI 工具开发助手，帮助用户生成代码和构建工具。请用中文回复。分析用户需求，如果需要生成代码，请建议用户触发代码生成。",
       messages,

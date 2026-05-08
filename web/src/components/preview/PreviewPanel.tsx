@@ -1,7 +1,6 @@
 import { useState } from "react";
 import { MonacoEditor } from "@/components/preview/MonacoEditor";
 import { useQuery } from "@tanstack/react-query";
-import { client } from "@/lib/edgespark";
 
 interface PreviewPanelProps {
   projectId: number;
@@ -13,28 +12,32 @@ const tabs = [
   { key: "source", label: "源码" },
 ];
 
+interface ExecutionStep {
+  terminalOutput?: string | null;
+  type: string;
+  title: string | null;
+  status: string;
+}
+
 export function PreviewPanel({ projectId }: PreviewPanelProps) {
   const [activeTab, setActiveTab] = useState("code");
 
-  const { data: steps = [] } = useQuery({
-    queryKey: ["executionSteps", projectId],
+  const { data: steps = [] } = useQuery<ExecutionStep[]>({
+    queryKey: ["projectFiles", projectId],
     queryFn: async () => {
-      const res = await client.api.fetch(`/api/projects/${projectId}/steps`);
+      const res = await fetch(`/api/projects/${projectId}/steps`, { credentials: "include" });
       if (!res.ok) return [];
       return res.json();
     },
     refetchInterval: 5000,
   });
 
-  // Extract generated code from terminal outputs
-  const codeFromSteps = steps
-    .filter((s: { terminalOutput?: string | null }) => s.terminalOutput)
-    .map((s: { type: string; title: string | null; terminalOutput: string | null }) =>
-      `// Step: ${s.title || s.type}\n${s.terminalOutput || ""}`
-    )
-    .join("\n\n");
+  const completedSteps = steps.filter((s) => s.status === "completed" && s.terminalOutput);
+  const codeOutput = completedSteps.length > 0
+    ? completedSteps.map((s) => `// Step: ${s.title || s.type}\n${s.terminalOutput || ""}`).join("\n\n")
+    : null;
 
-  const displayCode = codeFromSteps || "// AI 生成的代码将在这里展示\n// 在输入框描述需求，点击 「+ 创建工具」按钮触发代码生成\n";
+  const displayCode = codeOutput || "// 在输入框描述需求\n// 点击「+ 创建工具」按钮触发代码生成\n// 生成的代码将在这里展示";
 
   return (
     <div className="h-full flex flex-col bg-white">
@@ -53,6 +56,9 @@ export function PreviewPanel({ projectId }: PreviewPanelProps) {
           </button>
         ))}
         <div className="flex-1" />
+        <span className="text-xs text-neutral-400">
+          {completedSteps.length > 0 ? `${completedSteps.length} 个步骤完成` : ""}
+        </span>
         <button className="bg-blue-600 text-white rounded px-3 py-1.5 text-sm hover:bg-blue-700 transition-colors">
           部署
         </button>

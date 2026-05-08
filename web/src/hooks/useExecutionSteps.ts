@@ -1,5 +1,4 @@
 import { useQuery } from "@tanstack/react-query";
-import { client } from "@/lib/edgespark";
 
 interface ExecutionStep {
   id: number;
@@ -20,7 +19,7 @@ export function useExecutionSteps(projectId: number | undefined) {
     queryKey: ["executionSteps", projectId],
     queryFn: async () => {
       if (!projectId) return [];
-      const res = await client.api.fetch(`/api/projects/${projectId}/steps`);
+      const res = await fetch(`/api/projects/${projectId}/steps`, { credentials: "include" });
       if (!res.ok) return [];
       return (await res.json()) as ExecutionStep[];
     },

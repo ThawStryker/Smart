@@ -3,11 +3,8 @@ import { db, storage, secret, vars, ctx } from "edgespark";
 import { auth } from "edgespark/http";
 import { eq, and } from "drizzle-orm";
 import { projects, tools, executionSteps, buckets } from "@defs";
-import { streamText, tool, jsonSchema, stepCountIs } from "ai";
+import { generateText } from "ai";
 import { createOpenAI } from "@ai-sdk/openai";
-
-// Claude Code architecture: tool-use agent loop adapted for Workers.
-// Uses DeepSeek (primary) or Seed-2.0-pro (optional) via OpenAI-compatible API.
 
 export const agentRoutes = new Hono()
   .post("/:projectId/generate", async (c) => {
@@ -20,10 +17,9 @@ export const agentRoutes = new Hono()
       .where(and(eq(projects.id, projectId), eq(projects.userId, userId)));
     if (!project) return c.json({ error: "Project not found" }, 404);
 
-    const body = await c.req.json<{ message: string; model?: "deepseek" | "seed" }>();
+    const body = await c.req.json<{ message: string; model?: string }>();
     if (!body.message?.trim()) return c.json({ error: "Message required" }, 400);
 
-    // Select model provider
     const modelChoice = body.model || "deepseek";
     let baseURL: string;
     let apiKey: string | null;
@@ -36,14 +32,14 @@ export const agentRoutes = new Hono()
     } else {
       baseURL = vars.get("DEEPSEEK_BASE_URL") || "https://api.deepseek.com";
       apiKey = secret.get("DEEPSEEK_API_KEY");
-      modelName = "deepseek-chat";
+      modelName = "deepseek-v4-pro";
     }
 
-    if (!apiKey) return c.json({ error: `${modelChoice === "seed" ? "Seed" : "DeepSeek"} API key not configured` }, 500);
+    if (!apiKey) return c.json({ error: "API key not configured" }, 500);
 
     const provider = createOpenAI({ baseURL, apiKey });
 
-    // Find or create tool for this project
+    // Find or create tool
     const [existingTool] = await db
       .select()
       .from(tools)
@@ -66,125 +62,97 @@ export const agentRoutes = new Hono()
       toolId = newTool!.id;
     }
 
-    const prefix = `${projectId}/${toolId}/`;
+    // Create initial step
+    const [step] = await db
+      .insert(executionSteps)
+      .values({
+        toolId,
+        stepOrder: 1,
+        type: "code_gen",
+        title: `生成: ${body.message.trim().slice(0, 50)}`,
+        status: "running",
+        startedAt: new Date().toISOString(),
+      })
+      .returning();
 
-    const result = streamText({
-      model: provider(modelName),
-      system:
-        "你是一个编程 Agent，架构参考 Claude Code。你拥有文件读写和执行步骤管理的能力。请自主规划任务、生成代码、记录步骤。始终用中文交流。",
-      messages: [{ role: "user", content: body.message.trim() }],
-      stopWhen: stepCountIs(10),
-      tools: {
-        writeFile: tool({
-          description: "写入代码文件到项目存储",
-          inputSchema: jsonSchema({
-            type: "object",
-            properties: {
-              path: { type: "string", description: "文件路径，如 src/index.html" },
-              content: { type: "string", description: "文件内容" },
-            },
-            required: ["path", "content"],
-          }),
-          execute: async ({ path, content }) => {
-            const encoder = new TextEncoder();
-            await storage.from(buckets.sourceBuckets).put(prefix + path, encoder.encode(content as string));
-            return `File written: ${path}`;
-          },
-        }),
-        readFile: tool({
-          description: "读取项目中的文件",
-          inputSchema: jsonSchema({
-            type: "object",
-            properties: {
-              path: { type: "string", description: "文件路径" },
-            },
-            required: ["path"],
-          }),
-          execute: async ({ path }) => {
-            const obj = await storage.from(buckets.sourceBuckets).get(prefix + (path as string));
-            if (!obj) return "File not found";
-            return new TextDecoder().decode(obj.body);
-          },
-        }),
-        listFiles: tool({
-          description: "列出项目中的所有文件",
-          inputSchema: jsonSchema({
-            type: "object",
-            properties: {},
-          }),
-          execute: async () => {
-            const result = await storage.from(buckets.sourceBuckets).list({ prefix });
-            return result.files.map((f) => f.path.replace(prefix, "")).join("\n") || "(empty)";
-          },
-        }),
-        createStep: tool({
-          description: "创建一个执行步骤记录",
-          inputSchema: jsonSchema({
-            type: "object",
-            properties: {
-              stepType: { type: "string", description: "步骤类型" },
-              title: { type: "string", description: "步骤标题" },
-              detail: { type: "string", description: "步骤详情" },
-            },
-            required: ["stepType", "title"],
-          }),
-          execute: async ({ stepType, title, detail }) => {
-            const existingSteps = await db
-              .select()
-              .from(executionSteps)
-              .where(eq(executionSteps.toolId, toolId));
-            const [step] = await db
-              .insert(executionSteps)
-              .values({
-                toolId,
-                stepOrder: existingSteps.length + 1,
-                type: stepType as string,
-                title: title as string,
-                detail: (detail as string) ?? null,
-                status: "running",
-                startedAt: new Date().toISOString(),
-              })
-              .returning();
-            return `Step #${step!.id} - ${title} created (running)`;
-          },
-        }),
-        updateStep: tool({
-          description: "更新执行步骤的状态和终端输出",
-          inputSchema: jsonSchema({
-            type: "object",
-            properties: {
-              stepId: { type: "number", description: "步骤 ID" },
-              status: { type: "string", description: "新状态: running, completed, failed" },
-              terminalOutput: { type: "string", description: "终端输出内容" },
-            },
-            required: ["stepId", "status"],
-          }),
-          execute: async ({ stepId, status, terminalOutput }) => {
-            await db
-              .update(executionSteps)
-              .set({
-                status: status as string,
-                terminalOutput: (terminalOutput as string) ?? null,
-                completedAt: status === "completed" || status === "failed" ? new Date().toISOString() : null,
-              })
-              .where(eq(executionSteps.id, stepId as number));
-            return `Step #${stepId} updated to ${status}`;
-          },
-        }),
-      },
-    });
+    try {
+      const { text } = await generateText({
+        model: provider(modelName),
+        system:
+          `你是一个编程 Agent。用户提出需求，你直接生成完整的代码文件。
 
-    // Consume stream to execute tool loop, return full text as JSON
-    const text = await result.text;
+回复格式要求：
+1. 首先简要说明你的方案（1-2句话）
+2. 然后用 \`\`\`language:path 标记输出每个文件，例如：
+\`\`\`html:src/index.html
+<!DOCTYPE html>...
+\`\`\`
+\`\`\`typescript:src/main.ts
+console.log("hello");
+\`\`\`
+3. 最后简要总结生成的文件
 
-    ctx.runInBackground(
-      (async () => {
-        await db
-          .update(tools)
-          .set({ status: "completed" })
-          .where(eq(tools.id, toolId));
-      })()
-    );
+务必包含完整的、可运行的代码。`,
+        messages: [{ role: "user", content: body.message.trim() }],
+      });
 
-    return c.json({ content: text });
+      // Parse code blocks from response
+      const codeBlockRegex = /```(\w+)?:?(\S+)?\n([\s\S]*?)```/g;
+      const prefix = `${projectId}/${toolId}/`;
+      let match;
+      const files: string[] = [];
+
+      while ((match = codeBlockRegex.exec(text)) !== null) {
+        const lang = match[1] || "";
+        const filePath = match[2] || `code.${lang || "txt"}`;
+        const code = match[3];
+
+        const encoder = new TextEncoder();
+        await storage.from(buckets.sourceBuckets).put(prefix + filePath, encoder.encode(code));
+        files.push(filePath);
+      }
+
+      // If no code blocks found, save the raw response
+      if (files.length === 0) {
+        const encoder = new TextEncoder();
+        await storage.from(buckets.sourceBuckets).put(prefix + "output.txt", encoder.encode(text));
+        files.push("output.txt");
+      }
+
+      // Update step as completed
+      await db
+        .update(executionSteps)
+        .set({
+          status: "completed",
+          terminalOutput: `生成文件:\n${files.map((f) => `  - ${f}`).join("\n")}\n\n${text.slice(0, 500)}`,
+          completedAt: new Date().toISOString(),
+        })
+        .where(eq(executionSteps.id, step!.id));
+
+      ctx.runInBackground(
+        (async () => {
+          await db
+            .update(tools)
+            .set({ status: "completed" })
+            .where(eq(tools.id, toolId));
+        })()
+      );
+
+      return c.json({
+        content: text,
+        files,
+        stepId: step!.id,
+      });
+    } catch (err) {
+      await db
+        .update(executionSteps)
+        .set({
+          status: "failed",
+          terminalOutput: String(err),
+          completedAt: new Date().toISOString(),
+        })
+        .where(eq(executionSteps.id, step!.id));
+
+      return c.json({ error: "Generation failed", detail: String(err) }, 500);
+    }
   });
