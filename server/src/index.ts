@@ -17,8 +17,7 @@
 
 import { Hono } from "hono";
 import { projectsRoutes } from "./routes/projects";
-import { chatRoutes } from "./routes/chat";
-import { agentRoutes } from "./routes/agent";
+import { vibeRoutes } from "./routes/vibe";
 import { stepsRoutes } from "./routes/steps";
 
 const app = new Hono()
@@ -26,8 +25,7 @@ const app = new Hono()
     c.json({ message: "Hello from EdgeSpark! Spark your idea to the Edge." })
   )
   .route("/api/projects", projectsRoutes)
-  .route("/api/projects", chatRoutes)
-  .route("/api/projects", agentRoutes)
+  .route("/api/projects", vibeRoutes)
   .route("/api/projects", stepsRoutes);
 
 export default app;

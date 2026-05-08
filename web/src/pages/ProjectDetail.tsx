@@ -1,4 +1,4 @@
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useState, useCallback, useRef } from "react";
 import { TopNav } from "@/components/layout/TopNav";
 import { WorkspaceLayout } from "@/components/layout/WorkspaceLayout";
 import { ProjectConfigBar } from "@/components/workspace/ProjectConfigBar";
@@ -10,22 +10,22 @@ import { useAuth } from "@/hooks/useAuth";
 import { useNavigate, useParams } from "react-router-dom";
 import { useQueryClient } from "@tanstack/react-query";
 
-async function apiFetch(path: string, options?: RequestInit) {
-  return fetch(path, {
-    ...options,
-    credentials: "include",
-    headers: {
-      "Content-Type": "application/json",
-      ...options?.headers,
-    },
-  });
-}
-
 interface ProjectData {
   id: number;
   name: string;
   description: string | null;
   status: string;
+}
+
+interface SSEEvent {
+  type: "text" | "step" | "file" | "done" | "error";
+  content?: string;
+  status?: string;
+  title?: string;
+  detail?: string;
+  path?: string;
+  language?: string;
+  files?: string[];
 }
 
 export function ProjectDetail() {
@@ -38,23 +38,23 @@ export function ProjectDetail() {
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [input, setInput] = useState("");
   const [isStreaming, setIsStreaming] = useState(false);
+  const [generatedFiles, setGeneratedFiles] = useState<Array<{ path: string; language: string; content: string }>>([]);
+  const abortRef = useRef<AbortController | null>(null);
 
   const numProjectId = projectId ? parseInt(projectId, 10) : undefined;
 
   useEffect(() => {
     if (!projectId) return;
-    apiFetch(`/api/projects/${projectId}`)
+    fetch(`/api/projects/${projectId}`, { credentials: "include" })
       .then((res) => res.json())
       .then((data) => {
         setProject(data as ProjectData);
         setPageLoading(false);
       })
-      .catch(() => {
-        navigate("/404");
-      });
+      .catch(() => navigate("/404"));
   }, [projectId, navigate]);
 
-  const handleSubmit = useCallback(async () => {
+  const handleSend = useCallback(async () => {
     if (!input.trim() || isStreaming || !numProjectId) return;
 
     const userMessage: ChatMessage = {
@@ -69,76 +69,89 @@ export function ProjectDetail() {
     const assistantId = (Date.now() + 1).toString();
     setMessages((prev) => [...prev, { id: assistantId, role: "assistant", content: "", isLoading: true }]);
 
+    const controller = new AbortController();
+    abortRef.current = controller;
+
     try {
-      const res = await apiFetch(`/api/projects/${numProjectId}/chat`, {
+      const res = await fetch(`/api/projects/${numProjectId}/vibe`, {
         method: "POST",
+        credentials: "include",
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ message: userMessage.content }),
+        signal: controller.signal,
       });
 
-      if (!res.ok) {
-        const errText = await res.text();
-        setMessages((prev) => prev.map((m) => m.id === assistantId ? { ...m, content: `请求失败: ${res.status}`, isLoading: false } : m));
-        console.error("Chat error:", errText);
+      if (!res.ok || !res.body) {
+        setMessages((prev) => prev.map((m) => m.id === assistantId ? { ...m, content: `错误: ${res.status}`, isLoading: false } : m));
         setIsStreaming(false);
         return;
       }
 
-      const data = await res.json();
-      setMessages((prev) =>
-        prev.map((m) => m.id === assistantId ? { ...m, content: data.content, isLoading: false } : m)
-      );
-    } catch (err) {
-      setMessages((prev) => prev.map((m) => m.id === assistantId ? { ...m, content: `请求失败: ${String(err)}`, isLoading: false } : m));
-    } finally {
-      setIsStreaming(false);
-    }
-  }, [input, isStreaming, numProjectId]);
+      const reader = res.body.getReader();
+      const decoder = new TextDecoder();
+      let buffer = "";
+      let fullText = "";
 
-  const handleGenerate = useCallback(async () => {
-    if (!input.trim() || isStreaming || !numProjectId) return;
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
 
-    const msg = input.trim();
-    const userMessage: ChatMessage = {
-      id: Date.now().toString(),
-      role: "user",
-      content: msg,
-    };
-    setMessages((prev) => [...prev, userMessage]);
-    setIsStreaming(true);
+        buffer += decoder.decode(value, { stream: true });
+        const lines = buffer.split("\n");
+        buffer = lines.pop() || "";
 
-    const assistantId = (Date.now() + 1).toString();
-    setMessages((prev) => [...prev, { id: assistantId, role: "assistant", content: "正在生成代码...", isLoading: true }]);
+        for (const line of lines) {
+          if (!line.startsWith("data: ")) continue;
+          const dataStr = line.slice(6).trim();
+          if (!dataStr) continue;
 
-    try {
-      const res = await apiFetch(`/api/projects/${numProjectId}/generate`, {
-        method: "POST",
-        body: JSON.stringify({ message: msg }),
-      });
-
-      if (!res.ok) {
-        const errText = await res.text();
-        setMessages((prev) => prev.map((m) => m.id === assistantId ? { ...m, content: `生成失败: ${res.status}`, isLoading: false } : m));
-        console.error("Generate error:", errText);
-        setIsStreaming(false);
-        return;
+          try {
+            const event: SSEEvent = JSON.parse(dataStr);
+            switch (event.type) {
+              case "text":
+                fullText += event.content || "";
+                setMessages((prev) =>
+                  prev.map((m) => m.id === assistantId ? { ...m, content: fullText, isLoading: true } : m)
+                );
+                break;
+              case "file":
+                setGeneratedFiles((prev) => [...prev, {
+                  path: event.path || "",
+                  language: event.language || "",
+                  content: event.content || "",
+                }]);
+                break;
+              case "step":
+                // Refresh steps in ExecutionLogPanel
+                queryClient.invalidateQueries({ queryKey: ["executionSteps", numProjectId] });
+                break;
+              case "error":
+                setMessages((prev) =>
+                  prev.map((m) => m.id === assistantId ? { ...m, content: `错误: ${event.content}`, isLoading: false } : m)
+                );
+                break;
+              case "done":
+                setMessages((prev) =>
+                  prev.map((m) => m.id === assistantId ? { ...m, isLoading: false } : m)
+                );
+                queryClient.invalidateQueries({ queryKey: ["executionSteps", numProjectId] });
+                break;
+            }
+          } catch {
+            // skip invalid JSON
+          }
+        }
       }
 
-      const data = await res.json();
-      const fileList = data.files?.length
-        ? `已生成 ${data.files.length} 个文件:\n${data.files.map((f: string) => `  - ${f}`).join("\n")}`
-        : "代码已生成";
       setMessages((prev) =>
-        prev.map((m) => m.id === assistantId ? { ...m, content: fileList, isLoading: false } : m)
+        prev.map((m) => m.id === assistantId ? { ...m, isLoading: false } : m)
       );
-      setInput("");
-
-      // Refresh steps and files
-      queryClient.invalidateQueries({ queryKey: ["executionSteps", numProjectId] });
-      queryClient.invalidateQueries({ queryKey: ["projectFiles", numProjectId] });
-    } catch (err) {
-      setMessages((prev) => prev.map((m) => m.id === assistantId ? { ...m, content: `生成失败: ${String(err)}`, isLoading: false } : m));
+    } catch (err: unknown) {
+      if (err instanceof DOMException && err.name === "AbortError") return;
+      setMessages((prev) => prev.map((m) => m.id === assistantId ? { ...m, content: `网络错误`, isLoading: false } : m));
     } finally {
       setIsStreaming(false);
+      abortRef.current = null;
     }
   }, [input, isStreaming, numProjectId, queryClient]);
 
@@ -162,13 +175,13 @@ export function ProjectDetail() {
             <ChatInput
               value={input}
               onChange={setInput}
-              onSubmit={handleSubmit}
-              onGenerate={handleGenerate}
+              onSubmit={handleSend}
+              onGenerate={handleSend}
               isLoading={isStreaming}
             />
           </div>
         }
-        right={<PreviewPanel projectId={numProjectId} />}
+        right={<PreviewPanel projectId={numProjectId} generatedFiles={generatedFiles} />}
       />
     </div>
   );
