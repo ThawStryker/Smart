@@ -35,7 +35,7 @@ interface StoredFile {
 interface OverviewTool {
   toolId: number;
   toolName: string;
-  files: Array<{ path: string; size: number }>;
+  files: Array<{ path: string; language: string }>;
 }
 
 export function ProjectDetail() {
@@ -81,12 +81,9 @@ export function ProjectDetail() {
           const allFiles: StoredFile[] = [];
           for (const tool of overviewData) {
             for (const f of tool.files) {
-              // Load file content
               try {
-                const fileRes = await fetch(
-                  `/api/projects/${numProjectId}/tools/${tool.toolId}/files/${encodeURIComponent(f.path)}`,
-                  { credentials: "include" }
-                );
+                const url = `/api/projects/${numProjectId}/tools/${tool.toolId}/files/${f.path}`;
+                const fileRes = await fetch(url, { credentials: "include" });
                 if (fileRes.ok) {
                   const fileData = await fileRes.json() as StoredFile;
                   allFiles.push(fileData);

@@ -26,7 +26,7 @@ export const dataRoutes = new Hono()
     return c.json(history);
   })
 
-  // Get project overview (files + steps)
+  // Get project overview (tools + files from step metadata)
   .get("/:projectId/overview", async (c) => {
     const userId = auth.user!.id;
     const projectId = parseInt(c.req.param("projectId"), 10);
@@ -37,7 +37,6 @@ export const dataRoutes = new Hono()
       .where(and(eq(projects.id, projectId), eq(projects.userId, userId)));
     if (!project) return c.json({ error: "Project not found" }, 404);
 
-    // Get tools and their steps
     const projectTools = await db
       .select()
       .from(tools)
@@ -46,37 +45,55 @@ export const dataRoutes = new Hono()
     const result: Array<{
       toolId: number;
       toolName: string;
-      files: Array<{ path: string; size: number }>;
-      steps: typeof executionSteps.$inferSelect[];
+      files: Array<{ path: string; language: string }>;
     }> = [];
 
     for (const tool of projectTools) {
-      const prefix = `${projectId}/${tool.id}/`;
-      const fileList = await storage.from(buckets.sourceBuckets).list({ prefix, limit: 100 });
-
-      const files = fileList.files.map((f) => ({
-        path: f.path.replace(prefix, ""),
-        size: f.size,
-      }));
-
       const stepList = await db
         .select()
         .from(executionSteps)
         .where(eq(executionSteps.toolId, tool.id))
         .orderBy(asc(executionSteps.stepOrder));
 
+      // Extract file info from completed steps' metadata
+      const files: Array<{ path: string; language: string }> = [];
+      for (const step of stepList) {
+        if (step.status === "completed" && step.metadata) {
+          try {
+            const metaFiles = JSON.parse(step.metadata) as Array<{ path: string; language: string }>;
+            for (const f of metaFiles) {
+              if (!files.some((existing) => existing.path === f.path)) {
+                files.push(f);
+              }
+            }
+          } catch { /* skip invalid JSON */ }
+        }
+      }
+
+      // Fallback: if no metadata, try listing from R2
+      if (files.length === 0) {
+        try {
+          const prefix = `${projectId}/${tool.id}/`;
+          const fileList = await storage.from(buckets.sourceBuckets).list({ prefix, limit: 100 });
+          for (const f of fileList.files) {
+            const path = f.path.replace(prefix, "");
+            const ext = path.split(".").pop() || "text";
+            files.push({ path, language: ext });
+          }
+        } catch { /* R2 list may fail */ }
+      }
+
       result.push({
         toolId: tool.id,
         toolName: tool.name,
         files,
-        steps: stepList,
       });
     }
 
     return c.json(result);
   })
 
-  // Get file content
+  // Get file content from R2
   .get("/:projectId/tools/:toolId/files/*", async (c) => {
     const userId = auth.user!.id;
     const projectId = parseInt(c.req.param("projectId"), 10);

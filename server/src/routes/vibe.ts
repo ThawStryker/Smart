@@ -193,7 +193,7 @@ HTML 骨架搭好了，接下来写样式和逻辑...`,
           const codeBlockRegex = /```(\w+)?:?(\S+)?\n([\s\S]*?)```/g;
           const prefix = `${projectId}/${toolId}/`;
           let match;
-          const files: string[] = [];
+          const files: Array<{ path: string; language: string }> = [];
 
           while ((match = codeBlockRegex.exec(fullResponse)) !== null) {
             const language = match[1] || "";
@@ -203,7 +203,7 @@ HTML 骨架搭好了，接下来写样式和逻辑...`,
             // Save to R2
             const encoder = new TextEncoder();
             await storage.from(buckets.sourceBuckets).put(prefix + filePath, encoder.encode(code));
-            files.push(filePath);
+            files.push({ path: filePath, language });
 
             // Notify frontend about file
             sendSSE(controller, {
@@ -221,14 +221,16 @@ HTML 骨架搭好了，接下来写样式和逻辑...`,
             });
           }
 
-          // Update step
-          const terminalOutput = `生成文件:\n${files.map((f) => `  - ${f}`).join("\n")}`;
+          // Update step — store file list in metadata for reliable retrieval
+          const terminalOutput = `生成文件:\n${files.map((f) => `  - ${f.path}`).join("\n")}`;
+          const fileMetadata = JSON.stringify(files);
           await db
             .update(executionSteps)
             .set({
               status: "completed",
               terminalOutput,
               detail: `生成 ${files.length} 个文件`,
+              metadata: fileMetadata,
               completedAt: new Date().toISOString(),
             })
             .where(eq(executionSteps.id, step!.id));
