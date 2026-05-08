@@ -2,13 +2,11 @@ import { useEffect, useState, useCallback, useRef } from "react";
 import { TopNav } from "@/components/layout/TopNav";
 import { WorkspaceLayout } from "@/components/layout/WorkspaceLayout";
 import { ProjectConfigBar } from "@/components/workspace/ProjectConfigBar";
-import { ExecutionLogPanel } from "@/components/workspace/ExecutionLogPanel";
 import { ChatMessages, type ChatMessage } from "@/components/chat/ChatMessages";
 import { ChatInput } from "@/components/chat/ChatInput";
 import { PreviewPanel } from "@/components/preview/PreviewPanel";
 import { useAuth } from "@/hooks/useAuth";
 import { useNavigate, useParams } from "react-router-dom";
-import { useQueryClient } from "@tanstack/react-query";
 
 interface ProjectData {
   id: number;
@@ -32,7 +30,6 @@ export function ProjectDetail() {
   const { user, loading: authLoading } = useAuth();
   const navigate = useNavigate();
   const { projectId } = useParams();
-  const queryClient = useQueryClient();
   const [project, setProject] = useState<ProjectData | null>(null);
   const [pageLoading, setPageLoading] = useState(true);
   const [messages, setMessages] = useState<ChatMessage[]>([]);
@@ -122,8 +119,17 @@ export function ProjectDetail() {
                 }]);
                 break;
               case "step":
-                // Refresh steps in ExecutionLogPanel
-                queryClient.invalidateQueries({ queryKey: ["executionSteps", numProjectId] });
+                // Insert step notification inline in chat
+                if (event.title) {
+                  setMessages((prev) => [
+                    ...prev,
+                    {
+                      id: `step-${Date.now()}-${Math.random()}`,
+                      role: "system",
+                      content: `${event.status === "running" ? "🔄" : "✅"} ${event.title}`,
+                    },
+                  ]);
+                }
                 break;
               case "error":
                 setMessages((prev) =>
@@ -134,7 +140,6 @@ export function ProjectDetail() {
                 setMessages((prev) =>
                   prev.map((m) => m.id === assistantId ? { ...m, isLoading: false } : m)
                 );
-                queryClient.invalidateQueries({ queryKey: ["executionSteps", numProjectId] });
                 break;
             }
           } catch {
@@ -153,7 +158,7 @@ export function ProjectDetail() {
       setIsStreaming(false);
       abortRef.current = null;
     }
-  }, [input, isStreaming, numProjectId, queryClient]);
+  }, [input, isStreaming, numProjectId]);
 
   if (authLoading || pageLoading) return <div className="p-8 text-neutral-500">加载中...</div>;
   if (!user) { navigate("/login"); return null; }
@@ -171,7 +176,6 @@ export function ProjectDetail() {
               onNameChange={(name) => setProject((prev) => prev ? { ...prev, name } : null)}
             />
             <ChatMessages messages={messages} />
-            <ExecutionLogPanel projectId={numProjectId} />
             <ChatInput
               value={input}
               onChange={setInput}
