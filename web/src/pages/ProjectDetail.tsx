@@ -43,7 +43,7 @@ export function ProjectDetail() {
       <TopNav user={user} />
       <WorkspaceLayout
         left={
-          <div className="flex-1 flex flex-col overflow-hidden">
+          <div className="h-full flex flex-col overflow-hidden">
             <ProjectConfigBar
               projectId={project.id}
               projectName={project.name}
