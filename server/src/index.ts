@@ -16,11 +16,13 @@
  */
 
 import { Hono } from "hono";
+import { projectsRoutes } from "./routes/projects";
 
 const app = new Hono()
   .get("/api/public/hello", (c) =>
     c.json({ message: "Hello from EdgeSpark! Spark your idea to the Edge." })
-  );
+  )
+  .route("/api/projects", projectsRoutes);
 
 // Example: Get all posts
 // .get('/api/posts', async (c) => {
