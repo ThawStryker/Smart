@@ -1,23 +1,55 @@
-/**
- * Database Relations
- *
- * Define app-level Drizzle ORM relations here.
- *
- * Notes:
- * - Relations help Drizzle with typed joins and nested query shapes at runtime.
- * - Relation-only edits usually do not change generated migration SQL.
- * - You can split relations across multiple files, but re-export them here.
- */
-
 import { relations } from "drizzle-orm";
+import {
+  projects,
+  tools,
+  executionSteps,
+  conversations,
+  versions,
+  marketListings,
+} from "./db_schema";
 
-// Example relation — uncomment after you have matching tables/foreign keys:
-//
-// import { users, posts } from "./db_schema";
-//
-// export const postsRelations = relations(posts, ({ one }) => ({
-//   author: one(users, {
-//     fields: [posts.authorId],
-//     references: [users.id],
-//   }),
-// }));
+export const projectsRelations = relations(projects, ({ many }) => ({
+  tools: many(tools),
+  conversations: many(conversations),
+}));
+
+export const toolsRelations = relations(tools, ({ one, many }) => ({
+  project: one(projects, {
+    fields: [tools.projectId],
+    references: [projects.id],
+  }),
+  executionSteps: many(executionSteps),
+  versions: many(versions),
+  marketListing: one(marketListings, {
+    fields: [tools.id],
+    references: [marketListings.toolId],
+  }),
+}));
+
+export const executionStepsRelations = relations(executionSteps, ({ one }) => ({
+  tool: one(tools, {
+    fields: [executionSteps.toolId],
+    references: [tools.id],
+  }),
+}));
+
+export const conversationsRelations = relations(conversations, ({ one }) => ({
+  project: one(projects, {
+    fields: [conversations.projectId],
+    references: [projects.id],
+  }),
+}));
+
+export const versionsRelations = relations(versions, ({ one }) => ({
+  tool: one(tools, {
+    fields: [versions.toolId],
+    references: [tools.id],
+  }),
+}));
+
+export const marketListingsRelations = relations(marketListings, ({ one }) => ({
+  tool: one(tools, {
+    fields: [marketListings.toolId],
+    references: [tools.id],
+  }),
+}));
