@@ -1,7 +1,7 @@
 import { Hono } from "hono";
 import { db, storage, secret, vars, ctx } from "edgespark";
 import { auth } from "edgespark/http";
-import { eq, and, asc } from "drizzle-orm";
+import { eq, asc } from "drizzle-orm";
 import { projects, conversations, tools, executionSteps, buckets } from "@defs";
 
 const SSE_HEADERS = {
@@ -10,10 +10,86 @@ const SSE_HEADERS = {
   Connection: "keep-alive",
 };
 
-function sendSSE(stream: ReadableStreamDefaultController, data: unknown) {
-  const line = `data: ${JSON.stringify(data)}\n\n`;
-  stream.enqueue(new TextEncoder().encode(line));
+function sse(ctrl: ReadableStreamDefaultController, data: Record<string, unknown>) {
+  ctrl.enqueue(new TextEncoder().encode(`data: ${JSON.stringify(data)}\n\n`));
 }
+
+// Tool definitions (matching DeepSeek-TUI's typed tool surface)
+const TOOLS = [
+  {
+    type: "function",
+    function: {
+      name: "read_file",
+      description: "读取项目中的文件内容",
+      parameters: {
+        type: "object",
+        properties: {
+          path: { type: "string", description: "文件路径，如 src/index.html" },
+        },
+        required: ["path"],
+      },
+    },
+  },
+  {
+    type: "function",
+    function: {
+      name: "write_file",
+      description: "创建或覆盖文件",
+      parameters: {
+        type: "object",
+        properties: {
+          path: { type: "string", description: "文件路径" },
+          content: { type: "string", description: "文件内容" },
+        },
+        required: ["path", "content"],
+      },
+    },
+  },
+  {
+    type: "function",
+    function: {
+      name: "edit_file",
+      description: "在文件中搜索并替换指定内容（比完整重写更高效）",
+      parameters: {
+        type: "object",
+        properties: {
+          path: { type: "string", description: "文件路径" },
+          old_string: { type: "string", description: "要替换的原始文本" },
+          new_string: { type: "string", description: "替换后的新文本" },
+        },
+        required: ["path", "old_string", "new_string"],
+      },
+    },
+  },
+  {
+    type: "function",
+    function: {
+      name: "list_files",
+      description: "列出项目中的所有文件",
+      parameters: {
+        type: "object",
+        properties: {
+          prefix: { type: "string", description: "可选的路径前缀过滤" },
+        },
+      },
+    },
+  },
+  {
+    type: "function",
+    function: {
+      name: "grep_files",
+      description: "在项目文件中搜索匹配的文本模式（正则）",
+      parameters: {
+        type: "object",
+        properties: {
+          pattern: { type: "string", description: "要搜索的正则表达式模式" },
+          path: { type: "string", description: "可选的文件路径限制" },
+        },
+        required: ["pattern"],
+      },
+    },
+  },
+];
 
 export const vibeRoutes = new Hono()
   .post("/:projectId/vibe", async (c) => {
@@ -23,7 +99,7 @@ export const vibeRoutes = new Hono()
     const [project] = await db
       .select()
       .from(projects)
-      .where(and(eq(projects.id, projectId), eq(projects.userId, userId)));
+      .where(eq(projects.id, projectId));
     if (!project) return c.json({ error: "Project not found" }, 404);
 
     const body = await c.req.json<{ message: string }>();
@@ -31,7 +107,7 @@ export const vibeRoutes = new Hono()
 
     const baseURL = vars.get("DEEPSEEK_BASE_URL") || "https://api.deepseek.com";
     const apiKey = secret.get("DEEPSEEK_API_KEY");
-    if (!apiKey) return c.json({ error: "DeepSeek API key not configured" }, 500);
+    if (!apiKey) return c.json({ error: "API key not configured" }, 500);
 
     // Save user message
     await db.insert(conversations).values({
@@ -47,43 +123,37 @@ export const vibeRoutes = new Hono()
       .from(conversations)
       .where(eq(conversations.projectId, projectId))
       .orderBy(asc(conversations.createdAt))
-      .limit(40);
+      .limit(80);
 
-    const messages = [
+    // Build messages array for API (OpenAI format)
+    const apiMessages: Array<Record<string, unknown>> = [
       {
         role: "system",
         content:
-          `你是一个 Vibe Coding AI 编程助手，像 Claude Code 一样工作。请用中文回复。
+          `你是 Smart 编程智能体，运行在 Web 平台上。你可以使用工具读写文件、搜索代码。
 
 工作方式：
-1. 先分析用户需求，说出你的思路
-2. 当需要写代码时，用代码块输出，格式：\`\`\`语言:文件路径\\n代码内容\\n\`\`\`
-3. 每完成一个文件，简要说明这个文件的作用
-4. 像一个真正的编程伙伴一样，保持对话自然流畅
+1. 先理解用户需求，用 list_files 了解项目结构
+2. 用 read_file 查看需要修改的文件
+3. 用 write_file 或 edit_file 进行修改
+4. 用 grep_files 搜索代码模式
+5. 批量执行独立的工具调用
 
-示例回复：
-好的，我来帮你创建一个计算器应用。首先写 HTML 结构：
-
-\`\`\`html:src/index.html
-<!DOCTYPE html>
-<html>
-<head><title>计算器</title></head>
-<body>
-  <div id="calculator">...</div>
-</body>
-</html>
-\`\`\`
-
-HTML 骨架搭好了，接下来写样式和逻辑...`,
+原则：
+- 并行执行：独立操作一次完成，不要逐个等待
+- 验证后声明：编辑前确认文件内容，执行后检查结果
+- 保持简洁：直接给出方案和结果，不要冗余解释
+- 用中文回复`,
       },
-      ...history.map((msg) => ({
-        role: msg.role as "user" | "assistant",
-        content: msg.content,
-      })),
     ];
 
-    let fullResponse = "";
-    let toolId = 0;
+    for (const msg of history) {
+      if (msg.role === "user") {
+        apiMessages.push({ role: "user", content: msg.content });
+      } else if (msg.role === "assistant") {
+        apiMessages.push({ role: "assistant", content: msg.content });
+      }
+    }
 
     // Find or create tool
     const [existingTool] = await db
@@ -92,158 +162,294 @@ HTML 骨架搭好了，接下来写样式和逻辑...`,
       .where(eq(tools.projectId, projectId))
       .limit(1);
 
+    let toolId: number;
+    if (existingTool) {
+      toolId = existingTool.id;
+    } else {
+      const [newTool] = await db
+        .insert(tools)
+        .values({
+          projectId,
+          name: `${project.name}-v1`,
+          version: "0.1.0",
+          status: "building",
+        })
+        .returning();
+      toolId = newTool!.id;
+    }
+
+    const prefix = `${projectId}/${toolId}/`;
+    let fullResponse = "";
+
     const stream = new ReadableStream({
       async start(controller) {
         try {
-          // Create tool
-          if (existingTool) {
-            toolId = existingTool.id;
-          } else {
-            const [newTool] = await db
-              .insert(tools)
-              .values({
-                projectId,
-                name: `${project.name}-v1`,
-                version: "0.1.0",
-                status: "building",
-              })
-              .returning();
-            toolId = newTool!.id;
-          }
+          let currentMessages = [...apiMessages];
+          let stepCount = 0;
+          const maxSteps = 15;
 
-          // Create step
-          const [step] = await db
-            .insert(executionSteps)
-            .values({
-              toolId,
-              stepOrder: 1,
-              type: "vibe_coding",
-              title: `处理: ${body.message.trim().slice(0, 40)}`,
-              status: "running",
-              startedAt: new Date().toISOString(),
-            })
-            .returning();
+          // Agent loop: keep calling until no more tool calls
+          while (stepCount < maxSteps) {
+            stepCount++;
+            const response = await fetch(`${baseURL}/v1/chat/completions`, {
+              method: "POST",
+              headers: {
+                "Content-Type": "application/json",
+                Authorization: `Bearer ${apiKey}`,
+              },
+              body: JSON.stringify({
+                model: "deepseek-v4-pro",
+                messages: currentMessages,
+                tools: TOOLS,
+                tool_choice: "auto",
+                temperature: 0.5,
+                max_tokens: 8192,
+                stream: true,
+              }),
+            });
 
-          sendSSE(controller, {
-            type: "step",
-            status: "running",
-            title: `开始处理: ${body.message.trim().slice(0, 40)}`,
-          });
+            if (!response.ok) {
+              const errText = await response.text();
+              sse(controller, { type: "error", content: `API error: ${response.status}` });
+              break;
+            }
 
-          // Call DeepSeek with streaming
-          const response = await fetch(`${baseURL}/v1/chat/completions`, {
-            method: "POST",
-            headers: {
-              "Content-Type": "application/json",
-              Authorization: `Bearer ${apiKey}`,
-            },
-            body: JSON.stringify({
-              model: "deepseek-v4-pro",
-              messages,
-              temperature: 0.7,
-              max_tokens: 8192,
-              stream: true,
-            }),
-          });
+            // Parse streaming response
+            const reader = response.body!.getReader();
+            const decoder = new TextDecoder();
+            let buffer = "";
+            let assistantContent = "";
+            let toolCalls: Array<{
+              id: string;
+              function: { name: string; arguments: string };
+            }> = [];
+            let currentToolCall: { id: string; name: string; args: string } | null = null;
 
-          if (!response.ok) {
-            const errText = await response.text();
-            sendSSE(controller, { type: "error", content: `API error: ${response.status}` });
-            sendSSE(controller, { type: "done" });
-            controller.close();
+            while (true) {
+              const { done, value } = await reader.read();
+              if (done) break;
 
-            await db
-              .update(executionSteps)
-              .set({ status: "failed", terminalOutput: errText, completedAt: new Date().toISOString() })
-              .where(eq(executionSteps.id, step!.id));
-            return;
-          }
+              buffer += decoder.decode(value, { stream: true });
+              const lines = buffer.split("\n");
+              buffer = lines.pop() || "";
 
-          const reader = response.body!.getReader();
-          const decoder = new TextDecoder();
-          let buffer = "";
+              for (const line of lines) {
+                if (!line.startsWith("data: ")) continue;
+                const data = line.slice(6).trim();
+                if (data === "[DONE]") continue;
 
-          while (true) {
-            const { done, value } = await reader.read();
-            if (done) break;
+                try {
+                  const parsed = JSON.parse(data);
+                  const delta = parsed.choices?.[0]?.delta;
 
-            buffer += decoder.decode(value, { stream: true });
-            const lines = buffer.split("\n");
-            buffer = lines.pop() || "";
+                  if (delta?.content) {
+                    assistantContent += delta.content;
+                    fullResponse += delta.content;
+                    sse(controller, { type: "text", content: delta.content });
+                  }
 
-            for (const line of lines) {
-              if (!line.startsWith("data: ")) continue;
-              const data = line.slice(6).trim();
-              if (data === "[DONE]") continue;
+                  // Handle tool calls in stream
+                  if (delta?.tool_calls) {
+                    for (const tc of delta.tool_calls) {
+                      if (tc.id) {
+                        // New tool call starting
+                        const fn = tc.function || {};
+                        currentToolCall = {
+                          id: tc.id,
+                          name: fn.name || "",
+                          args: fn.arguments || "",
+                        };
+                        toolCalls.push({
+                          id: tc.id,
+                          function: {
+                            name: fn.name || "",
+                            arguments: fn.arguments || "",
+                          },
+                        });
+                        sse(controller, {
+                          type: "tool_start",
+                          toolCallId: tc.id,
+                          name: fn.name || "",
+                        });
+                      } else if (currentToolCall && tc.function?.arguments) {
+                        // Append arguments
+                        currentToolCall.args += tc.function.arguments;
+                        const idx = toolCalls.findIndex((t) => t.id === currentToolCall!.id);
+                        if (idx >= 0) {
+                          toolCalls[idx].function.arguments = currentToolCall.args;
+                        }
+                      }
+                    }
+                  }
+                } catch { /* skip partial JSON */ }
+              }
+            }
+
+            // If no tool calls, agent is done
+            if (toolCalls.length === 0) {
+              break;
+            }
+
+            // Build assistant message with tool calls
+            const assistantMsg: Record<string, unknown> = {
+              role: "assistant",
+              content: assistantContent || null,
+            };
+            if (toolCalls.length > 0) {
+              assistantMsg.tool_calls = toolCalls.map((tc) => ({
+                id: tc.id,
+                type: "function",
+                function: {
+                  name: tc.function.name,
+                  arguments: tc.function.arguments,
+                },
+              }));
+            }
+            currentMessages.push(assistantMsg);
+
+            // Execute tool calls
+            for (const tc of toolCalls) {
+              const { name, arguments: argsStr } = tc.function;
+              let args: Record<string, string> = {};
+              try { args = JSON.parse(argsStr); } catch { /* invalid JSON */ }
+
+              sse(controller, {
+                type: "tool_exec",
+                toolCallId: tc.id,
+                name,
+                input: argsStr,
+              });
+
+              let result: string;
 
               try {
-                const parsed = JSON.parse(data);
-                const delta = parsed.choices?.[0]?.delta?.content;
-                if (delta) {
-                  fullResponse += delta;
-                  sendSSE(controller, { type: "text", content: delta });
+                switch (name) {
+                  case "read_file": {
+                    const obj = await storage.from(buckets.sourceBuckets).get(prefix + args.path);
+                    result = obj ? new TextDecoder().decode(obj.body) : "File not found";
+                    break;
+                  }
+                  case "write_file": {
+                    const encoder = new TextEncoder();
+                    await storage.from(buckets.sourceBuckets).put(
+                      prefix + args.path,
+                      encoder.encode(args.content)
+                    );
+                    result = `File written: ${args.path}`;
+                    sse(controller, {
+                      type: "file",
+                      path: args.path,
+                      language: args.path.split(".").pop() || "text",
+                      content: args.content,
+                    });
+                    break;
+                  }
+                  case "edit_file": {
+                    const obj = await storage.from(buckets.sourceBuckets).get(prefix + args.path);
+                    if (!obj) { result = "File not found"; break; }
+                    let content = new TextDecoder().decode(obj.body);
+                    if (!content.includes(args.old_string)) {
+                      result = `Error: old_string not found in ${args.path}`;
+                      break;
+                    }
+                    content = content.replace(args.old_string, args.new_string);
+                    const encoder = new TextEncoder();
+                    await storage.from(buckets.sourceBuckets).put(prefix + args.path, encoder.encode(content));
+                    result = `File edited: ${args.path}`;
+                    sse(controller, {
+                      type: "file",
+                      path: args.path,
+                      language: args.path.split(".").pop() || "text",
+                      content,
+                    });
+                    break;
+                  }
+                  case "list_files": {
+                    const listPrefix = prefix + (args.prefix || "");
+                    const fileList = await storage.from(buckets.sourceBuckets).list({
+                      prefix: listPrefix,
+                      limit: 100,
+                    });
+                    result = fileList.files
+                      .map((f) => f.path.replace(prefix, ""))
+                      .join("\n") || "(empty)";
+                    break;
+                  }
+                  case "grep_files": {
+                    const listPrefix = prefix + (args.path ? args.path.replace(/\/[^/]*$/, "/") : "");
+                    const fileList = await storage.from(buckets.sourceBuckets).list({
+                      prefix: listPrefix || prefix,
+                      limit: 50,
+                    });
+                    const matches: string[] = [];
+                    const pattern = new RegExp(args.pattern, "gi");
+                    for (const f of fileList.files) {
+                      const obj = await storage.from(buckets.sourceBuckets).get(f.path);
+                      if (!obj) continue;
+                      const text = new TextDecoder().decode(obj.body);
+                      const lines = text.split("\n");
+                      for (let i = 0; i < lines.length; i++) {
+                        if (pattern.test(lines[i])) {
+                          matches.push(`${f.path.replace(prefix, "")}:${i + 1}: ${lines[i].trim()}`);
+                        }
+                      }
+                    }
+                    result = matches.slice(0, 30).join("\n") || "No matches found";
+                    break;
+                  }
+                  default:
+                    result = `Unknown tool: ${name}`;
                 }
-              } catch {
-                // ignore parse errors for partial chunks
+              } catch (err) {
+                result = `Tool error: ${String(err)}`;
               }
+
+              sse(controller, {
+                type: "tool_result",
+                toolCallId: tc.id,
+                name,
+                output: result.slice(0, 500),
+              });
+
+              // Add tool result to messages
+              currentMessages.push({
+                role: "tool",
+                tool_call_id: tc.id,
+                content: result,
+              });
+
+              // Save step to DB
+              ctx.runInBackground(
+                (async () => {
+                  const existingSteps = await db
+                    .select()
+                    .from(executionSteps)
+                    .where(eq(executionSteps.toolId, toolId));
+                  await db.insert(executionSteps).values({
+                    toolId,
+                    stepOrder: existingSteps.length + 1,
+                    type: name,
+                    title: `${name}: ${argsStr.slice(0, 80)}`,
+                    status: "completed",
+                    detail: result.slice(0, 200),
+                    terminalOutput: result.slice(0, 500),
+                    startedAt: new Date().toISOString(),
+                    completedAt: new Date().toISOString(),
+                  });
+                })()
+              );
             }
           }
 
-          // Process complete response for code blocks
-          const codeBlockRegex = /```(\w+)?:?(\S+)?\n([\s\S]*?)```/g;
-          const prefix = `${projectId}/${toolId}/`;
-          let match;
-          const files: Array<{ path: string; language: string }> = [];
-
-          while ((match = codeBlockRegex.exec(fullResponse)) !== null) {
-            const language = match[1] || "";
-            const filePath = match[2] || `code.${language || "txt"}`;
-            const code = match[3];
-
-            // Save to R2
-            const encoder = new TextEncoder();
-            await storage.from(buckets.sourceBuckets).put(prefix + filePath, encoder.encode(code));
-            files.push({ path: filePath, language });
-
-            // Notify frontend about file
-            sendSSE(controller, {
-              type: "file",
-              path: filePath,
-              language,
-              content: code,
-            });
-
-            sendSSE(controller, {
-              type: "step",
-              status: "completed",
-              title: `已生成: ${filePath}`,
-              detail: `${code.split("\n").length} 行 ${language}`,
-            });
-          }
-
-          // Update step — store file list in metadata for reliable retrieval
-          const terminalOutput = `生成文件:\n${files.map((f) => `  - ${f.path}`).join("\n")}`;
-          const fileMetadata = JSON.stringify(files);
-          await db
-            .update(executionSteps)
-            .set({
-              status: "completed",
-              terminalOutput,
-              detail: `生成 ${files.length} 个文件`,
-              metadata: fileMetadata,
-              completedAt: new Date().toISOString(),
-            })
-            .where(eq(executionSteps.id, step!.id));
-
-          // Save assistant message
+          // Save assistant message to DB
           await db.insert(conversations).values({
             projectId,
             userId,
             role: "assistant",
-            content: fullResponse,
+            content: fullResponse || "任务完成",
           });
 
-          // Complete tool
+          // Update tool status
           ctx.runInBackground(
             (async () => {
               await db
@@ -253,20 +459,12 @@ HTML 骨架搭好了，接下来写样式和逻辑...`,
             })()
           );
 
-          sendSSE(controller, {
-            type: "step",
-            status: "completed",
-            title: `完成！共生成 ${files.length} 个文件`,
-            files,
-          });
-
-          sendSSE(controller, { type: "done" });
+          sse(controller, { type: "done" });
           controller.close();
         } catch (err) {
-          console.error("Vibe error:", err);
-          try { sendSSE(controller, { type: "error", content: String(err) }); } catch {}
-          try { sendSSE(controller, { type: "done" }); } catch {}
-          try { controller.close(); } catch {}
+          try { sse(controller, { type: "error", content: String(err) }); } catch { /* */ }
+          try { sse(controller, { type: "done" }); } catch { /* */ }
+          try { controller.close(); } catch { /* */ }
         }
       },
     });

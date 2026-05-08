@@ -16,7 +16,7 @@ interface ProjectData {
 }
 
 interface SSEEvent {
-  type: "text" | "step" | "file" | "done" | "error";
+  type: "text" | "step" | "file" | "done" | "error" | "tool_start" | "tool_exec" | "tool_result";
   content?: string;
   status?: string;
   title?: string;
@@ -24,6 +24,10 @@ interface SSEEvent {
   path?: string;
   language?: string;
   files?: string[];
+  toolCallId?: string;
+  name?: string;
+  input?: string;
+  output?: string;
 }
 
 interface StoredFile {
@@ -166,11 +170,21 @@ export function ProjectDetail() {
                   return [...prev, newFile];
                 });
                 break;
-              case "step":
-                if (event.title) {
+              case "tool_start":
+                if (event.name) {
                   setMessages((prev) => [
                     ...prev,
-                    { id: `step-${Date.now()}-${Math.random()}`, role: "system", content: `${event.status === "running" ? "🔄" : "✅"} ${event.title}` },
+                    { id: `tool-${event.toolCallId || Date.now()}`, role: "system", content: `🔧 ${event.name}` },
+                  ]);
+                }
+                break;
+              case "tool_result":
+                if (event.name && event.output) {
+                  const outputText = event.output;
+                  const short = outputText.length > 100 ? outputText.slice(0, 100) + "..." : outputText;
+                  setMessages((prev) => [
+                    ...prev,
+                    { id: `result-${event.toolCallId || Date.now()}`, role: "system", content: `✅ ${event.name}: ${short}` },
                   ]);
                 }
                 break;
