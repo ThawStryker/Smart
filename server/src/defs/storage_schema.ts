@@ -10,14 +10,22 @@
  *
  * Usage in code:
  *   import { buckets } from "@defs";
- *   await edgespark.storage.from(buckets.uploads).put("file.jpg", buffer);
+ *   await edgespark.storage.from(buckets.sourceBuckets).put("file.jpg", buffer);
  */
 
 import type { BucketDef } from "@sdk/server-types";
 
-// Example bucket — uncomment and modify:
-//
-// export const uploads: BucketDef<"uploads"> = {
-//   bucket_name: "uploads",
-//   description: "User uploaded files",
-// };
+export const sourceBuckets: BucketDef<"tool-sources"> = {
+  bucket_name: "tool-sources",
+  description: "AI 生成的工具源代码包",
+};
+
+export const artifactBuckets: BucketDef<"tool-artifacts"> = {
+  bucket_name: "tool-artifacts",
+  description: "构建产物（dist/ 打包文件）",
+};
+
+export const attachmentBuckets: BucketDef<"attachments"> = {
+  bucket_name: "attachments",
+  description: "用户上传的附件文件",
+};
