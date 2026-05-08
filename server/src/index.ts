@@ -17,31 +17,17 @@
 
 import { Hono } from "hono";
 import { projectsRoutes } from "./routes/projects";
+import { chatRoutes } from "./routes/chat";
+import { agentRoutes } from "./routes/agent";
+import { stepsRoutes } from "./routes/steps";
 
 const app = new Hono()
   .get("/api/public/hello", (c) =>
     c.json({ message: "Hello from EdgeSpark! Spark your idea to the Edge." })
   )
-  .route("/api/projects", projectsRoutes);
-
-// Example: Get all posts
-// .get('/api/posts', async (c) => {
-//   const allPosts = await db.select().from(posts);
-//   return c.json({ posts: allPosts });
-// })
-
-// Example: Create post
-// .post('/api/posts', async (c) => {
-//   const data = await c.req.json();
-//   await db.insert(posts).values({ title: data.title, content: data.content });
-//   return c.json({ success: true }, 201);
-// })
-
-// Example: Background task (doesn't block response)
-// .post('/api/analytics', async (c) => {
-//   const event = await c.req.json();
-//   ctx.runInBackground(logEvent(event));
-//   return c.json({ ok: true });
-// })
+  .route("/api/projects", projectsRoutes)
+  .route("/api/projects", chatRoutes)
+  .route("/api/projects", agentRoutes)
+  .route("/api/projects", stepsRoutes);
 
 export default app;

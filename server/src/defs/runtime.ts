@@ -4,11 +4,9 @@
 // Values still come from .env.local in local dev and remote vars/secrets in deployed envs.
 
 export type VarKey =
-  // | "API_BASE_URL"
-  // | "GOOGLE_CLIENT_ID"
-  never;
+  | "DEEPSEEK_BASE_URL"
+  | "SEED_BASE_URL";
 
 export type SecretKey =
-  // | "STRIPE_KEY"
-  // | "GOOGLE_CLIENT_SECRET"
-  never;
+  | "DEEPSEEK_API_KEY"
+  | "SEED_API_KEY";

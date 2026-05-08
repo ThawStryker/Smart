@@ -51,6 +51,7 @@ export const executionSteps = sqliteTable("execution_steps", {
   startedAt: text("started_at"),
   completedAt: text("completed_at"),
   metadata: text("metadata"),
+  terminalOutput: text("terminal_output"),
 });
 
 // 对话记录
