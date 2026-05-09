@@ -1,5 +1,5 @@
 import { sql } from "drizzle-orm";
-import { integer, real, sqliteTable, text } from "drizzle-orm/sqlite-core";
+import { integer, real, sqliteTable, text, uniqueIndex } from "drizzle-orm/sqlite-core";
 
 // 用户扩展信息（基础认证由 EdgeSpark 管理）
 export const userProfiles = sqliteTable("user_profiles", {
@@ -89,3 +89,16 @@ export const marketListings = sqliteTable("market_listings", {
   status: text("status").default("pending_review"),
   createdAt: text("created_at").default(sql`(datetime('now'))`),
 });
+
+// 工具运行时数据（内置数据 API）
+export const toolData = sqliteTable("tool_data", {
+  id: integer("id").primaryKey({ autoIncrement: true }),
+  projectId: integer("project_id").notNull(),
+  userId: text("user_id").notNull(),
+  key: text("key").notNull(),
+  value: text("value").notNull(), // JSON string
+  createdAt: text("created_at").default(sql`(datetime('now'))`),
+  updatedAt: text("updated_at").default(sql`(datetime('now'))`),
+}, (table) => ({
+  uniqueProjectUserKey: uniqueIndex("tool_data_project_user_key").on(table.projectId, table.userId, table.key),
+}));
