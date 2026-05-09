@@ -2,7 +2,7 @@ import { Hono } from "hono";
 import { db } from "edgespark";
 import { auth } from "edgespark/http";
 import { eq, and } from "drizzle-orm";
-import { toolData } from "@defs";
+import { toolData, projects } from "@defs";
 
 export const toolDataRoutes = new Hono()
   .get("/.smart/data/:key", async (c) => {
@@ -34,6 +34,13 @@ export const toolDataRoutes = new Hono()
     const body = await c.req.json<{ value: unknown; projectId: number }>();
     if (!body.projectId) return c.json({ error: "projectId required" }, 400);
 
+    // Verify project ownership
+    const [project] = await db
+      .select()
+      .from(projects)
+      .where(and(eq(projects.id, body.projectId), eq(projects.userId, userId)));
+    if (!project) return c.json({ error: "Project not found" }, 404);
+
     const valueStr = typeof body.value === "string" ? body.value : JSON.stringify(body.value);
 
     const [existing] = await db
@@ -51,9 +58,21 @@ export const toolDataRoutes = new Hono()
         .set({ value: valueStr, updatedAt: new Date().toISOString() })
         .where(eq(toolData.id, existing.id));
     } else {
-      await db
-        .insert(toolData)
-        .values({ projectId: body.projectId, userId, key, value: valueStr });
+      try {
+        await db
+          .insert(toolData)
+          .values({ projectId: body.projectId, userId, key, value: valueStr });
+      } catch {
+        // Race condition: another request inserted between select and insert
+        await db
+          .update(toolData)
+          .set({ value: valueStr, updatedAt: new Date().toISOString() })
+          .where(and(
+            eq(toolData.projectId, body.projectId),
+            eq(toolData.userId, userId),
+            eq(toolData.key, key),
+          ));
+      }
     }
 
     return c.json({ success: true });
@@ -65,6 +84,13 @@ export const toolDataRoutes = new Hono()
     const key = c.req.param("key");
     const projectId = parseInt(c.req.query("projectId") || "0", 10);
     if (!projectId) return c.json({ error: "projectId required" }, 400);
+
+    // Verify project ownership
+    const [project] = await db
+      .select()
+      .from(projects)
+      .where(and(eq(projects.id, projectId), eq(projects.userId, userId)));
+    if (!project) return c.json({ error: "Project not found" }, 404);
 
     await db
       .delete(toolData)
