@@ -9,4 +9,6 @@ export type VarKey =
 
 export type SecretKey =
   | "DEEPSEEK_API_KEY"
-  | "SEED_API_KEY";
+  | "SEED_API_KEY"
+  | "ALIYUN_ACCESS_KEY_ID"
+  | "ALIYUN_ACCESS_KEY_SECRET";
