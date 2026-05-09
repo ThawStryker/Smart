@@ -4,7 +4,6 @@ import { WorkspaceLayout } from "@/components/layout/WorkspaceLayout";
 import { ProjectConfigBar } from "@/components/workspace/ProjectConfigBar";
 import { ChatMessages, type ChatMessage } from "@/components/chat/ChatMessages";
 import { ChatInput } from "@/components/chat/ChatInput";
-import { ExecutionLogPanel } from "@/components/workspace/ExecutionLogPanel";
 import { PreviewPanel } from "@/components/preview/PreviewPanel";
 import { useAuth } from "@/hooks/useAuth";
 import { useNavigate, useParams } from "react-router-dom";
@@ -46,7 +45,6 @@ export function ProjectDetail() {
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [input, setInput] = useState("");
   const [isStreaming, setIsStreaming] = useState(false);
-  const [leftTab, setLeftTab] = useState<"chat" | "log">("chat");
   const [generatedFiles, setGeneratedFiles] = useState<StoredFile[]>([]);
   const abortRef = useRef<AbortController | null>(null);
 
@@ -180,14 +178,6 @@ export function ProjectDetail() {
                   ]);
                 }
                 break;
-              case "tool_exec":
-                if (event.name) {
-                  setMessages((prev) => [
-                    ...prev,
-                    { id: `exec-${event.toolCallId || Date.now()}`, role: "system", content: `⚙️ 执行: ${event.name}` },
-                  ]);
-                }
-                break;
               case "tool_result":
                 if (event.name && event.output) {
                   const outputText = event.output;
@@ -202,9 +192,6 @@ export function ProjectDetail() {
                 setMessages((prev) =>
                   prev.map((m) => m.id === assistantId ? { ...m, content: `错误: ${event.content}`, isLoading: false } : m)
                 );
-                break;
-              case "step":
-                // 执行步骤完成通知 — ExecutionLogPanel 通过轮询获取，此处触发即时刷新
                 break;
               case "done":
                 setMessages((prev) =>
@@ -243,41 +230,14 @@ export function ProjectDetail() {
               projectName={project.name}
               onNameChange={(name) => setProject((prev) => prev ? { ...prev, name } : null)}
             />
-            {/* 标签切换栏 */}
-            <div className="border-b border-neutral-200 bg-neutral-50 px-4 flex gap-0">
-              {[
-                { key: "chat", label: "对话" },
-                { key: "log", label: "执行日志" },
-              ].map((tab) => (
-                <button
-                  key={tab.key}
-                  onClick={() => setLeftTab(tab.key as typeof leftTab)}
-                  className={`px-4 py-2 text-sm border-b-2 transition-colors ${
-                    leftTab === tab.key
-                      ? "border-blue-600 text-blue-600 font-medium"
-                      : "border-transparent text-neutral-500 hover:text-neutral-700"
-                  }`}
-                >
-                  {tab.label}
-                </button>
-              ))}
-            </div>
-            {leftTab === "chat" ? (
-              <>
-                <ChatMessages messages={messages} />
-                <ChatInput
-                  value={input}
-                  onChange={setInput}
-                  onSubmit={handleSend}
-                  onGenerate={handleSend}
-                  isLoading={isStreaming}
-                />
-              </>
-            ) : (
-              <div className="flex-1 overflow-y-auto">
-                <ExecutionLogPanel projectId={numProjectId} />
-              </div>
-            )}
+            <ChatMessages messages={messages} />
+            <ChatInput
+              value={input}
+              onChange={setInput}
+              onSubmit={handleSend}
+              onGenerate={handleSend}
+              isLoading={isStreaming}
+            />
           </div>
         }
         right={<PreviewPanel projectId={numProjectId} generatedFiles={generatedFiles} />}
