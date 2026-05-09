@@ -1,4 +1,5 @@
-import { useState } from "react";
+import { useState, useRef, useCallback, useEffect } from "react";
+import { client } from "@/lib/edgespark";
 
 interface DeployModalProps {
   projectId: number;
@@ -20,21 +21,46 @@ export function DeployModal({
 
   const baseDomain = "torresx.cn";
 
-  const handleDeploy = async () => {
+  const abortRef = useRef<AbortController | null>(null);
+
+  // Cancel deploy on unmount
+  useEffect(() => {
+    return () => {
+      if (abortRef.current) abortRef.current.abort();
+    };
+  }, []);
+
+  const handleCancel = () => {
+    if (abortRef.current) abortRef.current.abort();
+    setStatus("idle");
+  };
+
+  const handleDeploy = useCallback(async () => {
     if (!subdomain.trim()) return;
     setStatus("deploying");
     setError("");
 
+    // Clean up any previous abort controller
+    if (abortRef.current) abortRef.current.abort();
+    const controller = new AbortController();
+    abortRef.current = controller;
+
+    // Cleanup on unmount
+    const isMounted = { current: true };
+
     try {
-      const res = await fetch(`/api/projects/${projectId}/deploy`, {
+      const res = await client.api.fetch(`/api/projects/${projectId}/deploy`, {
         method: "POST",
-        credentials: "include",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           subdomain: subdomain.trim(),
           html: htmlContent,
         }),
+        signal: controller.signal,
       });
+
+      if (!isMounted.current) return;
+
       const data = await res.json();
       if (!res.ok) {
         setError(data.error || "Deploy failed");
@@ -44,10 +70,12 @@ export function DeployModal({
       setDeployUrl(data.url);
       setStatus("done");
     } catch (err) {
-      setError(String(err));
+      if (!isMounted.current) return;
+      if (err instanceof DOMException && err.name === "AbortError") return;
+      setError(err instanceof Error ? err.message : "Network error");
       setStatus("error");
     }
-  };
+  }, [subdomain, projectId, htmlContent]);
 
   return (
     <div className="fixed inset-0 bg-black/30 flex items-center justify-center z-50">
@@ -100,6 +128,12 @@ export function DeployModal({
             <div className="text-xs text-neutral-400 mt-2">
               这可能需要 1-2 分钟
             </div>
+            <button
+              onClick={handleCancel}
+              className="mt-4 px-4 py-2 text-sm text-neutral-500 hover:bg-neutral-100 rounded"
+            >
+              取消
+            </button>
           </div>
         )}
 
