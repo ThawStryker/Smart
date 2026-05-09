@@ -180,6 +180,14 @@ export function ProjectDetail() {
                   ]);
                 }
                 break;
+              case "tool_exec":
+                if (event.name) {
+                  setMessages((prev) => [
+                    ...prev,
+                    { id: `exec-${event.toolCallId || Date.now()}`, role: "system", content: `⚙️ 执行: ${event.name}` },
+                  ]);
+                }
+                break;
               case "tool_result":
                 if (event.name && event.output) {
                   const outputText = event.output;
@@ -194,6 +202,9 @@ export function ProjectDetail() {
                 setMessages((prev) =>
                   prev.map((m) => m.id === assistantId ? { ...m, content: `错误: ${event.content}`, isLoading: false } : m)
                 );
+                break;
+              case "step":
+                // 执行步骤完成通知 — ExecutionLogPanel 通过轮询获取，此处触发即时刷新
                 break;
               case "done":
                 setMessages((prev) =>
