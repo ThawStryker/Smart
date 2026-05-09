@@ -419,12 +419,6 @@ export const vibeRoutes = new Hono()
                 output: result.slice(0, 500),
               });
 
-              sse(controller, {
-                type: "step",
-                status: "completed",
-                title: `${name}: ${argsStr.slice(0, 80)}`,
-              });
-
               // Add tool result to messages
               currentMessages.push({
                 role: "tool",
@@ -432,37 +426,24 @@ export const vibeRoutes = new Hono()
                 content: result,
               });
 
-              // Save step to DB — two-phase: running then completed
+              // Save step to DB
               ctx.runInBackground(
                 (async () => {
                   const existingSteps = await db
                     .select()
                     .from(executionSteps)
                     .where(eq(executionSteps.toolId, toolId));
-                  // Phase 1: insert as running
-                  const [step] = await db
-                    .insert(executionSteps)
-                    .values({
-                      toolId,
-                      stepOrder: existingSteps.length + 1,
-                      type: name,
-                      title: `${name}: ${argsStr.slice(0, 80)}`,
-                      status: "running",
-                      startedAt: new Date().toISOString(),
-                    })
-                    .returning();
-                  if (!step) return;
-
-                  // Phase 2: update to completed
-                  await db
-                    .update(executionSteps)
-                    .set({
-                      status: "completed",
-                      detail: result.slice(0, 200),
-                      terminalOutput: result.slice(0, 500),
-                      completedAt: new Date().toISOString(),
-                    })
-                    .where(eq(executionSteps.id, step.id));
+                  await db.insert(executionSteps).values({
+                    toolId,
+                    stepOrder: existingSteps.length + 1,
+                    type: name,
+                    title: `${name}: ${argsStr.slice(0, 80)}`,
+                    status: "completed",
+                    detail: result.slice(0, 200),
+                    terminalOutput: result.slice(0, 500),
+                    startedAt: new Date().toISOString(),
+                    completedAt: new Date().toISOString(),
+                  });
                 })()
               );
             }
