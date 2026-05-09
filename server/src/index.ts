@@ -22,6 +22,7 @@ import { stepsRoutes } from "./routes/steps";
 import { dataRoutes } from "./routes/data";
 import { toolDataRoutes } from "./routes/toolData";
 import { sdkRoutes } from "./routes/sdk";
+import { deployRoutes } from "./routes/deploy";
 
 const app = new Hono()
   .get("/api/public/hello", (c) =>
@@ -31,6 +32,7 @@ const app = new Hono()
   .route("/api/projects", vibeRoutes)
   .route("/api/projects", stepsRoutes)
   .route("/api/projects", dataRoutes)
+  .route("/api/projects", deployRoutes)
   .route("/", toolDataRoutes)
   .route("/", sdkRoutes);
 
