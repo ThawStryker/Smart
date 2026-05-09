@@ -4,6 +4,7 @@ import { WorkspaceLayout } from "@/components/layout/WorkspaceLayout";
 import { ProjectConfigBar } from "@/components/workspace/ProjectConfigBar";
 import { ChatMessages, type ChatMessage } from "@/components/chat/ChatMessages";
 import { ChatInput } from "@/components/chat/ChatInput";
+import { ExecutionLogPanel } from "@/components/workspace/ExecutionLogPanel";
 import { PreviewPanel } from "@/components/preview/PreviewPanel";
 import { useAuth } from "@/hooks/useAuth";
 import { useNavigate, useParams } from "react-router-dom";
@@ -45,6 +46,7 @@ export function ProjectDetail() {
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [input, setInput] = useState("");
   const [isStreaming, setIsStreaming] = useState(false);
+  const [leftTab, setLeftTab] = useState<"chat" | "log">("chat");
   const [generatedFiles, setGeneratedFiles] = useState<StoredFile[]>([]);
   const abortRef = useRef<AbortController | null>(null);
 
@@ -230,14 +232,41 @@ export function ProjectDetail() {
               projectName={project.name}
               onNameChange={(name) => setProject((prev) => prev ? { ...prev, name } : null)}
             />
-            <ChatMessages messages={messages} />
-            <ChatInput
-              value={input}
-              onChange={setInput}
-              onSubmit={handleSend}
-              onGenerate={handleSend}
-              isLoading={isStreaming}
-            />
+            {/* 标签切换栏 */}
+            <div className="border-b border-neutral-200 bg-neutral-50 px-4 flex gap-0">
+              {[
+                { key: "chat", label: "对话" },
+                { key: "log", label: "执行日志" },
+              ].map((tab) => (
+                <button
+                  key={tab.key}
+                  onClick={() => setLeftTab(tab.key as typeof leftTab)}
+                  className={`px-4 py-2 text-sm border-b-2 transition-colors ${
+                    leftTab === tab.key
+                      ? "border-blue-600 text-blue-600 font-medium"
+                      : "border-transparent text-neutral-500 hover:text-neutral-700"
+                  }`}
+                >
+                  {tab.label}
+                </button>
+              ))}
+            </div>
+            {leftTab === "chat" ? (
+              <>
+                <ChatMessages messages={messages} />
+                <ChatInput
+                  value={input}
+                  onChange={setInput}
+                  onSubmit={handleSend}
+                  onGenerate={handleSend}
+                  isLoading={isStreaming}
+                />
+              </>
+            ) : (
+              <div className="flex-1 overflow-y-auto">
+                <ExecutionLogPanel projectId={numProjectId} />
+              </div>
+            )}
           </div>
         }
         right={<PreviewPanel projectId={numProjectId} generatedFiles={generatedFiles} />}
