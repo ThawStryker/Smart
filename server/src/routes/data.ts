@@ -100,6 +100,7 @@ export const dataRoutes = new Hono()
         } catch (e) { console.error("[overview] R2 list error:", e); /* R2 list may fail */ }
       }
 
+      console.log(`[overview] tool ${tool.id}: ${files.length} files:`, files.map(f => f.path));
       result.push({
         toolId: tool.id,
         toolName: tool.name,
@@ -107,6 +108,7 @@ export const dataRoutes = new Hono()
       });
     }
 
+    console.log(`[overview] returning ${result.length} tools, total files:`, result.flatMap(t => t.files).map(f => f.path));
     return c.json(result);
   })
 
