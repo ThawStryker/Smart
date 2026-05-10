@@ -48,7 +48,6 @@ export function ProjectDetail() {
   const [isStreaming, setIsStreaming] = useState(false);
   const [leftTab, setLeftTab] = useState<"chat" | "log">("chat");
   const [generatedFiles, setGeneratedFiles] = useState<StoredFile[]>([]);
-  const [loadDiag, setLoadDiag] = useState("");
   const abortRef = useRef<AbortController | null>(null);
 
   const numProjectId = projectId ? parseInt(projectId, 10) : undefined;
@@ -66,16 +65,12 @@ export function ProjectDetail() {
 
         // Restore files from R2 overview API (independent of conversation history)
         let filesRestored = false;
-        let diag = "";
         try {
           const overviewRes = await fetch(`/api/projects/${numProjectId}/overview`, { credentials: "include" });
           console.log("[loadAll] overview status:", overviewRes.status);
           if (overviewRes.ok) {
             const overview = await overviewRes.json() as Array<{ toolId: number; toolName: string; files: Array<{ path: string; language: string }> }>;
             console.log("[loadAll] overview data:", JSON.stringify(overview));
-            if (overview.length === 0) {
-              diag = "诊断: overview 返回空（项目没有工具或没有文件）";
-            }
             const restoredFiles: StoredFile[] = [];
             for (const tool of overview) {
               if (!tool.files || tool.files.length === 0) {
@@ -94,12 +89,8 @@ export function ProjectDetail() {
                     restoredFiles.push({ path: data.path, language: data.language, content: data.content });
                   } else {
                     console.warn("[loadAll] file fetch failed:", f.path, fileRes.status);
-                    setLoadDiag += ` 文件 ${f.path} 获取失败(${fileRes.status});`;
                   }
-                } catch (e) {
-                  console.warn("[loadAll] file fetch error:", f.path, e);
-                  setLoadDiag += ` 文件 ${f.path} 网络错误;`;
-                }
+                } catch (e) { console.warn("[loadAll] file fetch error:", f.path, e); }
               }
               if (restoredFiles.length >= 20) break;
             }
