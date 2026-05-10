@@ -85,15 +85,19 @@ export const dataRoutes = new Hono()
 
       // Fallback: if no metadata, try listing from R2
       if (files.length === 0) {
+        console.log(`[overview] tool ${tool.id} has no metadata, trying R2 list`);
         try {
           const prefix = `${projectId}/${tool.id}/`;
           const fileList = await storage.from(buckets.sourceBuckets).list({ prefix, limit: 100 });
-          for (const f of fileList.files) {
-            const path = f.path.replace(prefix, "");
-            const ext = path.split(".").pop() || "text";
-            files.push({ path, language: ext });
+          console.log(`[overview] R2 list for ${prefix}: ${fileList.files?.length || 0} files, objects:`, JSON.stringify(fileList.files?.slice(0, 3) || []));
+          if (fileList.files) {
+            for (const f of fileList.files) {
+              const path = f.path.replace(prefix, "");
+              const ext = path.split(".").pop() || "text";
+              files.push({ path, language: ext });
+            }
           }
-        } catch { /* R2 list may fail */ }
+        } catch (e) { console.error("[overview] R2 list error:", e); /* R2 list may fail */ }
       }
 
       result.push({
