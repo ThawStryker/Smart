@@ -432,6 +432,7 @@ Smart SDK 全局 API：
                       path: args.path,
                       language: lang,
                       content: args.content,
+                      toolId: toolId,
                     });
                     break;
                   }
@@ -457,6 +458,7 @@ Smart SDK 全局 API：
                       path: args.path,
                       language: lang,
                       content,
+                      toolId: toolId,
                     });
                     break;
                   }
@@ -566,7 +568,7 @@ Smart SDK 全局 API：
             })()
           );
 
-          sse(controller, { type: "done" });
+          sse(controller, { type: "done", toolId });
           controller.close();
         } catch (err) {
           try { sse(controller, { type: "error", content: String(err) }); } catch { /* */ }

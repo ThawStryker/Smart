@@ -26,6 +26,7 @@ interface SSEEvent {
   language?: string;
   files?: string[];
   toolCallId?: string;
+  toolId?: number;
   name?: string;
   input?: string;
   output?: string;
@@ -209,6 +210,7 @@ export function ProjectDetail() {
                 );
                 break;
               case "file":
+                if (event.toolId) setActiveToolId(event.toolId);
                 setGeneratedFiles((prev) => {
                   // Replace if same path, otherwise add
                   const existing = prev.findIndex((f) => f.path === event.path);
@@ -238,6 +240,7 @@ export function ProjectDetail() {
                 );
                 break;
               case "done":
+                if (event.toolId) setActiveToolId(event.toolId);
                 setMessages((prev) =>
                   prev.map((m) => m.id === assistantId ? { ...m, isLoading: false } : m)
                 );
