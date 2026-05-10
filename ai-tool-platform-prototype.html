@@ -1,0 +1,379 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AI工具工厂平台 - 原型</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://cdn.jsdelivr.net/npm/font-awesome@4.7.0/css/font-awesome.min.css" rel="stylesheet">
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        primary: '#2563eb',
+                        success: '#10b981',
+                        running: '#3b82f6',
+                        warning: '#f59e0b',
+                        neutral: {
+                            50: '#f9fafb',
+                            100: '#f3f4f6',
+                            200: '#e5e7eb',
+                            300: '#d1d5db',
+                            800: '#1f2937',
+                            900: '#111827',
+                        }
+                    },
+                    fontFamily: {
+                        sans: ['Inter', 'system-ui', 'sans-serif'],
+                    },
+                }
+            }
+        }
+    </script>
+    <style type="text/tailwindcss">
+        @layer utilities {
+            .content-auto {
+                content-visibility: auto;
+            }
+            .scrollbar-hide::-webkit-scrollbar {
+                display: none;
+            }
+            .scrollbar-thin::-webkit-scrollbar {
+                width: 4px;
+            }
+            .scrollbar-thin::-webkit-scrollbar-thumb {
+                background-color: rgba(156, 163, 175, 0.5);
+                border-radius: 2px;
+            }
+            .terminal-animation::after {
+                content: "";
+                animation: blink 1s step-end infinite;
+            }
+            @keyframes blink {
+                50% { opacity: 0; }
+            }
+            .pulse-dot {
+                animation: pulse 1.5s infinite;
+            }
+            @keyframes pulse {
+                0%, 100% { opacity: 1; }
+                50% { opacity: 0.3; }
+            }
+            .loading-dots span {
+                animation: loading 1.4s infinite ease-in-out both;
+            }
+            .loading-dots span:nth-child(1) { animation-delay: -0.32s; }
+            .loading-dots span:nth-child(2) { animation-delay: -0.16s; }
+            @keyframes loading {
+                0%, 80%, 100% { transform: scale(0); opacity: 0.5; }
+                40% { transform: scale(1); opacity: 1; }
+            }
+        }
+    </style>
+</head>
+<body class="bg-neutral-50 font-sans text-neutral-800 h-screen flex flex-col overflow-hidden">
+    <!-- 平台顶部导航 -->
+    <div class="bg-white border-b border-neutral-200 px-6 py-3 flex items-center justify-between">
+        <div class="flex items-center gap-8">
+            <div class="flex items-center gap-2">
+                <div class="w-8 h-8 rounded bg-primary flex items-center justify-center">
+                    <i class="fa fa-bolt text-white text-lg"></i>
+                </div>
+                <span class="font-bold text-lg">Smart</span>
+            </div>
+            <nav class="flex items-center gap-6 text-sm">
+                <a href="#" class="text-neutral-800 font-medium">任务</a>
+                <a href="#" class="text-neutral-500 hover:text-primary transition-colors">Agents</a>
+                <a href="#" class="text-neutral-500 hover:text-primary transition-colors">Bots</a>
+                <a href="#" class="text-neutral-500 hover:text-primary transition-colors">Skills</a>
+                <a href="#" class="text-primary font-medium border-b-2 border-primary pb-3">MCPs</a>
+                <a href="#" class="text-neutral-500 hover:text-primary transition-colors">工具市场</a>
+                <a href="#" class="text-neutral-500 hover:text-primary transition-colors">AI工具</a>
+            </nav>
+        </div>
+        <div class="flex items-center gap-4">
+            <button class="text-sm bg-primary/10 text-primary px-3 py-1 rounded hover:bg-primary/20 transition-colors">
+                发布工具
+            </button>
+        </div>
+    </div>
+
+    <!-- 主内容区 -->
+    <div class="flex-1 flex overflow-hidden">
+        <!-- 左侧工作区 -->
+        <div class="flex-1 flex flex-col border-r border-neutral-200 overflow-hidden">
+            <!-- 项目配置区 -->
+            <div class="bg-white border-b border-neutral-200 px-6 py-4 flex items-center justify-between">
+                <div class="flex items-center gap-4">
+                    <i class="fa fa-file-text-o text-neutral-400"></i>
+                    <div class="flex flex-col">
+                        <div class="flex items-center gap-2">
+                            <h1 class="font-medium">批量微信聊天记录整理工具</h1>
+                            <button class="text-neutral-400 hover:text-primary transition-colors">
+                                <i class="fa fa-pencil"></i>
+                            </button>
+                        </div>
+                        <div class="text-xs text-neutral-500 mt-0.5">创建于 2026-05-08 16:30</div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 执行日志面板 -->
+            <div class="flex-1 overflow-y-auto scrollbar-thin p-6 bg-white">
+                <div class="mb-6">
+                    <div class="text-sm text-neutral-600 mb-3">模板创建成功！现在安装依赖：</div>
+                    
+                    <!-- 执行步骤 -->
+                    <div class="space-y-3">
+                        <!-- 完成步骤 -->
+                        <div class="border border-neutral-200 rounded-lg overflow-hidden">
+                            <div class="bg-neutral-50 px-4 py-3 flex items-center justify-between cursor-pointer hover:bg-neutral-100 transition-colors">
+                                <div class="flex items-center gap-3">
+                                    <span class="text-success"><i class="fa fa-check-circle"></i></span>
+                                    <span class="text-sm font-medium">Completed</span>
+                                    <span class="text-xs bg-neutral-200 px-2 py-0.5 rounded">Bash</span>
+                                    <span class="text-sm text-neutral-600">加载MCP资源：文件读取插件、Excel生成插件</span>
+                                </div>
+                                <i class="fa fa-chevron-down text-neutral-400 text-xs"></i>
+                            </div>
+                        </div>
+
+                        <div class="border border-neutral-200 rounded-lg overflow-hidden">
+                            <div class="bg-neutral-50 px-4 py-3 flex items-center justify-between cursor-pointer hover:bg-neutral-100 transition-colors">
+                                <div class="flex items-center gap-3">
+                                    <span class="text-success"><i class="fa fa-check-circle"></i></span>
+                                    <span class="text-sm font-medium">Completed</span>
+                                    <span class="text-xs bg-neutral-200 px-2 py-0.5 rounded">Bash</span>
+                                    <span class="text-sm text-neutral-600">加载Skills：文件分类处理Skill、搜索功能Skill</span>
+                                </div>
+                                <i class="fa fa-chevron-down text-neutral-400 text-xs"></i>
+                            </div>
+                        </div>
+
+                        <div class="border border-neutral-200 rounded-lg overflow-hidden">
+                            <div class="bg-neutral-50 px-4 py-3 flex items-center justify-between cursor-pointer hover:bg-neutral-100 transition-colors">
+                                <div class="flex items-center gap-3">
+                                    <span class="text-success"><i class="fa fa-check-circle"></i></span>
+                                    <span class="text-sm font-medium">Completed</span>
+                                    <span class="text-xs bg-neutral-200 px-2 py-0.5 rounded">Bash</span>
+                                    <span class="text-sm text-neutral-600">生成工具核心代码</span>
+                                </div>
+                                <i class="fa fa-chevron-down text-neutral-400 text-xs"></i>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="mb-6">
+                    <div class="text-sm text-neutral-600 mb-3">开发服务器已启动成功！现在安装额外依赖：</div>
+                    
+                    <div class="space-y-3">
+                        <div class="border border-neutral-200 rounded-lg overflow-hidden">
+                            <div class="bg-neutral-50 px-4 py-3 flex items-center justify-between cursor-pointer hover:bg-neutral-100 transition-colors">
+                                <div class="flex items-center gap-3">
+                                    <span class="text-success"><i class="fa fa-check-circle"></i></span>
+                                    <span class="text-sm font-medium">1 of 8 done</span>
+                                    <span class="text-sm text-neutral-600">安装前端依赖包</span>
+                                </div>
+                                <i class="fa fa-chevron-down text-neutral-400 text-xs"></i>
+                            </div>
+                        </div>
+
+                        <!-- 运行中步骤 -->
+                        <div class="border border-primary/20 rounded-lg overflow-hidden bg-primary/5">
+                            <div class="px-4 py-3 flex items-center justify-between cursor-pointer hover:bg-primary/10 transition-colors">
+                                <div class="flex items-center gap-3">
+                                    <span class="text-running pulse-dot"><i class="fa fa-circle-o-notch fa-spin"></i></span>
+                                    <span class="text-sm font-medium text-running">Running</span>
+                                    <span class="text-xs bg-primary/20 text-primary px-2 py-0.5 rounded">Bash</span>
+                                    <span class="text-sm text-neutral-800">编译打包工具代码</span>
+                                </div>
+                                <i class="fa fa-chevron-down text-neutral-400 text-xs"></i>
+                            </div>
+                            <div class="px-4 py-3 bg-black/90 text-green-400 text-xs font-mono h-32 overflow-y-auto scrollbar-thin">
+                                <div>$ npm run build</div>
+                                <div>> vite build</div>
+                                <div>vite v5.0.0 building for production...</div>
+                                <div>✓ 123 modules transformed.</div>
+                                <div>rendering chunks...  <span class="terminal-animation">▋</span></div>
+                            </div>
+                        </div>
+
+                        <div class="flex items-center gap-1.5 text-sm text-neutral-500 pl-4">
+                            <span>...</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 底部输入区 -->
+            <div class="bg-white border-t border-neutral-200 p-4">
+                <div class="border border-neutral-300 rounded-lg overflow-hidden">
+                    <div class="px-4 py-2 border-b border-neutral-200 bg-neutral-50 flex items-center gap-2">
+                        <i class="fa fa-plug text-neutral-500 text-sm"></i>
+                        <span class="text-xs text-neutral-500">内置能力</span>
+                    </div>
+                    <textarea 
+                        placeholder="继续对话，描述你需要的工具修改要求..." 
+                        class="w-full px-4 py-3 text-sm outline-none resize-none h-20"
+                    ></textarea>
+                    <div class="px-4 py-2 flex items-center justify-between border-t border-neutral-200 bg-neutral-50">
+                        <div class="flex items-center gap-4">
+                            <button class="flex items-center gap-1.5 text-xs text-neutral-600 hover:text-primary transition-colors">
+                                <i class="fa fa-paperclip"></i>
+                                附件
+                            </button>
+                            <button class="flex items-center gap-1.5 text-xs text-neutral-600 hover:text-primary transition-colors">
+                                <i class="fa fa-cubes"></i>
+                                MCP
+                            </button>
+                            <button class="flex items-center gap-1.5 text-xs text-neutral-600 hover:text-primary transition-colors">
+                                <i class="fa fa-magic"></i>
+                                Skills
+                            </button>
+                            <button class="flex items-center gap-1.5 text-xs bg-primary/10 text-primary px-3 py-1 rounded hover:bg-primary/20 transition-colors">
+                                <i class="fa fa-plus"></i>
+                                创建工具
+                            </button>
+                        </div>
+                        <button class="w-8 h-8 rounded-full bg-primary text-white flex items-center justify-center hover:bg-primary/90 transition-colors">
+                            <i class="fa fa-paper-plane-o"></i>
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- 右侧预览区 -->
+        <div class="w-1/2 flex flex-col bg-white">
+            <!-- 预览顶部栏 -->
+            <div class="border-b border-neutral-200 px-4 py-2 flex items-center justify-between bg-neutral-50">
+                <div class="flex items-center gap-3">
+                    <button class="px-3 py-1.5 bg-white border border-neutral-200 rounded text-sm font-medium flex items-center gap-1.5">
+                        <i class="fa fa-globe text-primary"></i>
+                        预览
+                    </button>
+                    <button class="px-3 py-1.5 bg-transparent text-neutral-500 rounded text-sm font-medium flex items-center gap-1.5 hover:bg-neutral-100 transition-colors">
+                        <i class="fa fa-code"></i>
+                        代码
+                    </button>
+                    <button class="px-3 py-1.5 bg-transparent text-neutral-500 rounded text-sm font-medium flex items-center gap-1.5 hover:bg-neutral-100 transition-colors">
+                        <i class="fa fa-history"></i>
+                        版本
+                    </button>
+                    <button class="px-3 py-1.5 bg-transparent text-neutral-500 rounded text-sm font-medium flex items-center gap-1.5 hover:bg-neutral-100 transition-colors">
+                        <i class="fa fa-code-fork"></i>
+                        源码
+                    </button>
+                    <button class="px-3 py-1.5 bg-transparent text-neutral-500 rounded text-sm font-medium flex items-center gap-1.5 hover:bg-neutral-100 transition-colors">
+                        <i class="fa fa-line-chart"></i>
+                        RUM
+                    </button>
+                    <button class="px-3 py-1.5 bg-primary text-white rounded text-sm font-medium flex items-center gap-1.5 hover:bg-primary/90 transition-colors">
+                        <i class="fa fa-rocket"></i>
+                        部署
+                    </button>
+                </div>
+            </div>
+
+            <!-- 预览地址栏 -->
+            <div class="border-b border-neutral-200 px-4 py-2 flex items-center justify-between bg-white">
+                <div class="flex items-center gap-3">
+                    <button class="text-neutral-500 hover:text-neutral-800 transition-colors">
+                        <i class="fa fa-refresh"></i>
+                    </button>
+                    <button class="text-neutral-500 hover:text-neutral-800 transition-colors">
+                        <i class="fa fa-external-link"></i>
+                    </button>
+                    <button class="text-neutral-500 hover:text-neutral-800 transition-colors">
+                        <i class="fa fa-expand"></i>
+                    </button>
+                    <div class="flex items-center gap-2 bg-neutral-100 rounded px-3 py-1 text-xs text-neutral-600">
+                        <i class="fa fa-link text-neutral-400"></i>
+                        https://tool-12345.toolfactory-preview.com
+                    </div>
+                </div>
+                <div class="flex items-center gap-3">
+                    <span class="text-xs text-success flex items-center gap-1">
+                        <i class="fa fa-check-circle"></i>
+                        运行中
+                    </span>
+                    <span class="text-xs text-success flex items-center gap-1">
+                        <i class="fa fa-circle pulse-dot"></i>
+                        HMR 已连接
+                    </span>
+                </div>
+            </div>
+
+            <!-- 预览内容区 -->
+            <div class="flex-1 bg-white flex flex-col items-center justify-center">
+                <div class="w-20 h-20 rounded-full bg-green-50 flex items-center justify-center mb-6">
+                    <div class="w-16 h-16 rounded-full bg-green-100 flex items-center justify-center">
+                        <i class="fa fa-bolt text-3xl text-green-500"></i>
+                    </div>
+                </div>
+                <h2 class="text-2xl font-bold text-neutral-800 mb-3">欢迎使用 Smart</h2>
+                <p class="text-neutral-500 mb-6">您的工具正在创建中，AI 正在为您生成代码...</p>
+                <div class="loading-dots flex gap-1">
+                    <span class="w-2 h-2 rounded-full bg-green-500"></span>
+                    <span class="w-2 h-2 rounded-full bg-green-500"></span>
+                    <span class="w-2 h-2 rounded-full bg-green-500"></span>
+                </div>
+
+                <!-- 工具生成进度预览 -->
+                <div class="mt-12 w-80">
+                    <div class="text-xs text-neutral-500 mb-2 flex justify-between">
+                        <span>生成进度</span>
+                        <span id="progress-text">68%</span>
+                    </div>
+                    <div class="w-full h-2 bg-neutral-100 rounded-full overflow-hidden">
+                        <div class="h-full bg-green-500 w-[68%] transition-all duration-500"></div>
+                    </div>
+                    <div class="mt-3 text-xs text-neutral-500 text-center">
+                        预计还需要 15 秒完成
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // 简单交互效果模拟
+        document.querySelectorAll('[class*="chevron-down"]').forEach(el => {
+            el.closest('div[class*="cursor-pointer"]').addEventListener('click', function() {
+                const content = this.nextElementSibling;
+                if (content) {
+                    content.style.display = content.style.display === 'none' ? 'block' : 'none';
+                }
+            });
+        });
+
+        // 进度条模拟
+        setTimeout(() => {
+            const progressBar = document.querySelector('.bg-green-500.w-\\[68\\%\\]');
+            const progressText = document.getElementById('progress-text');
+            const timeText = document.querySelector('.mt-3.text-xs');
+            
+            let progress = 68;
+            const interval = setInterval(() => {
+                progress += 1;
+                progressBar.style.width = `${progress}%`;
+                progressText.textContent = `${progress}%`;
+                
+                if (progress >= 100) {
+                    clearInterval(interval);
+                    timeText.textContent = '工具生成完成！';
+                    document.querySelector('.running > span:first-child').className = 'text-success';
+                    document.querySelector('.running > span:first-child').innerHTML = '<i class="fa fa-check-circle"></i>';
+                    document.querySelector('.running > span.font-medium').textContent = 'Completed';
+                    document.querySelector('.running > span.font-medium').className = 'text-sm font-medium text-success';
+                } else {
+                    const remaining = Math.ceil((100 - progress) * 0.5);
+                    timeText.textContent = `预计还需要 ${remaining} 秒完成`;
+                }
+            }, 300);
+        }, 1000);
+    </script>
+</body>
+</html>

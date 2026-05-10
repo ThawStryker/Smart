@@ -111,11 +111,11 @@ export const dataRoutes = new Hono()
   })
 
   // Get file content from R2
-  .get("/:projectId/tools/:toolId/files/*", async (c) => {
+  .get("/:projectId/tools/:toolId/files", async (c) => {
     const userId = auth.user!.id;
     const projectId = parseInt(c.req.param("projectId"), 10);
     const tId = parseInt(c.req.param("toolId"), 10);
-    const filePath = c.req.param("*");
+    const filePath = c.req.query("path");
     if (!filePath) return c.json({ error: "File path required" }, 400);
 
     const [project] = await db

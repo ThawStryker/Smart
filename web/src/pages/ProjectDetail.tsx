@@ -81,7 +81,7 @@ export function ProjectDetail() {
               for (const f of tool.files.slice(0, 20 - restoredFiles.length)) {
                 try {
                   const fileRes = await fetch(
-                    `/api/projects/${numProjectId}/tools/${tool.toolId}/files/${encodeURIComponent(f.path)}`,
+                    `/api/projects/${numProjectId}/tools/${tool.toolId}/files?path=${encodeURIComponent(f.path)}`,
                     { credentials: "include" }
                   );
                   if (fileRes.ok) {
