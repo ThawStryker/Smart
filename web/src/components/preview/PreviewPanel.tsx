@@ -10,6 +10,7 @@ interface GeneratedFile {
 
 interface PreviewPanelProps {
   projectId: number;
+  toolId?: number | null;
   generatedFiles?: GeneratedFile[];
 }
 
@@ -19,30 +20,26 @@ const tabs = [
   { key: "source", label: "源码" },
 ];
 
-export function PreviewPanel({ projectId, generatedFiles = [] }: PreviewPanelProps) {
+export function PreviewPanel({ projectId, toolId, generatedFiles = [] }: PreviewPanelProps) {
   const [activeTab, setActiveTab] = useState("code");
   const [selectedFileIdx, setSelectedFileIdx] = useState(0);
   const [showDeploy, setShowDeploy] = useState(false);
+  const [previewKey, setPreviewKey] = useState(0);
   const iframeRef = useRef<HTMLIFrameElement>(null);
+
+  const hasHtml = generatedFiles.some((f) => f.path.endsWith(".html") || f.language === "html");
+  const previewUrl = toolId && hasHtml
+    ? `/api/public/smart/preview/${projectId}/${toolId}/index.html`
+    : null;
 
   // Refresh file list when new files arrive
   useEffect(() => {
     if (generatedFiles.length > 0) {
       setSelectedFileIdx(generatedFiles.length - 1);
       setActiveTab("code");
+      setPreviewKey((k) => k + 1);
     }
   }, [generatedFiles.length]);
-
-  // Update iframe when switching to preview or files change
-  useEffect(() => {
-    if (activeTab !== "preview" || !iframeRef.current) return;
-    const htmlFile =
-      generatedFiles.find((f) => f.path.endsWith(".html")) ||
-      generatedFiles.find((f) => f.language === "html");
-    if (htmlFile) {
-      iframeRef.current.srcdoc = htmlFile.content;
-    }
-  }, [activeTab, generatedFiles]);
 
   const hasFiles = generatedFiles.length > 0;
   const currentFile = hasFiles
@@ -118,9 +115,11 @@ export function PreviewPanel({ projectId, generatedFiles = [] }: PreviewPanelPro
       <div className="flex-1 overflow-hidden">
         {/* Preview tab */}
         {activeTab === "preview" ? (
-          htmlFile ? (
+          previewUrl ? (
             <iframe
+              key={previewKey}
               ref={iframeRef}
+              src={previewUrl}
               className="w-full h-full border-0"
               sandbox="allow-scripts allow-forms allow-same-origin"
               title="Preview"

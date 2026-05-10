@@ -48,6 +48,7 @@ export function ProjectDetail() {
   const [isStreaming, setIsStreaming] = useState(false);
   const [leftTab, setLeftTab] = useState<"chat" | "log">("chat");
   const [generatedFiles, setGeneratedFiles] = useState<StoredFile[]>([]);
+  const [activeToolId, setActiveToolId] = useState<number | null>(null);
   const thinkingRef = useRef("");
   const abortRef = useRef<AbortController | null>(null);
 
@@ -72,6 +73,7 @@ export function ProjectDetail() {
           if (overviewRes.ok) {
             const overview = await overviewRes.json() as Array<{ toolId: number; toolName: string; files: Array<{ path: string; language: string }> }>;
             console.log("[loadAll] overview data:", JSON.stringify(overview));
+            if (overview.length > 0) setActiveToolId(overview[0].toolId);
             const restoredFiles: StoredFile[] = [];
             for (const tool of overview) {
               if (!tool.files || tool.files.length === 0) {
@@ -309,7 +311,7 @@ export function ProjectDetail() {
             )}
           </div>
         }
-        right={<PreviewPanel projectId={numProjectId} generatedFiles={generatedFiles} />}
+        right={<PreviewPanel projectId={numProjectId} toolId={activeToolId} generatedFiles={generatedFiles} />}
       />
     </div>
   );
