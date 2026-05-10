@@ -101,20 +101,17 @@ export function PreviewPanel({ projectId, toolId, generatedFiles = [] }: Preview
       >
         {activeTab === "preview" ? (
           previewUrl ? (
-            <div className="relative" style={{ width: previewDim.w * previewScale || "100%", height: previewDim.h * previewScale || "100%" }}>
+            <div className="flex justify-center">
               <iframe
                 key={previewKey}
                 ref={iframeRef}
                 src={previewUrl}
                 style={{
-                  width: previewDim.w || "100%",
-                  height: previewDim.h || "100%",
+                  width: previewDim.w || 0,
+                  height: previewDim.h || 0,
                   border: 0,
                   transform: `scale(${previewScale})`,
-                  transformOrigin: "top left",
-                  position: "absolute",
-                  top: 0,
-                  left: 0,
+                  transformOrigin: "top center",
                 }}
                 sandbox="allow-scripts allow-forms allow-same-origin"
                 title="Preview"
@@ -125,11 +122,9 @@ export function PreviewPanel({ projectId, toolId, generatedFiles = [] }: Preview
                     const doc = iframe?.contentDocument || iframe?.contentWindow?.document;
                     if (doc && container) {
                       const body = doc.body;
-                      const ch = Math.max(body.scrollHeight, body.offsetHeight, 400);
-                      const cw = Math.max(body.scrollWidth, body.offsetWidth, 400);
-                      const scaleH = container.clientHeight / ch;
-                      const scaleW = container.clientWidth / cw;
-                      const s = Math.min(scaleH, scaleW, 1);
+                      const ch = Math.max(body.scrollHeight, body.offsetHeight, 200);
+                      const cw = Math.max(body.scrollWidth, body.offsetWidth, 200);
+                      const s = Math.min(container.clientHeight / ch, 1);
                       setPreviewScale(s);
                       setPreviewDim({ w: cw, h: ch });
                     }
