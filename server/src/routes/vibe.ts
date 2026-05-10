@@ -193,6 +193,7 @@ Smart SDK 全局 API：
   - 若用户需求中有"登录""注册""账号""用户系统"，需生成登录/注册页面，调用 Smart.auth.signUp/signIn
   - 每个工具的用户系统完全独立，与其他工具和 Smart 平台不共享
   - 密码最少 6 位
+  - 页面间的跳转必须使用相对路径（如 window.location.href = 'login.html'），不能用绝对路径（如 '/login.html'），否则在预览和部署环境中会跳转失败
 
 ## 工具使用指南
 
