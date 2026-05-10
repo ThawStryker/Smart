@@ -193,7 +193,8 @@ Smart SDK 全局 API：
 - grep_files：搜索代码模式
 - 使用 Tailwind CSS CDN (<script src="https://cdn.tailwindcss.com"></script>)
 - 数据持久化必须通过 Smart SDK，不要用 localStorage
-- 生成自包含、可交互的单文件 HTML 应用
+	- 生成自包含、可交互的单文件 HTML 应用
+	- body 设置 min-height: 100vh; overflow-y: auto，确保页面在 iframe 中可滚动，所有内容可见
 
 ## 思维预算
 
