@@ -220,33 +220,15 @@ export function ProjectDetail() {
                 });
                 break;
               case "tool_start":
-                if (event.name) {
-                  setMessages((prev) => [
-                    ...prev,
-                    { id: `tool-${event.toolCallId || Date.now()}`, role: "system", content: `🔧 ${event.name}` },
-                  ]);
-                }
+                // Tool execution shown via thinking block and assistant response
                 break;
               case "tool_exec":
-                if (event.name) {
-                  setMessages((prev) => [
-                    ...prev,
-                    { id: `exec-${event.toolCallId || Date.now()}`, role: "system", content: `⚙️ 执行: ${event.name}` },
-                  ]);
-                }
                 break;
               case "step":
                 // ExecutionLogPanel polls via useExecutionSteps (2s interval when steps are running)
                 break;
               case "tool_result":
-                if (event.name && event.output) {
-                  const outputText = event.output;
-                  const short = outputText.length > 100 ? outputText.slice(0, 100) + "..." : outputText;
-                  setMessages((prev) => [
-                    ...prev,
-                    { id: `result-${event.toolCallId || Date.now()}`, role: "system", content: `✅ ${event.name}: ${short}` },
-                  ]);
-                }
+                // Tool result shown via thinking block
                 break;
               case "error":
                 setMessages((prev) =>
