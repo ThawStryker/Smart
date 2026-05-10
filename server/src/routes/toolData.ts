@@ -5,7 +5,7 @@ import { eq, and } from "drizzle-orm";
 import { toolData, projects } from "@defs";
 
 export const toolDataRoutes = new Hono()
-  .get("/.smart/data/:key", async (c) => {
+  .get("/api/public/smart/data/:key", async (c) => {
     const key = c.req.param("key");
     const projectId = parseInt(c.req.query("projectId") || "0", 10);
     if (!projectId) return c.json({ error: "projectId required" }, 400);
@@ -26,7 +26,7 @@ export const toolDataRoutes = new Hono()
     try { return c.json({ value: JSON.parse(row.value) }); }
     catch { return c.json({ value: row.value }); }
   })
-  .put("/.smart/data/:key", async (c) => {
+  .put("/api/public/smart/data/:key", async (c) => {
     const userId = auth.user?.id;
     if (!userId) return c.json({ error: "Login required" }, 401);
 
@@ -77,7 +77,7 @@ export const toolDataRoutes = new Hono()
 
     return c.json({ success: true });
   })
-  .delete("/.smart/data/:key", async (c) => {
+  .delete("/api/public/smart/data/:key", async (c) => {
     const userId = auth.user?.id;
     if (!userId) return c.json({ error: "Login required" }, 401);
 
@@ -102,7 +102,7 @@ export const toolDataRoutes = new Hono()
 
     return c.json({ success: true });
   })
-  .get("/.smart/auth/user", (c) => {
+  .get("/api/public/smart/auth/user", (c) => {
     if (!auth.user) return c.json({ user: null });
     return c.json({ user: { id: auth.user.id, email: auth.user.email, name: auth.user.name } });
   });

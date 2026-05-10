@@ -140,7 +140,7 @@ export const vibeRoutes = new Hono()
   app.js      — 独立业务逻辑（如需要）
 
 index.html 必须包含 SDK 引用（放在 </body> 前）：
-  <script src="/.smart/sdk.js"></script>
+  <script src="/api/public/smart/sdk.js"></script>
 
 Smart SDK 提供以下全局 API：
   const data = await Smart.data.get('key');        // 读取数据

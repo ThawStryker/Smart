@@ -1,7 +1,7 @@
 import { Hono } from "hono";
 
 export const sdkRoutes = new Hono()
-  .get("/.smart/sdk.js", (c) => {
+  .get("/api/public/smart/sdk.js", (c) => {
     return c.body(
       `(function() {
   'use strict';
@@ -28,18 +28,18 @@ export const sdkRoutes = new Hono()
   window.Smart = {
     data: {
       get: function(key) {
-        return apiRequest('GET', '/.smart/data/' + encodeURIComponent(key)).then(function(r) { return r.value; });
+        return apiRequest('GET', '/api/public/smart/data/' + encodeURIComponent(key)).then(function(r) { return r.value; });
       },
       set: function(key, value) {
-        return apiRequest('PUT', '/.smart/data/' + encodeURIComponent(key), { value: value, projectId: parseInt(getProjectId()) });
+        return apiRequest('PUT', '/api/public/smart/data/' + encodeURIComponent(key), { value: value, projectId: parseInt(getProjectId()) });
       },
       delete: function(key) {
-        return apiRequest('DELETE', '/.smart/data/' + encodeURIComponent(key));
+        return apiRequest('DELETE', '/api/public/smart/data/' + encodeURIComponent(key));
       }
     },
     auth: {
       user: function() {
-        return apiRequest('GET', '/.smart/auth/user').then(function(r) { return r.user; });
+        return apiRequest('GET', '/api/public/smart/auth/user').then(function(r) { return r.user; });
       }
     }
   };
