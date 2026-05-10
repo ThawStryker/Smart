@@ -24,7 +24,10 @@ export function PreviewPanel({ projectId, toolId, generatedFiles = [] }: Preview
   const [selectedFileIdx, setSelectedFileIdx] = useState(0);
   const [showDeploy, setShowDeploy] = useState(false);
   const [previewKey, setPreviewKey] = useState(0);
+  const [previewScale, setPreviewScale] = useState(1);
+  const [previewDim, setPreviewDim] = useState({ w: 0, h: 0 });
   const iframeRef = useRef<HTMLIFrameElement>(null);
+  const previewContainerRef = useRef<HTMLDivElement>(null);
 
   const hasHtml = generatedFiles.some((f) => f.path.endsWith(".html") || f.language === "html");
   const previewUrl = toolId && hasHtml
@@ -92,17 +95,48 @@ export function PreviewPanel({ projectId, toolId, generatedFiles = [] }: Preview
       </div>
 
       {/* Content area */}
-      <div className="flex-1 overflow-hidden">
+      <div
+        ref={previewContainerRef}
+        className={`flex-1 ${activeTab === "code" ? "overflow-hidden" : "overflow-auto"}`}
+      >
         {activeTab === "preview" ? (
           previewUrl ? (
-            <iframe
-              key={previewKey}
-              ref={iframeRef}
-              src={previewUrl}
-              className="w-full h-full border-0"
-              sandbox="allow-scripts allow-forms allow-same-origin"
-              title="Preview"
-            />
+            <div className="relative" style={{ width: previewDim.w * previewScale || "100%", height: previewDim.h * previewScale || "100%" }}>
+              <iframe
+                key={previewKey}
+                ref={iframeRef}
+                src={previewUrl}
+                style={{
+                  width: previewDim.w || "100%",
+                  height: previewDim.h || "100%",
+                  border: 0,
+                  transform: `scale(${previewScale})`,
+                  transformOrigin: "top left",
+                  position: "absolute",
+                  top: 0,
+                  left: 0,
+                }}
+                sandbox="allow-scripts allow-forms allow-same-origin"
+                title="Preview"
+                onLoad={() => {
+                  try {
+                    const iframe = iframeRef.current;
+                    const container = previewContainerRef.current;
+                    const doc = iframe?.contentDocument || iframe?.contentWindow?.document;
+                    if (doc && container) {
+                      const body = doc.body;
+                      const ch = Math.max(body.scrollHeight, body.offsetHeight, 400);
+                      const cw = Math.max(body.scrollWidth, body.offsetWidth, 400);
+                      const scaleH = container.clientHeight / ch;
+                      const scaleW = container.clientWidth / cw;
+                      const s = Math.min(scaleH, scaleW, 1);
+                      setPreviewScale(s);
+                      setPreviewDim({ w: cw, h: ch });
+                    }
+                  } catch { /* cross-origin */ }
+                }}
+              />
+            </div>
           ) : (
             <div className="flex items-center justify-center h-full text-neutral-400 text-sm">
               <p>暂无 HTML 文件可预览</p>
