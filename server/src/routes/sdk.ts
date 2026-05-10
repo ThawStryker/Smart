@@ -41,16 +41,29 @@ export const sdkRoutes = new Hono()
       user: function() {
         return apiRequest('GET', '/api/public/smart/auth/user').then(function(r) { return r.user; });
       },
-      login: function(redirectUrl) {
-        var url = '/login';
-        if (redirectUrl) url += '?redirect_to=' + encodeURIComponent(redirectUrl);
-        window.location.href = url;
+      signUp: function(email, password, name) {
+        var pid = getProjectId();
+        return fetch(origin + '/api/public/smart/auth/sign-up', {
+          method: 'POST', credentials: 'include',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ email: email, password: password, name: name || email.split('@')[0], projectId: parseInt(pid) })
+        }).then(function(r) { return r.json(); });
+      },
+      signIn: function(email, password) {
+        var pid = getProjectId();
+        return fetch(origin + '/api/public/smart/auth/sign-in', {
+          method: 'POST', credentials: 'include',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ email: email, password: password, projectId: parseInt(pid) })
+        }).then(function(r) { return r.json(); });
       },
       signOut: function() {
-        return fetch(origin + '/api/auth/sign-out', {
-          method: 'POST',
-          credentials: 'include'
-        }).then(function(r) { window.location.reload(); return r.json(); });
+        var pid = getProjectId();
+        return fetch(origin + '/api/public/smart/auth/sign-out', {
+          method: 'POST', credentials: 'include',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ projectId: parseInt(pid) })
+        }).then(function(r) { return r.json(); });
       }
     }
   };
