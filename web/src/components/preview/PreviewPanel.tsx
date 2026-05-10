@@ -24,7 +24,6 @@ export function PreviewPanel({ projectId, toolId, generatedFiles = [] }: Preview
   const [selectedFileIdx, setSelectedFileIdx] = useState(0);
   const [showDeploy, setShowDeploy] = useState(false);
   const [previewKey, setPreviewKey] = useState(0);
-  const [previewScale, setPreviewScale] = useState<number | null>(null);
   const iframeRef = useRef<HTMLIFrameElement>(null);
 
   const hasHtml = generatedFiles.some((f) => f.path.endsWith(".html") || f.language === "html");
@@ -96,35 +95,14 @@ export function PreviewPanel({ projectId, toolId, generatedFiles = [] }: Preview
       <div className="flex-1 overflow-hidden">
         {activeTab === "preview" ? (
           previewUrl ? (
-            <div className="flex justify-center" style={{ height: previewScale ? `${previewScale * 100}%` : "100%" }}>
-              <iframe
-                key={previewKey}
-                ref={iframeRef}
-                src={previewUrl}
-                className="border-0"
-                style={{
-                  width: previewScale !== null ? `${100 / previewScale}%` : "100%",
-                  height: "100%",
-                  transform: previewScale !== null ? `scale(${previewScale})` : "none",
-                  transformOrigin: "top center",
-                }}
-                sandbox="allow-scripts allow-forms allow-same-origin"
-                title="Preview"
-                onLoad={() => {
-                  try {
-                    const iframe = iframeRef.current;
-                    const doc = iframe?.contentDocument || iframe?.contentWindow?.document;
-                    if (doc) {
-                      const body = doc.body;
-                      const ch = Math.max(body.scrollHeight, 400);
-                      const containerH = iframe.parentElement?.parentElement?.clientHeight || 600;
-                      const s = Math.min(containerH / ch, 1);
-                      setPreviewScale(s);
-                    }
-                  } catch { /* cross-origin */ }
-                }}
-              />
-            </div>
+            <iframe
+              key={previewKey}
+              ref={iframeRef}
+              src={previewUrl}
+              className="w-full h-full border-0"
+              sandbox="allow-scripts allow-forms allow-same-origin"
+              title="Preview"
+            />
           ) : (
             <div className="flex items-center justify-center h-full text-neutral-400 text-sm">
               <p>暂无 HTML 文件可预览</p>
