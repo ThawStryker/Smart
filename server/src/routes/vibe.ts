@@ -183,6 +183,9 @@ Smart SDK 全局 API：
   await Smart.data.set('key', value);               // 写入数据
   await Smart.data.delete('key');                   // 删除数据
   const user = await Smart.auth.user();             // 当前用户，未登录返回 null
+  await Smart.auth.signUp(email, password, name);   // 注册
+  await Smart.auth.signIn(email, password);         // 登录
+  await Smart.auth.signOut();                       // 退出
 
 认证策略由生成的工具自己决定：
   - 需要登录的工具：在页面初始化时调 Smart.auth.user()，若返回 null 则 window.location.href = '/login' 跳转登录
