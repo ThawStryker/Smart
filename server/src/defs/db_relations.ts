@@ -13,6 +13,7 @@ import {
 export const projectsRelations = relations(projects, ({ many }) => ({
   tools: many(tools),
   conversations: many(conversations),
+  domains: many(domains),
 }));
 
 export const toolsRelations = relations(tools, ({ one, many }) => ({
@@ -22,6 +23,7 @@ export const toolsRelations = relations(tools, ({ one, many }) => ({
   }),
   executionSteps: many(executionSteps),
   versions: many(versions),
+  domains: many(domains),
   marketListing: one(marketListings, {
     fields: [tools.id],
     references: [marketListings.toolId],
