@@ -48,28 +48,30 @@ export const deployRoutes = new Hono()
 
     try {
       // 1. Add CNAME DNS record via Alibaba Cloud
-      await addCnameRecord("torresx.cn", subdomain, "custom.edgespark.app", accessKeyId, accessKeySecret);
+      await addDnsRecord("torresx.cn", subdomain, "CNAME", "cname.edgespark.app", accessKeyId, accessKeySecret);
 
-      // 2. Save domain record (pending until edgespark domain verify completes)
+      // 2. Save domain record as pending
       await db.insert(domains).values({
         projectId,
         toolId: tool.id,
         domain: fullDomain,
-        status: "active",
+        status: "pending",
       });
 
       return c.json({
         success: true,
         url: `https://${fullDomain}`,
         domain: fullDomain,
+        status: "dns_ready",
         nextSteps: [
           `edgespark domain add ${fullDomain}`,
+          `Add the printed TXT record to Alibaba Cloud DNS`,
           `edgespark domain verify ${fullDomain} --timeout 15m`,
         ],
       });
     } catch (err) {
       return c.json({
-        error: `Deploy failed: ${err instanceof Error ? err.message : String(err)}`,
+        error: `DNS setup failed: ${err instanceof Error ? err.message : String(err)}`,
       }, 500);
     }
   })
@@ -83,10 +85,11 @@ export const deployRoutes = new Hono()
     return c.json({ available: !existing });
   });
 
-// Alibaba Cloud DNS — AddDomainRecord using Web Crypto HMAC-SHA1
-async function addCnameRecord(
+// Alibaba Cloud DNS — AddDomainRecord
+async function addDnsRecord(
   domain: string,
   rr: string,
+  type: string,
   value: string,
   accessKeyId: string,
   accessKeySecret: string
@@ -95,7 +98,7 @@ async function addCnameRecord(
     Action: "AddDomainRecord",
     DomainName: domain,
     RR: rr,
-    Type: "CNAME",
+    Type: type,
     Value: value,
     Format: "JSON",
     Version: "2015-01-09",
