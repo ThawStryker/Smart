@@ -101,8 +101,4 @@ export const toolDataRoutes = new Hono()
       ));
 
     return c.json({ success: true });
-  })
-  .get("/api/public/smart/auth/user", (c) => {
-    if (!auth.user) return c.json({ user: null });
-    return c.json({ user: { id: auth.user.id, email: auth.user.email, name: auth.user.name } });
   });

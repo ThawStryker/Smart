@@ -21,6 +21,7 @@ import { vibeRoutes } from "./routes/vibe";
 import { stepsRoutes } from "./routes/steps";
 import { dataRoutes } from "./routes/data";
 import { toolDataRoutes } from "./routes/toolData";
+import { toolAuthRoutes } from "./routes/toolAuth";
 import { sdkRoutes } from "./routes/sdk";
 import { deployRoutes } from "./routes/deploy";
 import { previewRoutes } from "./routes/preview";
@@ -36,6 +37,7 @@ const app = new Hono()
   .route("/api/projects", dataRoutes)
   .route("/api/projects", deployRoutes)
   .route("/", toolDataRoutes)
+  .route("/", toolAuthRoutes)
   .route("/", sdkRoutes)
   .route("/", previewRoutes)
   .route("/", serveRoutes);
