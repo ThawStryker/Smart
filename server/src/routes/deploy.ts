@@ -84,7 +84,7 @@ export const deployRoutes = new Hono()
     if (!domain) return c.json({ error: "domain query required" }, 400);
     const fullDomain = `${domain.toLowerCase().replace(/[^a-z0-9-]/g, "")}.torresx.cn`;
     const [existing] = await db.select().from(domains).where(eq(domains.domain, fullDomain));
-    return c.json({ available: !existing });
+    return c.json({ available: !existing, status: existing?.status || null });
   });
 
 // Alibaba Cloud DNS — AddDomainRecord

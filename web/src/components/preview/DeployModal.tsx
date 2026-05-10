@@ -71,6 +71,21 @@ export function DeployModal({
         return;
       }
       setDeployUrl(data.url);
+
+      // Poll until domain is active
+      const domain = subdomain.trim();
+      for (let i = 0; i < 60; i++) {
+        if (!isMounted.current) return;
+        await new Promise(r => setTimeout(r, 2000));
+        try {
+          const checkRes = await client.api.fetch(`/api/projects/${projectId}/check-domain?domain=${domain}`, { signal: controller.signal });
+          const checkData = await checkRes.json();
+          if (checkData.status === "active") {
+            setStatus("done");
+            return;
+          }
+        } catch { /* poll error, continue */ }
+      }
       setStatus("done");
     } catch (err) {
       if (!isMounted.current) return;
@@ -126,10 +141,10 @@ export function DeployModal({
         {status === "deploying" && (
           <div className="text-center py-8">
             <div className="text-sm text-neutral-600">
-              正在部署到 {subdomain}.{baseDomain}...
+              正在配置域名 {subdomain}.{baseDomain}
             </div>
             <div className="text-xs text-neutral-400 mt-2">
-              这可能需要 1-2 分钟
+              DNS 解析 + SSL 证书签发中，最多需要 2 分钟
             </div>
             <button
               onClick={handleCancel}
