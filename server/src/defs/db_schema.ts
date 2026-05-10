@@ -102,3 +102,14 @@ export const toolData = sqliteTable("tool_data", {
 }, (table) => ({
   uniqueProjectUserKey: uniqueIndex("tool_data_project_user_key").on(table.projectId, table.userId, table.key),
 }));
+
+// 自定义域名部署
+export const domains = sqliteTable("domains", {
+  id: integer("id").primaryKey({ autoIncrement: true }),
+  projectId: integer("project_id").notNull(),
+  toolId: integer("tool_id").notNull(),
+  domain: text("domain").notNull().unique(),
+  status: text("status").default("pending"), // pending → active → removed
+  createdAt: text("created_at").default(sql`(datetime('now'))`),
+  verifiedAt: text("verified_at"),
+});

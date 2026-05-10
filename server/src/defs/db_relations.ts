@@ -7,6 +7,7 @@ import {
   versions,
   marketListings,
   toolData,
+  domains,
 } from "./db_schema";
 
 export const projectsRelations = relations(projects, ({ many }) => ({
@@ -57,4 +58,9 @@ export const marketListingsRelations = relations(marketListings, ({ one }) => ({
 
 export const toolDataRelations = relations(toolData, ({ one }) => ({
   project: one(projects, { fields: [toolData.projectId], references: [projects.id] }),
+}));
+
+export const domainsRelations = relations(domains, ({ one }) => ({
+  tool: one(tools, { fields: [domains.toolId], references: [tools.id] }),
+  project: one(projects, { fields: [domains.projectId], references: [projects.id] }),
 }));
