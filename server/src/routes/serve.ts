@@ -41,7 +41,17 @@ export const serveRoutes = new Hono()
     if (!obj) return c.json({ error: "File not found" }, 404);
 
     const ext = filePath.split(".").pop()?.toLowerCase() || "txt";
-    return new Response(obj.body, {
+    let body: Uint8Array | ArrayBuffer = obj.body;
+
+    // Inject project ID into HTML responses so SDK can find it
+    if (ext === "html") {
+      const text = new TextDecoder().decode(obj.body);
+      const injectScript = `<script>window.SMART_PROJECT_ID=${tool.projectId};window.SMART_TOOL_ID=${tool.id};</script>`;
+      const injected = text.replace("</head>", `${injectScript}</head>`);
+      body = new TextEncoder().encode(injected);
+    }
+
+    return new Response(body, {
       headers: { "Content-Type": MIME[ext] || "application/octet-stream" },
     });
   });
