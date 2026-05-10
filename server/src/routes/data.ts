@@ -49,24 +49,37 @@ export const dataRoutes = new Hono()
     }> = [];
 
     for (const tool of projectTools) {
-      const stepList = await db
-        .select()
-        .from(executionSteps)
-        .where(eq(executionSteps.toolId, tool.id))
-        .orderBy(asc(executionSteps.stepOrder));
-
-      // Extract file info from completed steps' metadata
+      // Collect files from all sources
       const files: Array<{ path: string; language: string }> = [];
-      for (const step of stepList) {
-        if (step.status === "completed" && step.metadata) {
-          try {
-            const metaFiles = JSON.parse(step.metadata) as Array<{ path: string; language: string }>;
-            for (const f of metaFiles) {
-              if (!files.some((existing) => existing.path === f.path)) {
-                files.push(f);
-              }
-            }
-          } catch { /* skip invalid JSON */ }
+      const addFile = (f: { path: string; language: string }) => {
+        if (!files.some((existing) => existing.path === f.path)) {
+          files.push(f);
+        }
+      };
+
+      // Primary: tool.metadata (set by vibe.ts at session end)
+      if (tool.metadata) {
+        try {
+          const metaFiles = JSON.parse(tool.metadata) as Array<{ path: string; language: string }>;
+          for (const f of metaFiles) addFile(f);
+        } catch { /* skip invalid JSON */ }
+      }
+
+      // Secondary: execution steps metadata (per-step file info)
+      if (files.length === 0) {
+        const stepList = await db
+          .select()
+          .from(executionSteps)
+          .where(eq(executionSteps.toolId, tool.id))
+          .orderBy(asc(executionSteps.stepOrder));
+
+        for (const step of stepList) {
+          if (step.status === "completed" && step.metadata) {
+            try {
+              const metaFiles = JSON.parse(step.metadata) as Array<{ path: string; language: string }>;
+              for (const f of metaFiles) addFile(f);
+            } catch { /* skip invalid JSON */ }
+          }
         }
       }
 

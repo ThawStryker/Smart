@@ -197,6 +197,7 @@ Smart SDK 提供以下全局 API：
 
     const prefix = `${projectId}/${toolId}/`;
     let fullResponse = "";
+    const generatedFiles: Array<{ path: string; language: string }> = [];
 
     const stream = new ReadableStream({
       async start(controller) {
@@ -360,11 +361,13 @@ Smart SDK 提供以下全局 API：
                       prefix + args.path,
                       encoder.encode(args.content)
                     );
+                    const lang = args.path.split(".").pop() || "text";
+                    generatedFiles.push({ path: args.path, language: lang });
                     result = `File written: ${args.path}`;
                     sse(controller, {
                       type: "file",
                       path: args.path,
-                      language: args.path.split(".").pop() || "text",
+                      language: lang,
                       content: args.content,
                     });
                     break;
@@ -380,11 +383,16 @@ Smart SDK 提供以下全局 API：
                     content = content.replace(args.old_string, args.new_string);
                     const encoder = new TextEncoder();
                     await storage.from(buckets.sourceBuckets).put(prefix + args.path, encoder.encode(content));
+                    const lang = args.path.split(".").pop() || "text";
+                    // Track if not already in list
+                    if (!generatedFiles.some((f) => f.path === args.path)) {
+                      generatedFiles.push({ path: args.path, language: lang });
+                    }
                     result = `File edited: ${args.path}`;
                     sse(controller, {
                       type: "file",
                       path: args.path,
-                      language: args.path.split(".").pop() || "text",
+                      language: lang,
                       content,
                     });
                     break;
@@ -482,12 +490,15 @@ Smart SDK 提供以下全局 API：
             content: fullResponse || "任务完成",
           });
 
-          // Update tool status
+          // Update tool status with generated file list
           ctx.runInBackground(
             (async () => {
               await db
                 .update(tools)
-                .set({ status: "completed" })
+                .set({
+                  status: "completed",
+                  metadata: generatedFiles.length > 0 ? JSON.stringify(generatedFiles) : null,
+                })
                 .where(eq(tools.id, toolId));
             })()
           );
