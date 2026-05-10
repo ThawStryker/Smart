@@ -16,7 +16,6 @@ interface ChatMessagesProps {
 function ThinkingBlock({ content, isLoading }: { content: string; isLoading?: boolean }) {
   const [expanded, setExpanded] = useState(false);
   const preview = content.slice(0, 200);
-  const hasMore = content.length > 200;
 
   return (
     <div className="mb-2">
