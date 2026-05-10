@@ -2,6 +2,7 @@ import { useEffect, useState, useCallback, useRef } from "react";
 import { TopNav } from "@/components/layout/TopNav";
 import { WorkspaceLayout } from "@/components/layout/WorkspaceLayout";
 import { ProjectConfigBar } from "@/components/workspace/ProjectConfigBar";
+import { ExecutionLogPanel } from "@/components/workspace/ExecutionLogPanel";
 import { ChatMessages, type ChatMessage } from "@/components/chat/ChatMessages";
 import { ChatInput } from "@/components/chat/ChatInput";
 import { PreviewPanel } from "@/components/preview/PreviewPanel";
@@ -45,6 +46,7 @@ export function ProjectDetail() {
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [input, setInput] = useState("");
   const [isStreaming, setIsStreaming] = useState(false);
+  const [leftTab, setLeftTab] = useState<"chat" | "log">("chat");
   const [generatedFiles, setGeneratedFiles] = useState<StoredFile[]>([]);
   const abortRef = useRef<AbortController | null>(null);
 
@@ -61,6 +63,36 @@ export function ProjectDetail() {
         if (!projRes.ok) { navigate("/404"); return; }
         setProject((await projRes.json()) as ProjectData);
 
+        // Restore files from R2 overview API (independent of conversation history)
+        let filesRestored = false;
+        try {
+          const overviewRes = await fetch(`/api/projects/${numProjectId}/overview`, { credentials: "include" });
+          if (overviewRes.ok) {
+            const overview = await overviewRes.json() as Array<{ toolId: number; toolName: string; files: Array<{ path: string; language: string }> }>;
+            const restoredFiles: StoredFile[] = [];
+            for (const tool of overview) {
+              if (!tool.files || tool.files.length === 0) continue;
+              for (const f of tool.files.slice(0, 20 - restoredFiles.length)) {
+                try {
+                  const fileRes = await fetch(
+                    `/api/projects/${numProjectId}/tools/${tool.toolId}/files/${encodeURIComponent(f.path)}`,
+                    { credentials: "include" }
+                  );
+                  if (fileRes.ok) {
+                    const data = await fileRes.json() as { path: string; language: string; content: string };
+                    restoredFiles.push({ path: data.path, language: data.language, content: data.content });
+                  }
+                } catch { /* skip single file fetch error */ }
+              }
+              if (restoredFiles.length >= 20) break;
+            }
+            if (restoredFiles.length > 0) {
+              setGeneratedFiles(restoredFiles);
+              filesRestored = true;
+            }
+          }
+        } catch { /* R2 overview unavailable, fallback to code blocks */ }
+
         // Load conversation history
         const convRes = await fetch(`/api/projects/${numProjectId}/conversations`, { credentials: "include" });
         if (convRes.ok) {
@@ -71,25 +103,23 @@ export function ProjectDetail() {
             content: c.content,
           })));
 
-          // Parse code blocks from assistant messages to restore files
-          const codeBlockRegex = /```(\w+)?:?(\S+)?\n([\s\S]*?)```/g;
-          const restoredFiles: StoredFile[] = [];
-          const seen = new Set<string>();
-          for (const c of convData) {
-            if (c.role !== "assistant") continue;
-            let match;
-            while ((match = codeBlockRegex.exec(c.content)) !== null) {
-              const path = match[2] || `code.${match[1] || "txt"}`;
-              if (seen.has(path)) continue;
-              seen.add(path);
-              restoredFiles.push({
-                path,
-                language: match[1] || "text",
-                content: match[3],
-              });
+          if (!filesRestored) {
+            // Fallback: parse code blocks from conversation history
+            const codeBlockRegex = /```(\w+)?:?(\S+)?\n([\s\S]*?)```/g;
+            const restoredFiles: StoredFile[] = [];
+            const seen = new Set<string>();
+            for (const c of convData) {
+              if (c.role !== "assistant") continue;
+              let match;
+              while ((match = codeBlockRegex.exec(c.content)) !== null) {
+                const path = match[2] || `code.${match[1] || "txt"}`;
+                if (seen.has(path)) continue;
+                seen.add(path);
+                restoredFiles.push({ path, language: match[1] || "text", content: match[3] });
+              }
             }
+            if (restoredFiles.length > 0) setGeneratedFiles(restoredFiles);
           }
-          if (restoredFiles.length > 0) setGeneratedFiles(restoredFiles);
         }
       } catch { /* keep defaults */ }
       setPageLoading(false);
@@ -178,6 +208,17 @@ export function ProjectDetail() {
                   ]);
                 }
                 break;
+              case "tool_exec":
+                if (event.name) {
+                  setMessages((prev) => [
+                    ...prev,
+                    { id: `exec-${event.toolCallId || Date.now()}`, role: "system", content: `⚙️ 执行: ${event.name}` },
+                  ]);
+                }
+                break;
+              case "step":
+                // ExecutionLogPanel polls via useExecutionSteps (2s interval when steps are running)
+                break;
               case "tool_result":
                 if (event.name && event.output) {
                   const outputText = event.output;
@@ -230,14 +271,41 @@ export function ProjectDetail() {
               projectName={project.name}
               onNameChange={(name) => setProject((prev) => prev ? { ...prev, name } : null)}
             />
-            <ChatMessages messages={messages} />
-            <ChatInput
-              value={input}
-              onChange={setInput}
-              onSubmit={handleSend}
-              onGenerate={handleSend}
-              isLoading={isStreaming}
-            />
+            {/* 标签切换栏 */}
+            <div className="border-b border-neutral-200 bg-neutral-50 px-4 flex gap-0 shrink-0">
+              {[
+                { key: "chat", label: "对话" },
+                { key: "log", label: "执行日志" },
+              ].map((tab) => (
+                <button
+                  key={tab.key}
+                  onClick={() => setLeftTab(tab.key as typeof leftTab)}
+                  className={`px-4 py-2 text-sm border-b-2 transition-colors ${
+                    leftTab === tab.key
+                      ? "border-blue-600 text-blue-600 font-medium"
+                      : "border-transparent text-neutral-500 hover:text-neutral-700"
+                  }`}
+                >
+                  {tab.label}
+                </button>
+              ))}
+            </div>
+            {leftTab === "chat" ? (
+              <>
+                <ChatMessages messages={messages} />
+                <ChatInput
+                  value={input}
+                  onChange={setInput}
+                  onSubmit={handleSend}
+                  onGenerate={handleSend}
+                  isLoading={isStreaming}
+                />
+              </>
+            ) : (
+              <div className="flex-1 overflow-y-auto">
+                <ExecutionLogPanel projectId={numProjectId} />
+              </div>
+            )}
           </div>
         }
         right={<PreviewPanel projectId={numProjectId} generatedFiles={generatedFiles} />}
