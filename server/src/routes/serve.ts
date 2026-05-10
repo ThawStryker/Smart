@@ -34,7 +34,10 @@ export const serveRoutes = new Hono()
       .where(eq(tools.id, domainRow.toolId));
     if (!tool) return c.json({ error: "Tool not found" }, 404);
 
-    const filePath = c.req.param("*") || "index.html";
+    const urlPath = c.req.path;
+    const routePrefix = `/api/public/smart/serve/${subdomain}/`;
+    let filePath = urlPath.startsWith(routePrefix) ? urlPath.slice(routePrefix.length) : "";
+    if (!filePath) filePath = "index.html";
     const prefix = `${tool.projectId}/${tool.id}/`;
     const obj = await storage.from(buckets.sourceBuckets).get(prefix + filePath);
 

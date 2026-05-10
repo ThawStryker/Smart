@@ -39,8 +39,11 @@ export const previewRoutes = new Hono()
     const projectId = parseInt(rawProjectId, 10);
     const toolId = parseInt(rawToolId, 10);
 
-    const filePath = c.req.param("*") || "index.html";
-    if (!filePath) return c.json({ error: "File path required" }, 400);
+    // Extract file path from URL (wildcard may not capture in Hono sub-app routing)
+    const urlPath = c.req.path;
+    const routePrefix = `/api/public/smart/preview/${rawProjectId}/${rawToolId}/`;
+    let filePath = urlPath.startsWith(routePrefix) ? urlPath.slice(routePrefix.length) : "";
+    if (!filePath) filePath = "index.html";
 
     // Verify tool belongs to project
     const [tool] = await db
