@@ -29,10 +29,23 @@ export function PreviewPanel({ projectId, toolId, generatedFiles = [] }: Preview
   const iframeRef = useRef<HTMLIFrameElement>(null);
   const previewContainerRef = useRef<HTMLDivElement>(null);
 
+  const rescaleRef = useRef<() => void>(null);
+
   const hasHtml = generatedFiles.some((f) => f.path.endsWith(".html") || f.language === "html");
   const previewUrl = toolId && hasHtml
     ? `/api/public/smart/preview/${projectId}/${toolId}/index.html`
     : null;
+
+  // ResizeObserver: re-scale when container size changes (split pane drag)
+  useEffect(() => {
+    const container = previewContainerRef.current;
+    if (!container) return;
+    const ro = new ResizeObserver(() => {
+      rescaleRef.current?.();
+    });
+    ro.observe(container);
+    return () => ro.disconnect();
+  }, []);
 
   // Refresh file list when new files arrive
   useEffect(() => {
@@ -116,18 +129,22 @@ export function PreviewPanel({ projectId, toolId, generatedFiles = [] }: Preview
                 sandbox="allow-scripts allow-forms allow-same-origin"
                 title="Preview"
                 onLoad={() => {
-                  try {
-                    const iframe = iframeRef.current;
-                    const container = previewContainerRef.current;
-                    const doc = iframe?.contentDocument || iframe?.contentWindow?.document;
-                    if (doc && container) {
-                      const body = doc.body;
-                      const ch = Math.max(body.scrollHeight, body.offsetHeight, 400);
-                      const scaleH = Math.min(container.clientHeight / ch, 1);
-                      setPreviewScale(scaleH);
-                      setPreviewDim({ w: 0, h: ch });
-                    }
-                  } catch { /* cross-origin */ }
+                  const rescale = () => {
+                    try {
+                      const iframe = iframeRef.current;
+                      const container = previewContainerRef.current;
+                      const doc = iframe?.contentDocument || iframe?.contentWindow?.document;
+                      if (doc && container) {
+                        const body = doc.body;
+                        const ch = Math.max(body.scrollHeight, body.offsetHeight, 400);
+                        const scaleH = Math.min(container.clientHeight / ch, 1);
+                        setPreviewScale(scaleH);
+                        setPreviewDim({ w: 0, h: ch });
+                      }
+                    } catch { /* cross-origin */ }
+                  };
+                  rescaleRef.current = rescale;
+                  rescale();
                 }}
               />
             </div>
