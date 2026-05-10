@@ -1,4 +1,4 @@
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import { LoadingDots } from "@/components/shared/LoadingDots";
 
 export interface ChatMessage {
@@ -6,10 +6,35 @@ export interface ChatMessage {
   role: "user" | "assistant" | "system";
   content: string;
   isLoading?: boolean;
+  thinking?: string;
 }
 
 interface ChatMessagesProps {
   messages: ChatMessage[];
+}
+
+function ThinkingBlock({ content, isLoading }: { content: string; isLoading?: boolean }) {
+  const [expanded, setExpanded] = useState(false);
+  const preview = content.slice(0, 200);
+  const hasMore = content.length > 200;
+
+  return (
+    <div className="mb-2">
+      <div
+        onClick={() => setExpanded(!expanded)}
+        className="flex items-center gap-2 text-xs text-neutral-400 cursor-pointer hover:text-neutral-500 transition-colors"
+      >
+        <span>{expanded ? "▼" : "▶"}</span>
+        <span>思考中{isLoading ? "..." : ""}</span>
+        {!expanded && <span className="truncate max-w-[200px]">{preview}</span>}
+      </div>
+      {expanded && (
+        <div className="mt-1 p-2 bg-neutral-50 rounded border border-neutral-100 text-xs text-neutral-500 whitespace-pre-wrap max-h-40 overflow-y-auto">
+          {content}
+        </div>
+      )}
+    </div>
+  );
 }
 
 export function ChatMessages({ messages }: ChatMessagesProps) {
@@ -46,8 +71,11 @@ export function ChatMessages({ messages }: ChatMessagesProps) {
                   : "bg-white border border-neutral-200 text-neutral-700"
               }`}
             >
+              {msg.thinking && (
+                <ThinkingBlock content={msg.thinking} isLoading={msg.isLoading} />
+              )}
               <div className="whitespace-pre-wrap">{msg.content}</div>
-              {msg.isLoading && (
+              {msg.isLoading && !msg.thinking && (
                 <div className="mt-2">
                   <LoadingDots />
                 </div>

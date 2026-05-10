@@ -17,7 +17,7 @@ interface ProjectData {
 }
 
 interface SSEEvent {
-  type: "text" | "step" | "file" | "done" | "error" | "tool_start" | "tool_exec" | "tool_result";
+  type: "text" | "step" | "file" | "done" | "error" | "tool_start" | "tool_exec" | "tool_result" | "thinking" | "thinking_complete";
   content?: string;
   status?: string;
   title?: string;
@@ -48,6 +48,7 @@ export function ProjectDetail() {
   const [isStreaming, setIsStreaming] = useState(false);
   const [leftTab, setLeftTab] = useState<"chat" | "log">("chat");
   const [generatedFiles, setGeneratedFiles] = useState<StoredFile[]>([]);
+  const thinkingRef = useRef("");
   const abortRef = useRef<AbortController | null>(null);
 
   const numProjectId = projectId ? parseInt(projectId, 10) : undefined;
@@ -190,6 +191,15 @@ export function ProjectDetail() {
           try {
             const event: SSEEvent = JSON.parse(dataStr);
             switch (event.type) {
+              case "thinking":
+                thinkingRef.current = event.content || "";
+                setMessages((prev) =>
+                  prev.map((m) => m.id === assistantId ? { ...m, thinking: event.content } : m)
+                );
+                break;
+              case "thinking_complete":
+                thinkingRef.current = "";
+                break;
               case "text":
                 fullText += event.content || "";
                 setMessages((prev) =>
