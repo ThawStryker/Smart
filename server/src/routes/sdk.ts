@@ -41,27 +41,16 @@ export const sdkRoutes = new Hono()
       user: function() {
         return apiRequest('GET', '/api/public/smart/auth/user').then(function(r) { return r.user; });
       },
-      signUp: function(email, password, name) {
-        return fetch(origin + '/api/auth/sign-up/email', {
-          method: 'POST',
-          credentials: 'include',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ email: email, password: password, name: name || email.split('@')[0] })
-        }).then(function(r) { return r.json(); });
-      },
-      signIn: function(email, password) {
-        return fetch(origin + '/api/auth/sign-in/email', {
-          method: 'POST',
-          credentials: 'include',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ email: email, password: password })
-        }).then(function(r) { return r.json(); });
+      login: function(redirectUrl) {
+        var url = '/login';
+        if (redirectUrl) url += '?redirect_to=' + encodeURIComponent(redirectUrl);
+        window.location.href = url;
       },
       signOut: function() {
         return fetch(origin + '/api/auth/sign-out', {
           method: 'POST',
           credentials: 'include'
-        }).then(function(r) { return r.json(); });
+        }).then(function(r) { window.location.reload(); return r.json(); });
       }
     }
   };
