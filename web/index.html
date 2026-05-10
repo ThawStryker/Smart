@@ -45,7 +45,7 @@
         var h = window.location.hostname;
         if (h.endsWith('.torresx.cn') && h !== 'leading-stallion-5780.edgespark.app') {
           var sub = h.replace('.torresx.cn','');
-          window.location.replace('/api/public/smart/serve/'+sub+'/');
+          window.location.replace('/api/public/smart/serve/'+sub+window.location.pathname);
         }
       })();
     </script>
