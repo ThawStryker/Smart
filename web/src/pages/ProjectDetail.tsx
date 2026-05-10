@@ -67,11 +67,14 @@ export function ProjectDetail() {
         let filesRestored = false;
         try {
           const overviewRes = await fetch(`/api/projects/${numProjectId}/overview`, { credentials: "include" });
+          console.log("[loadAll] overview status:", overviewRes.status);
           if (overviewRes.ok) {
             const overview = await overviewRes.json() as Array<{ toolId: number; toolName: string; files: Array<{ path: string; language: string }> }>;
+            console.log("[loadAll] overview data:", JSON.stringify(overview));
             const restoredFiles: StoredFile[] = [];
             for (const tool of overview) {
               if (!tool.files || tool.files.length === 0) continue;
+              console.log(`[loadAll] tool ${tool.toolId} has ${tool.files.length} files`);
               for (const f of tool.files.slice(0, 20 - restoredFiles.length)) {
                 try {
                   const fileRes = await fetch(
@@ -81,8 +84,10 @@ export function ProjectDetail() {
                   if (fileRes.ok) {
                     const data = await fileRes.json() as { path: string; language: string; content: string };
                     restoredFiles.push({ path: data.path, language: data.language, content: data.content });
+                  } else {
+                    console.warn("[loadAll] file fetch failed:", f.path, fileRes.status);
                   }
-                } catch { /* skip single file fetch error */ }
+                } catch (e) { console.warn("[loadAll] file fetch error:", f.path, e); }
               }
               if (restoredFiles.length >= 20) break;
             }
@@ -104,6 +109,7 @@ export function ProjectDetail() {
           })));
 
           if (!filesRestored) {
+            console.log("[loadAll] R2 overview did not restore files, trying code block fallback");
             // Fallback: parse code blocks from conversation history
             const codeBlockRegex = /```(\w+)?:?(\S+)?\n([\s\S]*?)```/g;
             const restoredFiles: StoredFile[] = [];
