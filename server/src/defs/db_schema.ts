@@ -110,6 +110,7 @@ export const domains = sqliteTable("domains", {
   toolId: integer("tool_id").notNull(),
   domain: text("domain").notNull().unique(),
   status: text("status").default("pending"), // pending → active → removed
+  files: text("files"),                       // JSON: [{ path, content }]
   createdAt: text("created_at").default(sql`(datetime('now'))`),
   verifiedAt: text("verified_at"),
 });

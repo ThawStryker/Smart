@@ -15,7 +15,7 @@ export const deployRoutes = new Hono()
       .where(and(eq(projects.id, projectId), eq(projects.userId, userId)));
     if (!project) return c.json({ error: "Project not found" }, 404);
 
-    const body = await c.req.json<{ subdomain: string }>();
+    const body = await c.req.json<{ subdomain: string; files?: Array<{ path: string; content: string }> }>();
     if (!body.subdomain?.trim()) return c.json({ error: "subdomain required" }, 400);
 
     const subdomain = body.subdomain.trim().toLowerCase().replace(/[^a-z0-9-]/g, "");
@@ -50,12 +50,14 @@ export const deployRoutes = new Hono()
       // 1. Add CNAME DNS record via Alibaba Cloud
       await addDnsRecord("torresx.cn", subdomain, "CNAME", "cname.edgespark.app", accessKeyId, accessKeySecret);
 
-      // 2. Save domain record as pending
+      // 2. Save domain record with files
+      const filesJson = body.files?.length ? JSON.stringify(body.files) : null;
       await db.insert(domains).values({
         projectId,
         toolId: tool.id,
         domain: fullDomain,
         status: "pending",
+        files: filesJson,
       });
 
       return c.json({

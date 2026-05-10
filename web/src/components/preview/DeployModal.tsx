@@ -4,12 +4,14 @@ import { client } from "@/lib/edgespark";
 interface DeployModalProps {
   projectId: number;
   htmlContent: string;
+  files?: Array<{ path: string; content: string }>;
   onClose: () => void;
 }
 
 export function DeployModal({
   projectId,
   htmlContent,
+  files,
   onClose,
 }: DeployModalProps) {
   const [subdomain, setSubdomain] = useState("");
@@ -55,6 +57,7 @@ export function DeployModal({
         body: JSON.stringify({
           subdomain: subdomain.trim(),
           html: htmlContent,
+          files: files || [],
         }),
         signal: controller.signal,
       });

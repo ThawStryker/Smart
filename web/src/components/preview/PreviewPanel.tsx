@@ -153,6 +153,7 @@ export function PreviewPanel({ projectId, toolId, generatedFiles = [] }: Preview
         <DeployModal
           projectId={projectId}
           htmlContent={htmlFile?.content || ""}
+          files={generatedFiles.map(f => ({ path: f.path, content: f.content }))}
           onClose={() => setShowDeploy(false)}
         />
       )}
