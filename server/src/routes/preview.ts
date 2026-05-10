@@ -11,9 +11,17 @@ const MIME_TYPES: Record<string, string> = {
   png: "image/png",
   jpg: "image/jpeg",
   jpeg: "image/jpeg",
+  gif: "image/gif",
+  webp: "image/webp",
   svg: "image/svg+xml",
   ico: "image/x-icon",
+  woff: "font/woff",
+  woff2: "font/woff2",
+  ttf: "font/ttf",
   txt: "text/plain; charset=utf-8",
+  xml: "application/xml",
+  pdf: "application/pdf",
+  wasm: "application/wasm",
 };
 
 function getContentType(path: string): string {
@@ -23,15 +31,15 @@ function getContentType(path: string): string {
 
 export const previewRoutes = new Hono()
   .get("/api/public/smart/preview/:projectId/:toolId/*", async (c) => {
-    const projectId = parseInt(c.req.param("projectId"), 10);
-    const toolId = parseInt(c.req.param("toolId"), 10);
+    const rawProjectId = c.req.param("projectId");
+    const rawToolId = c.req.param("toolId");
+    if (!/^\d+$/.test(rawProjectId) || !/^\d+$/.test(rawToolId)) {
+      return c.json({ error: "Invalid project or tool ID" }, 400);
+    }
+    const projectId = parseInt(rawProjectId, 10);
+    const toolId = parseInt(rawToolId, 10);
 
-    // Extract file path from the full URL path (wildcard may not capture in sub-app routing)
-    const fullPath = c.req.path;
-    const prefix = `/api/public/smart/preview/${projectId}/${toolId}/`;
-    const filePath = fullPath.startsWith(prefix)
-      ? fullPath.slice(prefix.length)
-      : "index.html";
+    const filePath = c.req.param("*") || "index.html";
     if (!filePath) return c.json({ error: "File path required" }, 400);
 
     // Verify tool belongs to project
@@ -49,7 +57,7 @@ export const previewRoutes = new Hono()
     return new Response(obj.body, {
       headers: {
         "Content-Type": getContentType(filePath),
-        "Cache-Control": "no-cache",
+        "Cache-Control": "public, max-age=300",
       },
     });
   });
