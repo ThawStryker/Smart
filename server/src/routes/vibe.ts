@@ -184,6 +184,11 @@ Smart SDK 全局 API：
   await Smart.data.delete('key');                   // 删除数据
   const user = await Smart.auth.user();             // 当前用户，未登录返回 null
 
+认证策略由生成的工具自己决定：
+  - 需要登录的工具：在页面初始化时调 Smart.auth.user()，若返回 null 则 window.location.href = '/login' 跳转登录
+  - 公开工具：不调 Smart.auth.user()，即开即用，任何人通过 URL 可访问
+  - 若用户需求中出现"登录""注册""账号""用户系统"等，必须实现登录流程
+
 ## 工具使用指南
 
 - write_file：创建新文件或完整重写
