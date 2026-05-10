@@ -123,7 +123,7 @@ export function PreviewPanel({ projectId, toolId, generatedFiles = [] }: Preview
                   width: "100%",
                   height: previewDim.h || "100%",
                   border: 0,
-                  transform: `scale(${previewScale})`,
+                  transform: `scale(1, ${previewScale})`,
                   transformOrigin: "top left",
                 }}
                 sandbox="allow-scripts allow-forms allow-same-origin"
