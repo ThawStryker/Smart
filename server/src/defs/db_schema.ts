@@ -114,3 +114,15 @@ export const domains = sqliteTable("domains", {
   createdAt: text("created_at").default(sql`(datetime('now'))`),
   verifiedAt: text("verified_at"),
 });
+
+// 工具独立用户系统
+export const toolUsers = sqliteTable("tool_users", {
+  id: integer("id").primaryKey({ autoIncrement: true }),
+  projectId: integer("project_id").notNull(),
+  email: text("email").notNull(),
+  passwordHash: text("password_hash").notNull(),
+  name: text("name").notNull(),
+  createdAt: text("created_at").default(sql`(datetime('now'))`),
+}, (table) => ({
+  uniqueProjectEmail: uniqueIndex("tool_users_project_email").on(table.projectId, table.email),
+}));
