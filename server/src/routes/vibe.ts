@@ -443,13 +443,20 @@ Smart SDK 提供以下全局 API：
                 content: result,
               });
 
-              // Save step to DB
+              // Save step to DB with file metadata for overview restoration
               ctx.runInBackground(
                 (async () => {
                   const existingSteps = await db
                     .select()
                     .from(executionSteps)
                     .where(eq(executionSteps.toolId, toolId));
+
+                  // Collect file info for write_file / edit_file steps
+                  let fileMetadata = null;
+                  if ((name === "write_file" || name === "edit_file") && args.path) {
+                    fileMetadata = JSON.stringify([{ path: args.path, language: args.path.split(".").pop() || "text" }]);
+                  }
+
                   await db.insert(executionSteps).values({
                     toolId,
                     stepOrder: existingSteps.length + 1,
@@ -458,6 +465,7 @@ Smart SDK 提供以下全局 API：
                     status: "completed",
                     detail: result.slice(0, 200),
                     terminalOutput: result.slice(0, 500),
+                    metadata: fileMetadata,
                     startedAt: new Date().toISOString(),
                     completedAt: new Date().toISOString(),
                   });
