@@ -92,14 +92,15 @@ export function PreviewPanel({ projectId, toolId, generatedFiles = [] }: Preview
       </div>
 
       {/* Content area */}
-      <div className="flex-1 overflow-hidden">
+      <div className="flex-1 overflow-auto">
         {activeTab === "preview" ? (
           previewUrl ? (
             <iframe
               key={previewKey}
               ref={iframeRef}
               src={previewUrl}
-              className="w-full h-full border-0"
+              className="w-full min-h-full border-0"
+              scrolling="yes"
               sandbox="allow-scripts allow-forms allow-same-origin"
               title="Preview"
             />
