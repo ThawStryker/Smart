@@ -23,6 +23,7 @@ import { dataRoutes } from "./routes/data";
 import { toolDataRoutes } from "./routes/toolData";
 import { sdkRoutes } from "./routes/sdk";
 import { deployRoutes } from "./routes/deploy";
+import { previewRoutes } from "./routes/preview";
 
 const app = new Hono()
   .get("/api/public/hello", (c) =>
@@ -34,6 +35,7 @@ const app = new Hono()
   .route("/api/projects", dataRoutes)
   .route("/api/projects", deployRoutes)
   .route("/", toolDataRoutes)
-  .route("/", sdkRoutes);
+  .route("/", sdkRoutes)
+  .route("/", previewRoutes);
 
 export default app;
