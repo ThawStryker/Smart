@@ -72,9 +72,9 @@ export function DeployModal({
       }
       setDeployUrl(data.url);
 
-      // Poll until domain is active
+      // Poll until domain is active (up to 5 minutes)
       const domain = subdomain.trim();
-      for (let i = 0; i < 60; i++) {
+      for (let i = 0; i < 150; i++) {
         if (!isMounted.current) return;
         await new Promise(r => setTimeout(r, 2000));
         try {
@@ -86,7 +86,8 @@ export function DeployModal({
           }
         } catch { /* poll error, continue */ }
       }
-      setStatus("done");
+      setError("域名验证超时，请刷新页面后重试部署");
+      setStatus("error");
     } catch (err) {
       if (!isMounted.current) return;
       if (err instanceof DOMException && err.name === "AbortError") return;
@@ -141,10 +142,10 @@ export function DeployModal({
         {status === "deploying" && (
           <div className="text-center py-8">
             <div className="text-sm text-neutral-600">
-              正在配置域名 {subdomain}.{baseDomain}
+              {subdomain}.{baseDomain} 部署中
             </div>
             <div className="text-xs text-neutral-400 mt-2">
-              DNS 解析 + SSL 证书签发中，最多需要 2 分钟
+              DNS + SSL 证书签发最多需要 5 分钟，请耐心等待
             </div>
             <button
               onClick={handleCancel}
