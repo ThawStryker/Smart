@@ -87,6 +87,9 @@ export const marketListings = sqliteTable("market_listings", {
   downloads: integer("downloads").default(0),
   ratingAvg: real("rating_avg"),
   status: text("status").default("pending_review"),
+  type: text("type").default("tool"),          // NEW: "tool" | "url"
+  url: text("url"),                             // NEW: external URL
+  version: integer("version").default(1),       // NEW: version number
   createdAt: text("created_at").default(sql`(datetime('now'))`),
 });
 
@@ -126,3 +129,31 @@ export const toolUsers = sqliteTable("tool_users", {
 }, (table) => ({
   uniqueProjectEmail: uniqueIndex("tool_users_project_email").on(table.projectId, table.email),
 }));
+
+// 技能/Skills 管理
+export const skills = sqliteTable("skills", {
+  id: integer("id").primaryKey({ autoIncrement: true }),
+  name: text("name").notNull(),
+  description: text("description"),
+  visibility: text("visibility").default("private"), // "global" | "private"
+  ownerId: text("owner_id").notNull(),
+  sourceType: text("source_type").notNull(), // "zip" | "git"
+  sourceUrl: text("source_url"),
+  storagePath: text("storage_path").notNull(),
+  enabled: integer("enabled", { mode: "boolean" }).default(true),
+  createdAt: text("created_at").default(sql`(datetime('now'))`),
+  updatedAt: text("updated_at").default(sql`(datetime('now'))`),
+});
+
+// MCPs 管理
+export const mcps = sqliteTable("mcps", {
+  id: integer("id").primaryKey({ autoIncrement: true }),
+  name: text("name").notNull(),
+  description: text("description"),
+  visibility: text("visibility").default("private"), // "global" | "private"
+  ownerId: text("owner_id").notNull(),
+  config: text("config"), // JSON
+  enabled: integer("enabled", { mode: "boolean" }).default(true),
+  createdAt: text("created_at").default(sql`(datetime('now'))`),
+  updatedAt: text("updated_at").default(sql`(datetime('now'))`),
+});

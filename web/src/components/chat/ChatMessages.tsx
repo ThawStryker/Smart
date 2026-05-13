@@ -7,6 +7,7 @@ export interface ChatMessage {
   content: string;
   isLoading?: boolean;
   thinking?: string;
+  images?: string[];
 }
 
 interface ChatMessagesProps {
@@ -54,7 +55,16 @@ export function ChatMessages({ messages }: ChatMessagesProps) {
                   {msg.thinking}
                 </div>
               )}
-              <div className="whitespace-pre-wrap leading-relaxed">{msg.content}</div>
+              {msg.images && msg.images.length > 0 && (
+                <div className="flex gap-1.5 mb-2 flex-wrap">
+                  {msg.images.map((img, i) => (
+                    <img key={i} src={img} alt="" className="max-w-[120px] max-h-[120px] rounded object-cover" />
+                  ))}
+                </div>
+              )}
+              {msg.content && (
+                <div className="whitespace-pre-wrap leading-relaxed">{msg.content}</div>
+              )}
               {msg.isLoading && (
                 <div className="mt-2">
                   <LoadingDots />

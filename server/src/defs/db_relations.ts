@@ -9,6 +9,9 @@ import {
   toolData,
   domains,
   toolUsers,
+  userProfiles,
+  skills,
+  mcps,
 } from "./db_schema";
 
 export const projectsRelations = relations(projects, ({ many }) => ({
@@ -70,4 +73,18 @@ export const domainsRelations = relations(domains, ({ one }) => ({
 
 export const toolUsersRelations = relations(toolUsers, ({ one }) => ({
   project: one(projects, { fields: [toolUsers.projectId], references: [projects.id] }),
+}));
+
+export const skillsRelations = relations(skills, ({ one }) => ({
+  owner: one(userProfiles, {
+    fields: [skills.ownerId],
+    references: [userProfiles.userId],
+  }),
+}));
+
+export const mcpsRelations = relations(mcps, ({ one }) => ({
+  owner: one(userProfiles, {
+    fields: [mcps.ownerId],
+    references: [userProfiles.userId],
+  }),
 }));

@@ -1,5 +1,5 @@
 import { Hono } from "hono";
-import { db, secret } from "edgespark";
+import { db } from "edgespark";
 import { auth } from "edgespark/http";
 import { eq, and, desc } from "drizzle-orm";
 import { projects, tools, domains } from "@defs";
@@ -15,7 +15,24 @@ export const deployRoutes = new Hono()
       .where(and(eq(projects.id, projectId), eq(projects.userId, userId)));
     if (!project) return c.json({ error: "Project not found" }, 404);
 
-    const body = await c.req.json<{ subdomain: string; files?: Array<{ path: string; content: string }> }>();
+    // Check if project already has an active domain
+    const [activeDomain] = await db
+      .select()
+      .from(domains)
+      .where(and(eq(domains.projectId, projectId), eq(domains.status, "active")));
+    if (activeDomain) return c.json({ error: "Project already has an active domain", domain: activeDomain.domain }, 409);
+
+    // Check for in-progress deployment
+    const [existing] = await db
+      .select()
+      .from(domains)
+      .where(and(
+        eq(domains.projectId, projectId),
+        eq(domains.status, "pending"),
+      ));
+    if (existing) return c.json({ error: "Deployment already in progress", domain: existing.domain }, 409);
+
+    const body = await c.req.json<{ subdomain: string }>();
     if (!body.subdomain?.trim()) return c.json({ error: "subdomain required" }, 400);
 
     const subdomain = body.subdomain.trim().toLowerCase().replace(/[^a-z0-9-]/g, "");
@@ -23,14 +40,13 @@ export const deployRoutes = new Hono()
 
     const fullDomain = `${subdomain}.torresx.cn`;
 
-    // Check domain not already taken
-    const [existing] = await db
+    // Check global uniqueness
+    const [dup] = await db
       .select()
       .from(domains)
       .where(eq(domains.domain, fullDomain));
-    if (existing) return c.json({ error: "Domain already in use" }, 409);
+    if (dup) return c.json({ error: "Domain already in use" }, 409);
 
-    // Find the latest tool for this project
     const [tool] = await db
       .select()
       .from(tools)
@@ -39,93 +55,94 @@ export const deployRoutes = new Hono()
       .limit(1);
     if (!tool) return c.json({ error: "No tool found for this project" }, 404);
 
-    const accessKeyId = secret.get("ALIYUN_ACCESS_KEY_ID");
-    const accessKeySecret = secret.get("ALIYUN_ACCESS_KEY_SECRET");
+    await db.insert(domains).values({
+      projectId,
+      toolId: tool.id,
+      domain: fullDomain,
+      status: "pending",
+    });
 
-    if (!accessKeyId || !accessKeySecret) {
-      return c.json({ error: "Aliyun credentials not configured" }, 500);
-    }
-
-    try {
-      // 1. Add CNAME DNS record via Alibaba Cloud
-      await addDnsRecord("torresx.cn", subdomain, "CNAME", "cname.edgespark.app", accessKeyId, accessKeySecret);
-
-      // 2. Save domain record with files
-      const filesJson = body.files?.length ? JSON.stringify(body.files) : null;
-      await db.insert(domains).values({
-        projectId,
-        toolId: tool.id,
-        domain: fullDomain,
-        status: "pending",
-        files: filesJson,
-      });
-
-      return c.json({
-        success: true,
-        url: `https://${fullDomain}`,
-        domain: fullDomain,
-        status: "dns_ready",
-        nextSteps: [
-          `edgespark domain add ${fullDomain}`,
-          `Add the printed TXT record to Alibaba Cloud DNS`,
-          `edgespark domain verify ${fullDomain} --timeout 15m`,
-        ],
-      });
-    } catch (err) {
-      return c.json({
-        error: `DNS setup failed: ${err instanceof Error ? err.message : String(err)}`,
-      }, 500);
-    }
+    return c.json({
+      success: true,
+      domain: fullDomain,
+      status: "pending",
+    });
   })
 
-  // Check domain availability
   .get("/:projectId/check-domain", async (c) => {
     const domain = c.req.query("domain");
     if (!domain) return c.json({ error: "domain query required" }, 400);
     const fullDomain = `${domain.toLowerCase().replace(/[^a-z0-9-]/g, "")}.torresx.cn`;
     const [existing] = await db.select().from(domains).where(eq(domains.domain, fullDomain));
     return c.json({ available: !existing, status: existing?.status || null });
+  })
+
+  .get("/:projectId/deploy-status", async (c) => {
+    const userId = auth.user!.id;
+    const projectId = parseInt(c.req.param("projectId"), 10);
+
+    const [project] = await db
+      .select()
+      .from(projects)
+      .where(and(eq(projects.id, projectId), eq(projects.userId, userId)));
+    if (!project) return c.json({ error: "Project not found" }, 404);
+
+    const [domainRow] = await db
+      .select()
+      .from(domains)
+      .where(eq(domains.projectId, projectId))
+      .orderBy(desc(domains.createdAt))
+      .limit(1);
+
+    if (!domainRow) {
+      return c.json({ deployed: false });
+    }
+
+    return c.json({
+      deployed: domainRow.status === "active",
+      domain: domainRow.domain,
+      status: domainRow.status,
+    });
+  })
+
+  .post("/:projectId/deploy/cancel", async (c) => {
+    const userId = auth.user!.id;
+    const projectId = parseInt(c.req.param("projectId"), 10);
+
+    const [project] = await db
+      .select()
+      .from(projects)
+      .where(and(eq(projects.id, projectId), eq(projects.userId, userId)));
+    if (!project) return c.json({ error: "Project not found" }, 404);
+
+    const [domainRow] = await db
+      .select()
+      .from(domains)
+      .where(and(
+        eq(domains.projectId, projectId),
+        eq(domains.status, "pending"),
+      ))
+      .orderBy(desc(domains.createdAt))
+      .limit(1);
+
+    if (!domainRow) {
+      // Check dns_ready
+      const [ready] = await db
+        .select()
+        .from(domains)
+        .where(and(
+          eq(domains.projectId, projectId),
+          eq(domains.status, "dns_ready"),
+        ))
+        .orderBy(desc(domains.createdAt))
+        .limit(1);
+
+      if (!ready) return c.json({ error: "No active deployment to cancel" }, 404);
+
+      await db.update(domains).set({ status: "removing" }).where(eq(domains.id, ready.id));
+      return c.json({ success: true, status: "removing" });
+    }
+
+    await db.update(domains).set({ status: "removing" }).where(eq(domains.id, domainRow.id));
+    return c.json({ success: true, status: "removing" });
   });
-
-// Alibaba Cloud DNS — AddDomainRecord
-async function addDnsRecord(
-  domain: string,
-  rr: string,
-  type: string,
-  value: string,
-  accessKeyId: string,
-  accessKeySecret: string
-): Promise<void> {
-  const params: Record<string, string> = {
-    Action: "AddDomainRecord",
-    DomainName: domain,
-    RR: rr,
-    Type: type,
-    Value: value,
-    Format: "JSON",
-    Version: "2015-01-09",
-    AccessKeyId: accessKeyId,
-    SignatureMethod: "HMAC-SHA1",
-    SignatureVersion: "1.0",
-    Timestamp: new Date().toISOString().replace(/\.\d{3}Z$/, "Z"),
-    SignatureNonce: Math.random().toString(36).slice(2) + Date.now().toString(36),
-  };
-
-  const sortedKeys = Object.keys(params).sort();
-  const queryString = sortedKeys.map(k => `${encodeURIComponent(k)}=${encodeURIComponent(params[k])}`).join("&");
-  const stringToSign = `POST&${encodeURIComponent("/")}&${encodeURIComponent(queryString)}`;
-  const key = accessKeySecret + "&";
-
-  const encoder = new TextEncoder();
-  const keyData = await crypto.subtle.importKey("raw", encoder.encode(key), { name: "HMAC", hash: "SHA-1" }, false, ["sign"]);
-  const signature = await crypto.subtle.sign("HMAC", keyData, encoder.encode(stringToSign));
-  const signatureBase64 = btoa(String.fromCharCode(...new Uint8Array(signature)));
-
-  const signedQS = `${queryString}&Signature=${encodeURIComponent(signatureBase64)}`;
-  const res = await fetch(`https://alidns.aliyuncs.com/?${signedQS}`, { method: "POST" });
-  const result = await res.json() as Record<string, unknown>;
-
-  if (result.Code) {
-    throw new Error(`Aliyun DNS error: ${result.Code} - ${result.Message || "Unknown"}`);
-  }
-}

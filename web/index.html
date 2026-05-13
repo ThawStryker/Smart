@@ -38,6 +38,7 @@
     <meta name="twitter:image" content="https://cdn.edgespark.dev/assets/og-banner.png" />
     <link rel="icon" href="/favicon.png" />
     <title>EdgeSpark App</title>
+    <style>#es-watermark{display:none!important}</style>
   </head>
   <body>
     <script>
@@ -51,5 +52,15 @@
     </script>
     <div id="root"></div>
     <script type="module" src="/src/main.tsx"></script>
+    <script>
+      (function(){
+        function rm(){ var w=document.getElementById('es-watermark'); if(w)w.remove(); }
+        rm();
+        new MutationObserver(rm).observe(document.body||document.documentElement,{childList:true,subtree:true});
+        document.addEventListener('DOMContentLoaded',rm);
+        var i=setInterval(rm,500);
+        setTimeout(function(){clearInterval(i)},5000);
+      })();
+    </script>
   </body>
 </html>

@@ -1,6 +1,8 @@
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useCallback } from "react";
 import { MonacoEditor } from "@/components/preview/MonacoEditor";
-import { DeployModal } from "@/components/preview/DeployModal";
+import { DeployModal, DeployedModal } from "@/components/preview/DeployModal";
+import { PublishModal } from "@/components/preview/PublishModal";
+import { client } from "@/lib/edgespark";
 
 interface GeneratedFile {
   path: string;
@@ -19,15 +21,34 @@ const tabs = [
   { key: "code", label: "代码" },
 ];
 
+function stepFromStatus(status: string): number {
+  switch (status) {
+    case "pending": return 1;
+    case "dns_ready": return 2;
+    case "verifying": return 3;
+    case "active": return 4;
+    default: return 0;
+  }
+}
+
 export function PreviewPanel({ projectId, toolId, generatedFiles = [] }: PreviewPanelProps) {
   const [activeTab, setActiveTab] = useState("code");
   const [selectedFileIdx, setSelectedFileIdx] = useState(0);
-  const [showDeploy, setShowDeploy] = useState(false);
   const [previewKey, setPreviewKey] = useState(0);
   const [previewScale, setPreviewScale] = useState(1);
   const [previewDim, setPreviewDim] = useState({ w: 0, h: 0 });
   const iframeRef = useRef<HTMLIFrameElement>(null);
   const previewContainerRef = useRef<HTMLDivElement>(null);
+  const pollRef = useRef<AbortController | null>(null);
+
+  // Deploy state
+  const [showDeploy, setShowDeploy] = useState(false);
+  const [showPublish, setShowPublish] = useState(false);
+  const [deployMode, setDeployMode] = useState<"deploy" | "deployed">("deploy");
+  const [deployDomain, setDeployDomain] = useState("");
+  const [deployStep, setDeployStep] = useState(0); // 0=idle, 1-4=steps
+  const [deployError, setDeployError] = useState("");
+  const [existingDomain, setExistingDomain] = useState("");
 
   const rescaleRef = useRef<() => void>(null);
 
@@ -36,7 +57,117 @@ export function PreviewPanel({ projectId, toolId, generatedFiles = [] }: Preview
     ? `/api/public/smart/preview/${projectId}/${toolId}/index.html`
     : null;
 
-  // ResizeObserver: re-scale when container size changes (split pane drag)
+  // Check deploy status on mount
+  useEffect(() => {
+    client.api.fetch(`/api/projects/${projectId}/deploy-status`)
+      .then(r => r.json())
+      .then(d => {
+        if (d.deployed) {
+          setExistingDomain(d.domain);
+        } else if (d.status === "pending" || d.status === "dns_ready" || d.status === "verifying") {
+          // Resume in-progress deployment
+          setDeployDomain(d.domain);
+          setDeployStep(stepFromStatus(d.status));
+          setDeployMode("deploy");
+          startPolling(d.domain);
+        }
+      })
+      .catch(() => {});
+  }, [projectId]);
+
+  const startPolling = useCallback((domain: string) => {
+    if (pollRef.current) pollRef.current.abort();
+    const controller = new AbortController();
+    pollRef.current = controller;
+
+    const subdomain = domain.replace(".torresx.cn", "");
+
+    (async () => {
+      for (let i = 0; i < 150; i++) {
+        await new Promise(r => setTimeout(r, 2000));
+        if (controller.signal.aborted) return;
+        try {
+          const res = await client.api.fetch(
+            `/api/projects/${projectId}/check-domain?domain=${subdomain}`,
+            { signal: controller.signal }
+          );
+          const data = await res.json();
+          const step = stepFromStatus(data.status);
+          setDeployStep(step);
+          if (step === 4) {
+            setExistingDomain(domain);
+            return;
+          }
+        } catch { /* continue polling */ }
+      }
+      // Timeout
+      setDeployError("域名验证超时，请取消后重试");
+    })();
+  }, [projectId]);
+
+  const handleDeploy = useCallback(async (subdomain: string) => {
+    if (!subdomain) {
+      // User clicked retry from error screen
+      setDeployError("");
+      setDeployStep(0);
+      setDeployDomain("");
+      return;
+    }
+
+    setDeployStep(0);
+    setDeployError("");
+    setDeployDomain("");
+
+    try {
+      const res = await client.api.fetch(`/api/projects/${projectId}/deploy`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ subdomain }),
+      });
+
+      const data = await res.json();
+      if (!res.ok) {
+        setDeployError(data.error || "部署失败");
+        return;
+      }
+
+      const domain = data.domain;
+      setDeployDomain(domain);
+      setDeployStep(1); // DB stored
+      startPolling(domain);
+    } catch (err) {
+      setDeployError(err instanceof Error ? err.message : "网络错误");
+    }
+  }, [projectId, startPolling]);
+
+  const handleCancel = useCallback(async () => {
+    if (pollRef.current) pollRef.current.abort();
+
+    try {
+      await client.api.fetch(`/api/projects/${projectId}/deploy/cancel`, {
+        method: "POST",
+      });
+    } catch {}
+
+    setDeployStep(0);
+    setDeployDomain("");
+    setDeployError("");
+    setShowDeploy(false);
+  }, [projectId]);
+
+  const handleMinimize = useCallback(() => {
+    setShowDeploy(false);
+  }, []);
+
+  const openDeploy = () => {
+    if (existingDomain) {
+      setDeployMode("deployed");
+    } else {
+      setDeployMode("deploy");
+    }
+    setShowDeploy(true);
+  };
+
   useEffect(() => {
     const container = previewContainerRef.current;
     if (!container) return;
@@ -47,7 +178,6 @@ export function PreviewPanel({ projectId, toolId, generatedFiles = [] }: Preview
     return () => ro.disconnect();
   }, []);
 
-  // Refresh file list when new files arrive
   useEffect(() => {
     if (generatedFiles.length > 0) {
       setSelectedFileIdx(generatedFiles.length - 1);
@@ -60,23 +190,19 @@ export function PreviewPanel({ projectId, toolId, generatedFiles = [] }: Preview
   const currentFile = hasFiles
     ? generatedFiles[Math.min(selectedFileIdx, generatedFiles.length - 1)]
     : null;
-  const htmlFile =
-    generatedFiles.find((f) => f.path.endsWith(".html")) ||
-    generatedFiles.find((f) => f.language === "html");
   const langMap: Record<string, string> = {
-    html: "html",
-    css: "css",
-    js: "javascript",
-    ts: "typescript",
-    tsx: "typescript",
-    jsx: "javascript",
-    json: "json",
-    py: "python",
-    rs: "rust",
-    go: "go",
-    java: "java",
-    sql: "sql",
+    html: "html", css: "css", js: "javascript", ts: "typescript",
+    tsx: "typescript", jsx: "javascript", json: "json",
+    py: "python", rs: "rust", go: "go", java: "java", sql: "sql",
   };
+
+  const isDeploying = deployStep > 0 && deployStep < 4;
+  const deployButtonLabel = existingDomain ? "已部署" : isDeploying ? "部署中..." : "部署";
+  const deployButtonStyle = existingDomain
+    ? "bg-green-600 text-white rounded px-3 py-1.5 text-sm hover:bg-green-700 transition-colors"
+    : isDeploying
+    ? "bg-yellow-500 text-white rounded px-3 py-1.5 text-sm animate-pulse"
+    : "bg-blue-600 text-white rounded px-3 py-1.5 text-sm hover:bg-blue-700 transition-colors";
 
   return (
     <div className="h-full flex flex-col bg-white">
@@ -99,11 +225,11 @@ export function PreviewPanel({ projectId, toolId, generatedFiles = [] }: Preview
         <span className="text-xs text-neutral-400">
           {hasFiles ? `${generatedFiles.length} 个文件` : ""}
         </span>
-        <button
-          onClick={() => setShowDeploy(true)}
-          className="bg-blue-600 text-white rounded px-3 py-1.5 text-sm hover:bg-blue-700 transition-colors"
-        >
-          部署
+        <button onClick={() => setShowPublish(true)} className="bg-green-600 text-white rounded px-3 py-1.5 text-sm hover:bg-green-700 transition-colors">
+          发布
+        </button>
+        <button onClick={openDeploy} className={deployButtonStyle}>
+          {deployButtonLabel}
         </button>
       </div>
 
@@ -193,13 +319,28 @@ export function PreviewPanel({ projectId, toolId, generatedFiles = [] }: Preview
         ) : null}
       </div>
 
-      {/* Deploy modal */}
-      {showDeploy && (
+      {/* Deploy modals */}
+      {showDeploy && deployMode === "deploy" && (
         <DeployModal
-          projectId={projectId}
-          htmlContent={htmlFile?.content || ""}
-          files={generatedFiles.map(f => ({ path: f.path, content: f.content }))}
+          deployDomain={deployDomain}
+          deployStep={deployStep}
+          deployError={deployError}
+          onDeploy={handleDeploy}
+          onCancel={handleCancel}
+          onMinimize={handleMinimize}
           onClose={() => setShowDeploy(false)}
+        />
+      )}
+      {showDeploy && deployMode === "deployed" && (
+        <DeployedModal
+          domain={existingDomain}
+          onClose={() => setShowDeploy(false)}
+        />
+      )}
+      {showPublish && (
+        <PublishModal
+          projectId={projectId}
+          onClose={() => setShowPublish(false)}
         />
       )}
     </div>

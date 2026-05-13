@@ -1,13 +1,13 @@
 import { useEffect, useState, useCallback, useRef } from "react";
-import { TopNav } from "@/components/layout/TopNav";
 import { WorkspaceLayout } from "@/components/layout/WorkspaceLayout";
 import { ProjectConfigBar } from "@/components/workspace/ProjectConfigBar";
 import { ExecutionLogPanel } from "@/components/workspace/ExecutionLogPanel";
 import { ChatMessages, type ChatMessage } from "@/components/chat/ChatMessages";
 import { ChatInput } from "@/components/chat/ChatInput";
 import { PreviewPanel } from "@/components/preview/PreviewPanel";
-import { useAuth } from "@/hooks/useAuth";
 import { useNavigate, useParams } from "react-router-dom";
+import { LoadingSpinner } from "@/components/shared/LoadingSpinner";
+import { useProfile } from "@/hooks/useProfile";
 
 interface ProjectData {
   id: number;
@@ -39,7 +39,6 @@ interface StoredFile {
 }
 
 export function ProjectDetail() {
-  const { user, loading: authLoading } = useAuth();
   const navigate = useNavigate();
   const { projectId } = useParams();
   const [project, setProject] = useState<ProjectData | null>(null);
@@ -47,6 +46,9 @@ export function ProjectDetail() {
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [input, setInput] = useState("");
   const [isStreaming, setIsStreaming] = useState(false);
+  const { isAdmin } = useProfile();
+  const [model, setModel] = useState("seed");
+  const [images, setImages] = useState<string[]>([]);
   const [leftTab, setLeftTab] = useState<"chat" | "log">("chat");
   const [generatedFiles, setGeneratedFiles] = useState<StoredFile[]>([]);
   const [activeToolId, setActiveToolId] = useState<number | null>(null);
@@ -63,7 +65,7 @@ export function ProjectDetail() {
       try {
         // Load project info
         const projRes = await fetch(`/api/projects/${numProjectId}`, { credentials: "include" });
-        if (!projRes.ok) { navigate("/404"); return; }
+        if (!projRes.ok) { setPageLoading(false); navigate("/404"); return; }
         setProject((await projRes.json()) as ProjectData);
 
         // Restore files from R2 overview API (independent of conversation history)
@@ -148,9 +150,11 @@ export function ProjectDetail() {
       id: `u-${Date.now()}`,
       role: "user",
       content: input.trim(),
+      images: images.length > 0 ? [...images] : undefined,
     };
     setMessages((prev) => [...prev, userMessage]);
     setInput("");
+    setImages([]);
     setIsStreaming(true);
 
     const assistantId = `a-${Date.now()}`;
@@ -164,7 +168,7 @@ export function ProjectDetail() {
         method: "POST",
         credentials: "include",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ message: userMessage.content }),
+        body: JSON.stringify({ message: userMessage.content, model, images }),
         signal: controller.signal,
       });
 
@@ -260,15 +264,13 @@ export function ProjectDetail() {
       setIsStreaming(false);
       abortRef.current = null;
     }
-  }, [input, isStreaming, numProjectId]);
+  }, [input, isStreaming, numProjectId, model, images]);
 
-  if (authLoading || pageLoading) return <div className="p-8 text-neutral-500">加载中...</div>;
-  if (!user) { navigate("/login"); return null; }
+  if (pageLoading) return <LoadingSpinner />;
   if (!project || !numProjectId) return null;
 
   return (
-    <div className="h-screen flex flex-col">
-      <TopNav user={user} />
+    <div className="h-full flex flex-col overflow-hidden">
       <WorkspaceLayout
         left={
           <div className="h-full flex flex-col overflow-hidden">
@@ -305,6 +307,11 @@ export function ProjectDetail() {
                   onSubmit={handleSend}
                   onGenerate={handleSend}
                   isLoading={isStreaming}
+                  model={model}
+                  onModelChange={setModel}
+                  images={images}
+                  onImagesChange={setImages}
+                  isAdmin={isAdmin}
                 />
               </>
             ) : (

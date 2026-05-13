@@ -26,6 +26,12 @@ import { sdkRoutes } from "./routes/sdk";
 import { deployRoutes } from "./routes/deploy";
 import { previewRoutes } from "./routes/preview";
 import { serveRoutes } from "./routes/serve";
+import { domainSyncRoutes } from "./routes/domainSync";
+import { profileRoutes } from "./routes/profile";
+import { skillsRoutes } from "./routes/skills";
+import { mcpsRoutes } from "./routes/mcps";
+import { marketRoutes } from "./routes/market";
+import { adminRoutes } from "./routes/admin";
 
 const app = new Hono()
   .get("/api/public/hello", (c) =>
@@ -40,6 +46,12 @@ const app = new Hono()
   .route("/", toolAuthRoutes)
   .route("/", sdkRoutes)
   .route("/", previewRoutes)
-  .route("/", serveRoutes);
+  .route("/", serveRoutes)
+  .route("/", domainSyncRoutes)
+  .route("/", profileRoutes)
+  .route("/", skillsRoutes)
+  .route("/", mcpsRoutes)
+  .route("/", marketRoutes)
+  .route("/", adminRoutes);
 
 export default app;

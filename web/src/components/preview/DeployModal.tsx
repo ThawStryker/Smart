@@ -1,107 +1,53 @@
-import { useState, useRef, useCallback, useEffect } from "react";
-import { client } from "@/lib/edgespark";
+import { useState } from "react";
+
+const steps = [
+  { key: "db", label: "数据上传" },
+  { key: "dns", label: "DNS 解析" },
+  { key: "verify", label: "正在验证" },
+  { key: "done", label: "部署完成" },
+];
 
 interface DeployModalProps {
-  projectId: number;
-  htmlContent: string;
-  files?: Array<{ path: string; content: string }>;
+  deployDomain: string;
+  deployStep: number;
+  deployError: string;
+  onDeploy: (subdomain: string) => void;
+  onCancel: () => void;
+  onMinimize: () => void;
   onClose: () => void;
 }
 
 export function DeployModal({
-  projectId,
-  htmlContent,
-  files,
+  deployDomain,
+  deployStep,
+  deployError,
+  onDeploy,
+  onCancel,
+  onMinimize,
   onClose,
 }: DeployModalProps) {
   const [subdomain, setSubdomain] = useState("");
-  const [status, setStatus] = useState<
-    "idle" | "deploying" | "done" | "error"
-  >("idle");
-  const [deployUrl, setDeployUrl] = useState("");
-  const [error, setError] = useState("");
 
-  const baseDomain = "torresx.cn";
+  const isDeploying = deployStep > 0 && deployStep < 4;
+  const isDone = deployStep === 4;
+  const isError = deployError !== "";
+  const isIdle = deployStep === 0 && !isError;
 
-  const abortRef = useRef<AbortController | null>(null);
-
-  // Cancel deploy on unmount
-  useEffect(() => {
-    return () => {
-      if (abortRef.current) abortRef.current.abort();
-    };
-  }, []);
-
-  const handleCancel = () => {
-    if (abortRef.current) abortRef.current.abort();
-    setStatus("idle");
+  const handleDeploy = () => {
+    if (!subdomain.trim()) return;
+    onDeploy(subdomain.trim());
   };
 
-  const handleDeploy = useCallback(async () => {
-    if (!subdomain.trim()) return;
-    setStatus("deploying");
-    setError("");
-
-    // Clean up any previous abort controller
-    if (abortRef.current) abortRef.current.abort();
-    const controller = new AbortController();
-    abortRef.current = controller;
-
-    // Cleanup on unmount
-    const isMounted = { current: true };
-
-    try {
-      const res = await client.api.fetch(`/api/projects/${projectId}/deploy`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          subdomain: subdomain.trim(),
-          html: htmlContent,
-          files: files || [],
-        }),
-        signal: controller.signal,
-      });
-
-      if (!isMounted.current) return;
-
-      const data = await res.json();
-      if (!res.ok) {
-        setError(data.error || "Deploy failed");
-        setStatus("error");
-        return;
-      }
-      setDeployUrl(data.url);
-
-      // Poll until domain is active (up to 5 minutes)
-      const domain = subdomain.trim();
-      for (let i = 0; i < 150; i++) {
-        if (!isMounted.current) return;
-        await new Promise(r => setTimeout(r, 2000));
-        try {
-          const checkRes = await client.api.fetch(`/api/projects/${projectId}/check-domain?domain=${domain}`, { signal: controller.signal });
-          const checkData = await checkRes.json();
-          if (checkData.status === "active") {
-            setStatus("done");
-            return;
-          }
-        } catch { /* poll error, continue */ }
-      }
-      setError("域名验证超时，请刷新页面后重试部署");
-      setStatus("error");
-    } catch (err) {
-      if (!isMounted.current) return;
-      if (err instanceof DOMException && err.name === "AbortError") return;
-      setError(err instanceof Error ? err.message : "Network error");
-      setStatus("error");
-    }
-  }, [subdomain, projectId, htmlContent]);
+  const handleCancel = () => {
+    onCancel();
+  };
 
   return (
     <div className="fixed inset-0 bg-black/30 flex items-center justify-center z-50">
-      <div className="bg-white rounded-lg shadow-xl w-full max-w-md p-6">
+      <div className="bg-white rounded-lg shadow-xl w-full max-w-xl p-6">
         <h2 className="text-lg font-medium mb-4">部署工具</h2>
 
-        {status === "idle" && (
+        {isIdle && (
           <>
             <label className="block text-sm text-neutral-600 mb-2">
               输入域名前缀
@@ -110,15 +56,13 @@ export function DeployModal({
               <input
                 autoFocus
                 value={subdomain}
-                onChange={(e) =>
-                  setSubdomain(e.target.value.replace(/[^a-z0-9-]/g, ""))
-                }
+                onChange={(e) => setSubdomain(e.target.value.replace(/[^a-z0-9-]/g, ""))}
                 onKeyDown={(e) => e.key === "Enter" && handleDeploy()}
                 placeholder="例如 todo"
                 className="flex-1 px-3 py-2 border border-neutral-300 rounded-l text-sm outline-none focus:border-blue-500"
               />
               <span className="px-3 py-2 bg-neutral-50 border border-l-0 border-neutral-300 rounded-r text-sm text-neutral-500">
-                .{baseDomain}
+                .torresx.cn
               </span>
             </div>
             <div className="flex gap-3 justify-end">
@@ -139,33 +83,72 @@ export function DeployModal({
           </>
         )}
 
-        {status === "deploying" && (
-          <div className="text-center py-8">
-            <div className="text-sm text-neutral-600">
-              {subdomain}.{baseDomain} 部署中
+        {isDeploying && (
+          <div className="py-2">
+            <div className="text-sm text-neutral-700 mb-4">
+              {deployDomain} 部署中
             </div>
-            <div className="text-xs text-neutral-400 mt-2">
-              DNS + SSL 证书签发最多需要 5 分钟，请耐心等待
+
+            <div className="flex items-center gap-1">
+              {steps.map((step, i) => {
+                const active = i + 1 === deployStep;
+                const done = i + 1 < deployStep;
+
+                return (
+                  <div key={step.key} className="flex items-center gap-1">
+                    {i > 0 && (
+                      <span className={`w-4 h-px ${i < deployStep ? "bg-green-400" : "bg-neutral-200"}`} />
+                    )}
+                    <span className="flex items-center gap-1">
+                      {done ? (
+                        <span className="w-4 h-4 rounded-full bg-green-500 flex items-center justify-center text-white text-[10px]">✓</span>
+                      ) : active ? (
+                        <span className="w-4 h-4 rounded-full border-2 border-blue-500 border-t-transparent animate-spin" />
+                      ) : (
+                        <span className="w-4 h-4 rounded-full border-2 border-neutral-200" />
+                      )}
+                      <span className={`text-xs whitespace-nowrap ${done ? "text-green-600" : active ? "text-blue-600 font-medium" : "text-neutral-300"}`}>
+                        {step.label}
+                      </span>
+                    </span>
+                  </div>
+                );
+              })}
             </div>
-            <button
-              onClick={handleCancel}
-              className="mt-4 px-4 py-2 text-sm text-neutral-500 hover:bg-neutral-100 rounded"
-            >
-              取消
-            </button>
+
+            <div className="text-xs text-neutral-400 mt-4">
+              {deployStep === 1 && "等待域名注册和 DNS 解析..."}
+              {deployStep === 2 && "DNS 记录已添加，即将开始验证..."}
+              {deployStep === 3 && "正在验证域名，最多 5 分钟..."}
+            </div>
+
+            <div className="flex gap-3 justify-end mt-5">
+              <button
+                onClick={onMinimize}
+                className="px-4 py-2 text-sm text-neutral-500 hover:bg-neutral-100 rounded"
+              >
+                最小化
+              </button>
+              <button
+                onClick={handleCancel}
+                className="px-4 py-2 text-sm text-red-500 hover:bg-red-50 rounded"
+              >
+                取消部署
+              </button>
+            </div>
           </div>
         )}
 
-        {status === "done" && (
+        {isDone && (
           <div className="text-center py-4">
             <div className="text-green-600 text-sm mb-2">部署成功</div>
             <a
-              href={deployUrl}
+              href={`https://${deployDomain}`}
               target="_blank"
               rel="noopener noreferrer"
               className="text-blue-600 text-sm hover:underline break-all"
             >
-              {deployUrl}
+              https://{deployDomain}
             </a>
             <div className="mt-4">
               <button
@@ -178,19 +161,22 @@ export function DeployModal({
           </div>
         )}
 
-        {status === "error" && (
+        {isError && (
           <div className="text-center py-4">
             <div className="text-red-500 text-sm mb-2">部署失败</div>
-            <div className="text-xs text-neutral-500 mb-4">{error}</div>
+            <div className="text-xs text-neutral-500 mb-4">{deployError}</div>
             <div className="flex gap-3 justify-center">
               <button
                 onClick={onClose}
                 className="px-4 py-2 text-sm text-neutral-500 hover:bg-neutral-100 rounded"
               >
-                取消
+                关闭
               </button>
               <button
-                onClick={() => setStatus("idle")}
+                onClick={() => {
+                  setSubdomain("");
+                  onDeploy("");
+                }}
                 className="px-4 py-2 text-sm bg-blue-600 text-white rounded hover:bg-blue-700"
               >
                 重试
@@ -198,6 +184,39 @@ export function DeployModal({
             </div>
           </div>
         )}
+      </div>
+    </div>
+  );
+}
+
+// Success-only modal for already-deployed projects
+export function DeployedModal({
+  domain,
+  onClose,
+}: {
+  domain: string;
+  onClose: () => void;
+}) {
+  return (
+    <div className="fixed inset-0 bg-black/30 flex items-center justify-center z-50">
+      <div className="bg-white rounded-lg shadow-xl w-full max-w-md p-6">
+        <h2 className="text-lg font-medium mb-4">已部署</h2>
+        <a
+          href={`https://${domain}`}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="text-blue-600 text-sm hover:underline break-all"
+        >
+          https://{domain}
+        </a>
+        <div className="mt-4 flex justify-end">
+          <button
+            onClick={onClose}
+            className="px-4 py-2 text-sm bg-blue-600 text-white rounded hover:bg-blue-700"
+          >
+            完成
+          </button>
+        </div>
       </div>
     </div>
   );

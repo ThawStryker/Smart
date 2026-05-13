@@ -2,7 +2,7 @@ import { Hono } from "hono";
 import { db, storage, secret, vars, ctx } from "edgespark";
 import { auth } from "edgespark/http";
 import { eq, asc } from "drizzle-orm";
-import { projects, conversations, tools, executionSteps, buckets } from "@defs";
+import { projects, conversations, tools, executionSteps, buckets, userProfiles } from "@defs";
 
 const SSE_HEADERS = {
   "Content-Type": "text/event-stream",
@@ -10,8 +10,8 @@ const SSE_HEADERS = {
   Connection: "keep-alive",
 };
 
-function sse(ctrl: ReadableStreamDefaultController, data: Record<string, unknown>) {
-  ctrl.enqueue(new TextEncoder().encode(`data: ${JSON.stringify(data)}\n\n`));
+function emit(queue: Array<Record<string, unknown>>, data: Record<string, unknown>) {
+  queue.push(data);
 }
 
 // Tool definitions (matching DeepSeek-TUI's typed tool surface)
@@ -102,19 +102,39 @@ export const vibeRoutes = new Hono()
       .where(eq(projects.id, projectId));
     if (!project) return c.json({ error: "Project not found" }, 404);
 
-    const body = await c.req.json<{ message: string }>();
-    if (!body.message?.trim()) return c.json({ error: "Message required" }, 400);
+    const body = await c.req.json<{ message: string; model?: string; images?: string[] }>();
+    if (!body.message?.trim() && (!body.images || body.images.length === 0)) return c.json({ error: "Message required" }, 400);
 
-    const baseURL = vars.get("DEEPSEEK_BASE_URL") || "https://api.deepseek.com";
-    const apiKey = secret.get("DEEPSEEK_API_KEY");
-    if (!apiKey) return c.json({ error: "API key not configured" }, 500);
+    // Enforce admin-only model
+    const isAdminUser = await db.select().from(userProfiles).where(eq(userProfiles.userId, userId)).then(r => r[0]?.role === "admin");
+    let selectedModel = body.model || "seed";
+    if (selectedModel === "deepseek" && !isAdminUser) selectedModel = "seed";
+
+    let baseURL: string;
+    let apiKey: string | null;
+    let modelName: string;
+
+    if (selectedModel === "seed") {
+      baseURL = vars.get("SEED_BASE_URL") || "https://ark.cn-beijing.volces.com/api/v3";
+      apiKey = secret.get("SEED_API_KEY");
+      modelName = "doubao-seed-2-0-code-preview-260215";
+    } else {
+      baseURL = vars.get("DEEPSEEK_BASE_URL") || "https://api.deepseek.com";
+      apiKey = secret.get("DEEPSEEK_API_KEY");
+      modelName = "deepseek-v4-pro";
+    }
+
+    if (!apiKey) return c.json({ error: `API key not configured for ${selectedModel}` }, 500);
+
+    const apiPath = selectedModel === "seed" ? "/chat/completions" : "/v1/chat/completions";
 
     // Save user message
+    const userMessageContent = body.message?.trim() || (body.images?.length ? "[图片]" : "");
     await db.insert(conversations).values({
       projectId,
       userId,
       role: "user",
-      content: body.message.trim(),
+      content: userMessageContent,
     });
 
     // Load history
@@ -228,11 +248,28 @@ Smart SDK 全局 API：
       },
     ];
 
+    const images = body.images || [];
     for (const msg of history) {
       if (msg.role === "user") {
         apiMessages.push({ role: "user", content: msg.content });
       } else if (msg.role === "assistant") {
         apiMessages.push({ role: "assistant", content: msg.content });
+      }
+    }
+
+    // If images present, convert the last user message to multimodal format
+    if (images.length > 0) {
+      for (let i = apiMessages.length - 1; i >= 0; i--) {
+        if (apiMessages[i].role === "user") {
+          const text = apiMessages[i].content as string;
+          const content: Array<Record<string, unknown>> = [{ type: "text", text }];
+          for (const img of images) {
+            content.push({ type: "image_url", image_url: { url: img } });
+          }
+          apiMessages[i] = { role: "user", content };
+          console.log("[vibe] images attached:", images.length, "message:", text.slice(0, 50));
+          break;
+        }
       }
     }
 
@@ -261,26 +298,47 @@ Smart SDK 全局 API：
 
     const prefix = `${projectId}/${toolId}/`;
     let fullResponse = "";
+    let savedConvId: number | null = null;
+    let textChunks = 0;
     const generatedFiles: Array<{ path: string; language: string }> = [];
 
+    const eventQueue: Array<Record<string, unknown>> = [];
+
+    // SSE stream — drains from event queue
     const stream = new ReadableStream({
       async start(controller) {
-        try {
-          let currentMessages = [...apiMessages];
+        while (true) {
+          while (eventQueue.length > 0) {
+            const data = eventQueue.shift()!;
+            try {
+              controller.enqueue(new TextEncoder().encode(`data: ${JSON.stringify(data)}\n\n`));
+              if (data.type === "done") { controller.close(); return; }
+            } catch { return; } // client disconnected
+          }
+          await new Promise(r => setTimeout(r, 50));
+        }
+      },
+      cancel() { /* background task continues */ }
+    });
+
+    // AI agent loop — runs in background, survives client disconnect
+    const agentPromise = (async () => {
+      try {
+        let currentMessages = [...apiMessages];
           let stepCount = 0;
           const maxSteps = 15;
 
           // Agent loop: keep calling until no more tool calls
           while (stepCount < maxSteps) {
             stepCount++;
-            const response = await fetch(`${baseURL}/v1/chat/completions`, {
+            const response = await fetch(`${baseURL}${apiPath}`, {
               method: "POST",
               headers: {
                 "Content-Type": "application/json",
                 Authorization: `Bearer ${apiKey}`,
               },
               body: JSON.stringify({
-                model: "deepseek-v4-pro",
+                model: modelName,
                 messages: currentMessages,
                 tools: TOOLS,
                 tool_choice: "auto",
@@ -294,7 +352,7 @@ Smart SDK 全局 API：
             if (!response.ok) {
               const errText = await response.text();
               console.error("DeepSeek API error:", response.status, errText.slice(0, 300));
-              sse(controller, { type: "error", content: `API ${response.status}: ${errText.slice(0, 150)}` });
+              emit(eventQueue, { type: "error", content: `API ${response.status}: ${errText.slice(0, 150)}` });
               break;
             }
 
@@ -332,7 +390,24 @@ Smart SDK 全局 API：
                   if (delta.content) {
                     assistantContent += delta.content;
                     fullResponse += delta.content;
-                    sse(controller, { type: "text", content: delta.content });
+                    textChunks++;
+                    emit(eventQueue, { type: "text", content: delta.content });
+
+                    // Save partial response to DB so it survives page reload
+                    if (!savedConvId) {
+                      const [row] = await db.insert(conversations).values({
+                        projectId, userId,
+                        role: "assistant",
+                        content: fullResponse,
+                      }).returning({ id: conversations.id });
+                      savedConvId = row.id;
+                    } else if (textChunks % 5 === 0) {
+                      ctx.runInBackground(
+                        db.update(conversations)
+                          .set({ content: fullResponse })
+                          .where(eq(conversations.id, savedConvId))
+                      );
+                    }
                   }
 
                   // Thinking/reasoning — stream to UI with throttling
@@ -340,7 +415,7 @@ Smart SDK 全局 API：
                     reasoningContent += delta.reasoning_content;
                     // Emit thinking events (throttled: every 200 chars accumulated or on completion)
                     if (reasoningContent.length % 200 < delta.reasoning_content.length) {
-                      sse(controller, { type: "thinking", content: reasoningContent });
+                      emit(eventQueue, { type: "thinking", content: reasoningContent });
                     }
                   }
 
@@ -355,7 +430,7 @@ Smart SDK 全局 API：
                             name: tc.function?.name || "",
                             args: tc.function?.arguments || "",
                           });
-                          sse(controller, { type: "tool_start", toolCallId: tc.id, name: tc.function?.name || "" });
+                          emit(eventQueue, { type: "tool_start", toolCallId: tc.id, name: tc.function?.name || "" });
                         } else if (tc.function?.arguments) {
                           // Continuation of arguments
                           const existing = toolCallMap.get(tc.index);
@@ -370,8 +445,8 @@ Smart SDK 全局 API：
 
             // Emit final thinking content
             if (reasoningContent) {
-              sse(controller, { type: "thinking", content: reasoningContent });
-              sse(controller, { type: "thinking_complete" });
+              emit(eventQueue, { type: "thinking", content: reasoningContent });
+              emit(eventQueue, { type: "thinking_complete" });
             }
 
             // Collect tool calls from map
@@ -413,8 +488,8 @@ Smart SDK 全局 API：
               let args: Record<string, string> = {};
               try { args = JSON.parse(argsStr); } catch { /* invalid JSON */ }
 
-              sse(controller, { type: "tool_start", toolCallId: tc.id, name });
-              sse(controller, {
+              emit(eventQueue, { type: "tool_start", toolCallId: tc.id, name });
+              emit(eventQueue, {
                 type: "tool_exec",
                 toolCallId: tc.id,
                 name,
@@ -439,7 +514,7 @@ Smart SDK 全局 API：
                     const lang = args.path.split(".").pop() || "text";
                     generatedFiles.push({ path: args.path, language: lang });
                     result = `File written: ${args.path}`;
-                    sse(controller, {
+                    emit(eventQueue, {
                       type: "file",
                       path: args.path,
                       language: lang,
@@ -465,7 +540,7 @@ Smart SDK 全局 API：
                       generatedFiles.push({ path: args.path, language: lang });
                     }
                     result = `File edited: ${args.path}`;
-                    sse(controller, {
+                    emit(eventQueue, {
                       type: "file",
                       path: args.path,
                       language: lang,
@@ -514,7 +589,7 @@ Smart SDK 全局 API：
                 result = `Tool error: ${String(err)}`;
               }
 
-              sse(controller, {
+              emit(eventQueue, {
                 type: "tool_result",
                 toolCallId: tc.id,
                 name,
@@ -559,13 +634,19 @@ Smart SDK 全局 API：
             }
           }
 
-          // Save assistant message to DB
-          await db.insert(conversations).values({
-            projectId,
-            userId,
-            role: "assistant",
-            content: fullResponse || "任务完成",
-          });
+          // Save/update assistant message to DB
+          if (savedConvId) {
+            await db.update(conversations)
+              .set({ content: fullResponse || "任务完成" })
+              .where(eq(conversations.id, savedConvId));
+          } else {
+            await db.insert(conversations).values({
+              projectId,
+              userId,
+              role: "assistant",
+              content: fullResponse || "任务完成",
+            });
+          }
 
           // Update tool status with generated file list
           ctx.runInBackground(
@@ -580,15 +661,21 @@ Smart SDK 全局 API：
             })()
           );
 
-          sse(controller, { type: "done", toolId });
-          controller.close();
-        } catch (err) {
-          try { sse(controller, { type: "error", content: String(err) }); } catch { /* */ }
-          try { sse(controller, { type: "done" }); } catch { /* */ }
-          try { controller.close(); } catch { /* */ }
+        emit(eventQueue, { type: "done", toolId });
+      } catch (err) {
+        if (savedConvId && fullResponse) {
+          try {
+            await db.update(conversations)
+              .set({ content: fullResponse })
+              .where(eq(conversations.id, savedConvId));
+          } catch { /* ignore save error */ }
         }
-      },
-    });
+        emit(eventQueue, { type: "error", content: String(err) });
+        emit(eventQueue, { type: "done" });
+      }
+    })();
+
+    ctx.runInBackground(agentPromise);
 
     return new Response(stream, { headers: SSE_HEADERS });
   });
