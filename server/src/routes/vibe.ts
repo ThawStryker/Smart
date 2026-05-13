@@ -1,8 +1,8 @@
 import { Hono } from "hono";
 import { db, storage, secret, vars, ctx } from "edgespark";
 import { auth } from "edgespark/http";
-import { eq, asc } from "drizzle-orm";
-import { projects, conversations, tools, executionSteps, buckets, userProfiles } from "@defs";
+import { eq, asc, inArray } from "drizzle-orm";
+import { projects, conversations, tools, executionSteps, buckets, userProfiles, mcps, skills as skillsDef, marketListings } from "@defs";
 
 const SSE_HEADERS = {
   "Content-Type": "text/event-stream",
@@ -102,7 +102,7 @@ export const vibeRoutes = new Hono()
       .where(eq(projects.id, projectId));
     if (!project) return c.json({ error: "Project not found" }, 404);
 
-    const body = await c.req.json<{ message: string; model?: string; images?: string[] }>();
+    const body = await c.req.json<{ message: string; model?: string; images?: string[]; mcps?: string[]; skills?: string[] }>();
     if (!body.message?.trim() && (!body.images || body.images.length === 0)) return c.json({ error: "Message required" }, 400);
 
     // Enforce admin-only model
@@ -248,6 +248,66 @@ Smart SDK 全局 API：
       },
     ];
 
+    // Inject selected MCPs
+    const selectedMcps = (body.mcps || []).filter(Boolean);
+    const selectedSkills = (body.skills || []).filter(Boolean);
+
+    if (selectedMcps.length > 0) {
+      const mcpRows = await db.select().from(mcps).where(inArray(mcps.name, selectedMcps));
+      if (mcpRows.length > 0) {
+        const mcpDesc = mcpRows.map(m => `- **${m.name}**: ${m.description || ""} (config: ${m.config || "{}"})`).join("\n");
+        apiMessages[0] = { role: "system", content: (apiMessages[0].content as string) + `\n\n## 可用 MCP 工具\n\n${mcpDesc}\n\n调用 MCP 时使用工具调用机制。` };
+      }
+    }
+
+    if (selectedSkills.length > 0) {
+      const skillRows = await db.select().from(skillsDef).where(inArray(skillsDef.name, selectedSkills));
+      for (const skill of skillRows) {
+        if (skill.status === "installed" && skill.storagePath) {
+          // Try to read SKILL.md from R2
+          const skillMd = await storage.from(buckets.sourceBuckets).get(skill.storagePath + "SKILL.md");
+          if (!skillMd) {
+            // Try nested paths
+            const list = await storage.from(buckets.sourceBuckets).list({ prefix: skill.storagePath, limit: 50 });
+            const mdPath = list.files.find(f => f.path.endsWith("/SKILL.md") || f.path.endsWith("SKILL.md"));
+            if (mdPath) {
+              const obj = await storage.from(buckets.sourceBuckets).get(mdPath.path);
+              if (obj) {
+                apiMessages[0] = { role: "system", content: (apiMessages[0].content as string) + `\n\n## Skill: ${skill.name}\n\n${new TextDecoder().decode(obj.body).slice(0, 3000)}` };
+              }
+            }
+          } else {
+            apiMessages[0] = { role: "system", content: (apiMessages[0].content as string) + `\n\n## Skill: ${skill.name}\n\n${new TextDecoder().decode(skillMd.body).slice(0, 3000)}` };
+          }
+        }
+      }
+    }
+
+    // Build tools list — dynamically add MCP tools
+    const activeTools: Array<Record<string, unknown>> = [...TOOLS];
+    const mcpToolMap = new Map<string, Record<string, unknown>>();
+    if (selectedMcps.length > 0) {
+      const mcpRows = await db.select().from(mcps).where(inArray(mcps.name, selectedMcps));
+      for (const m of mcpRows) {
+        if (m.enabled && m.config) {
+          try {
+            const cfg = JSON.parse(m.config);
+            const name = m.name.replace(/-/g, "_");
+            const tool = {
+              type: "function",
+              function: {
+                name,
+                description: cfg.description || m.description || m.name,
+                parameters: cfg.parameters || { type: "object", properties: {}, required: [] },
+              },
+            };
+            activeTools.push(tool);
+            mcpToolMap.set(name, cfg);
+          } catch { /* skip malformed config */ }
+        }
+      }
+    }
+
     const images = body.images || [];
     for (const msg of history) {
       if (msg.role === "user") {
@@ -267,7 +327,6 @@ Smart SDK 全局 API：
             content.push({ type: "image_url", image_url: { url: img } });
           }
           apiMessages[i] = { role: "user", content };
-          console.log("[vibe] images attached:", images.length, "message:", text.slice(0, 50));
           break;
         }
       }
@@ -340,7 +399,7 @@ Smart SDK 全局 API：
               body: JSON.stringify({
                 model: modelName,
                 messages: currentMessages,
-                tools: TOOLS,
+                tools: activeTools,
                 tool_choice: "auto",
                 temperature: 0.5,
                 max_tokens: 8192,
@@ -580,6 +639,33 @@ Smart SDK 全局 API：
                       }
                     }
                     result = matches.slice(0, 30).join("\n") || "No matches found";
+                    break;
+                  }
+                  case "web_search": {
+                    try {
+                      const q = encodeURIComponent(args.query as string);
+                      const searchRes = await fetch(`https://api.duckduckgo.com/?q=${q}&format=json&no_html=1`, {
+                        headers: { "User-Agent": "Smart/1.0" },
+                      });
+                      if (searchRes.ok) {
+                        const json = await searchRes.json() as any;
+                        const items = json.Results || json.RelatedTopics || [];
+                        result = items.slice(0, 5).map((r: any) => `${r.Text || r.Result || ""} — ${r.FirstURL || ""}`).join("\n") || "No results";
+                      } else {
+                        result = `Search failed: ${searchRes.status}`;
+                      }
+                    } catch { result = "Web search unavailable"; }
+                    break;
+                  }
+                  case "smart_deploy": {
+                    result = "使用 Smart 部署功能需要用户在 Smart 前端操作。当前项目部署地址：部署按钮在编辑页面右上角。已部署的项目可在工具市场中查看。";
+                    break;
+                  }
+                  case "smart_market": {
+                    try {
+                      const marketList = await db.select().from(marketListings).where(eq(marketListings.status, "approved")).limit(10);
+                      result = marketList.map(item => `- ${item.title}: ${item.description || ""} (${item.type === "url" ? "外部链接" : "Smart 工具"})`).join("\n") || "暂无工具";
+                    } catch { result = "Market unavailable"; }
                     break;
                   }
                   default:

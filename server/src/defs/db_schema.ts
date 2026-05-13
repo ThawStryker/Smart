@@ -141,6 +141,8 @@ export const skills = sqliteTable("skills", {
   sourceUrl: text("source_url"),
   storagePath: text("storage_path").notNull(),
   enabled: integer("enabled", { mode: "boolean" }).default(true),
+  status: text("status").default("installing"), // installing → installed → failed
+  errorMessage: text("error_message"),
   createdAt: text("created_at").default(sql`(datetime('now'))`),
   updatedAt: text("updated_at").default(sql`(datetime('now'))`),
 });

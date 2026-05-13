@@ -72,18 +72,12 @@ export function ProjectDetail() {
         let filesRestored = false;
         try {
           const overviewRes = await fetch(`/api/projects/${numProjectId}/overview`, { credentials: "include" });
-          console.log("[loadAll] overview status:", overviewRes.status);
           if (overviewRes.ok) {
             const overview = await overviewRes.json() as Array<{ toolId: number; toolName: string; files: Array<{ path: string; language: string }> }>;
-            console.log("[loadAll] overview data:", JSON.stringify(overview));
             if (overview.length > 0) setActiveToolId(overview[0].toolId);
             const restoredFiles: StoredFile[] = [];
             for (const tool of overview) {
-              if (!tool.files || tool.files.length === 0) {
-                console.log(`[loadAll] tool ${tool.toolId} has no files`);
-                continue;
-              }
-              console.log(`[loadAll] tool ${tool.toolId} has ${tool.files.length} files`);
+              if (!tool.files || tool.files.length === 0) continue;
               for (const f of tool.files.slice(0, 20 - restoredFiles.length)) {
                 try {
                   const fileRes = await fetch(
@@ -118,7 +112,6 @@ export function ProjectDetail() {
           })));
 
           if (!filesRestored) {
-            console.log("[loadAll] R2 overview did not restore files, trying code block fallback");
             // Fallback: parse code blocks from conversation history
             const codeBlockRegex = /```(\w+)?:?(\S+)?\n([\s\S]*?)```/g;
             const restoredFiles: StoredFile[] = [];
@@ -143,7 +136,7 @@ export function ProjectDetail() {
     loadAll();
   }, [numProjectId, navigate]);
 
-  const handleSend = useCallback(async () => {
+  const handleSend = useCallback(async (selectedMcps?: string[], selectedSkills?: string[]) => {
     if (!input.trim() || isStreaming || !numProjectId) return;
 
     const userMessage: ChatMessage = {
@@ -168,7 +161,7 @@ export function ProjectDetail() {
         method: "POST",
         credentials: "include",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ message: userMessage.content, model, images }),
+        body: JSON.stringify({ message: userMessage.content, model, images, mcps: selectedMcps || [], skills: selectedSkills || [] }),
         signal: controller.signal,
       });
 
