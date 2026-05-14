@@ -122,9 +122,13 @@ export function Dashboard() {
                   className="smart-card p-5 cursor-pointer group"
                 >
                   <div className="flex items-start gap-4 mb-3">
-                    <div className={`w-11 h-11 rounded-xl bg-gradient-to-br ${getGradient(project.name)} flex items-center justify-center text-white text-sm font-bold shadow-sm shrink-0 group-hover:scale-105 transition-transform duration-300`}>
-                      {getInitials(project.name)}
-                    </div>
+                    {project.iconPath ? (
+                      <img src={`/api/public/smart/icon/${project.id}.png`} alt="" className="w-11 h-11 rounded-xl object-cover shadow-sm shrink-0 group-hover:scale-105 transition-transform duration-300" />
+                    ) : (
+                      <div className={`w-11 h-11 rounded-xl bg-gradient-to-br ${getGradient(project.name)} flex items-center justify-center text-white text-sm font-bold shadow-sm shrink-0 group-hover:scale-105 transition-transform duration-300`}>
+                        {getInitials(project.name)}
+                      </div>
+                    )}
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center justify-between gap-2">
                         <h3 className="font-semibold text-[15px] text-primary truncate group-hover:text-amber-600 transition-colors">{project.name}</h3>

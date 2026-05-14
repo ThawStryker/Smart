@@ -20,6 +20,7 @@ export const projects = sqliteTable("projects", {
   status: text("status").default("draft"),
   progress: integer("progress").default(0),
   config: text("config"),
+  iconPath: text("icon_path"),
   createdAt: text("created_at").default(sql`(datetime('now'))`),
   updatedAt: text("updated_at").default(sql`(datetime('now'))`),
 });

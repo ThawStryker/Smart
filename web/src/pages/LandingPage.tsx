@@ -13,6 +13,8 @@ interface Listing {
   type: string;
   url: string;
   link: string;
+  _projectId?: number;
+  _hasIcon?: boolean;
 }
 
 const gradients = [
@@ -140,9 +142,13 @@ export function LandingPage() {
                   className="smart-card p-4 group"
                 >
                   <div className="flex items-center gap-3 mb-3">
-                    <div className={`w-9 h-9 rounded-lg bg-gradient-to-br ${getGradient(l.title)} flex items-center justify-center text-white text-xs font-bold shadow-sm shrink-0 group-hover:scale-105 transition-transform duration-300`}>
-                      {getInitials(l.title)}
-                    </div>
+                    {l._hasIcon && l._projectId ? (
+                      <img src={`/api/public/smart/icon/${l._projectId}.png`} alt="" className="w-9 h-9 rounded-lg object-cover shadow-sm shrink-0 group-hover:scale-105 transition-transform duration-300" />
+                    ) : (
+                      <div className={`w-9 h-9 rounded-lg bg-gradient-to-br ${getGradient(l.title)} flex items-center justify-center text-white text-xs font-bold shadow-sm shrink-0 group-hover:scale-105 transition-transform duration-300`}>
+                        {getInitials(l.title)}
+                      </div>
+                    )}
                     <div className="flex-1 min-w-0">
                       <div className="text-sm font-semibold text-primary truncate">{l.title}</div>
                       {l.category && (

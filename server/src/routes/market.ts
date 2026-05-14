@@ -30,10 +30,23 @@ export const marketRoutes = new Hono()
           domainMap.set(d.projectId, d.domain);
         }
       }
-      // Map toolId → projectId → domain
+      // Map toolId → projectId → domain + icon
       for (const t of toolRows) {
         const domain = domainMap.get(t.projectId);
         if (domain) domainMap.set(t.id, domain);
+      }
+
+      // Load project icons
+      const projectRows = await db.select({ id: projects.id, iconPath: projects.iconPath })
+        .from(projects).where(inArray(projects.id, projectIds));
+      const iconMap = new Map(projectRows.map(p => [p.id, p.iconPath]));
+      const toolProjectMap = new Map(toolRows.map(t => [t.id, t.projectId]));
+      for (const r of rows) {
+        if (r.toolId > 0) {
+          const pid = toolProjectMap.get(r.toolId);
+          if (pid) (r as any)._projectId = pid;
+          if (pid && iconMap.get(pid)) (r as any)._hasIcon = true;
+        }
       }
     }
 

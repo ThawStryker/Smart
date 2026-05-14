@@ -51,6 +51,25 @@ export const projectsRoutes = new Hono()
       .returning();
     return c.json(row, 201);
   })
+  .post("/:projectId/icon", async (c) => {
+    const userId = auth.user!.id;
+    const projectId = parseInt(c.req.param("projectId"), 10);
+    const [p] = await db.select().from(projects).where(and(eq(projects.id, projectId), eq(projects.userId, userId)));
+    if (!p) return c.json({ error: "Not found" }, 404);
+
+    const formData = await c.req.formData();
+    const file = formData.get("file") as File;
+    if (!file) return c.json({ error: "file required" }, 400);
+
+    const buf = await file.arrayBuffer();
+    const path = `icons/${projectId}.png`;
+    await storage.from(buckets.sourceBuckets).put(path, buf);
+    await db.update(projects).set({ iconPath: path, updatedAt: new Date().toISOString() }).where(eq(projects.id, projectId));
+
+    // Return presigned URL for display
+    const { downloadUrl } = await storage.from(buckets.sourceBuckets).createPresignedGetUrl(path, 86400);
+    return c.json({ iconPath: path, url: downloadUrl });
+  })
   .post("/:projectId/clear-context", async (c) => {
     const userId = auth.user!.id;
     const projectId = parseInt(c.req.param("projectId"), 10);

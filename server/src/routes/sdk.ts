@@ -1,6 +1,19 @@
 import { Hono } from "hono";
+import { db, storage } from "edgespark";
+import { eq } from "drizzle-orm";
+import { projects, buckets } from "@defs";
 
 export const sdkRoutes = new Hono()
+  .get("/api/public/smart/icon/:projectId.png", async (c) => {
+    const projectId = parseInt(c.req.param("projectId"), 10);
+    const [p] = await db.select().from(projects).where(eq(projects.id, projectId));
+    if (!p?.iconPath) return c.notFound();
+    const obj = await storage.from(buckets.sourceBuckets).get(p.iconPath);
+    if (!obj) return c.notFound();
+    return new Response(obj.body, {
+      headers: { "Content-Type": "image/png", "Cache-Control": "public, max-age=86400" },
+    });
+  })
   .get("/api/public/smart/sdk.js", (c) => {
     return c.body(
       `(function() {
