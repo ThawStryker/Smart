@@ -71,12 +71,20 @@ async function readSkillMd(storagePath: string): Promise<string | null> {
   return null;
 }
 
-export async function buildSkillPrompt(selectedSkills: string[]): Promise<string> {
+function getSkillCharLimit(model: string): number {
+  // Context-window-based limits: roughly context_size / 20 to leave room for conversation
+  if (model === "deepseek") return 8000;   // 1M context
+  return 3000; // seed and any other model default
+}
+
+export async function buildSkillPrompt(selectedSkills: string[], model?: string): Promise<string> {
   let result = "";
 
   // Always inject superpowers
   const skillsToLoad = new Set(selectedSkills);
   skillsToLoad.add("superpowers");
+
+  const charLimit = getSkillCharLimit(model || "seed");
 
   let foundSuperpowers = false;
   const loadedNames: string[] = [];
@@ -87,7 +95,7 @@ export async function buildSkillPrompt(selectedSkills: string[]): Promise<string
     if (content) {
       if (skill.name === "superpowers") foundSuperpowers = true;
       loadedNames.push(skill.name);
-      result += `\n\n## Skill: ${skill.name}\n\n${content.slice(0, 8000)}`;
+      result += `\n\n## Skill: ${skill.name}\n\n${content.slice(0, charLimit)}`;
     }
   }
 

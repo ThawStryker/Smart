@@ -69,7 +69,7 @@ export const agentRoutes = new Hono()
 
     // === Build system prompt ===
     const memoryCtx = await buildMemoryContext(userId, projectId);
-    const skillCtx = await buildSkillPrompt(body.skills || []);
+    const skillCtx = await buildSkillPrompt(body.skills || [], selectedModel);
     const selectedMcps = (body.mcps || []).filter(Boolean);
     const mcpCtx = await buildMcpPrompt(selectedMcps);
 
