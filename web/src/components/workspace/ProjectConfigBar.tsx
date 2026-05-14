@@ -54,7 +54,7 @@ export function ProjectConfigBar({ projectId, projectName, iconPath, onIconChang
     };
   };
 
-  const iconUrl = iconPath || `data:image/svg+xml,${encodeURIComponent(`<svg xmlns="http://www.w3.org/2000/svg" width="32" height="32"><rect fill="%23f59e0b" width="32" height="32" rx="8"/><text fill="white" font-size="16" font-family="sans-serif" x="50%" y="55%" text-anchor="middle" dominant-baseline="middle">${projectName.charAt(0).toUpperCase()}</text></svg>`)}`;
+  const iconUrl = `/api/public/smart/icon/${projectId}`;
 
   return (
     <div className="bg-card border-b border-[#edeae5] px-6 py-3.5 flex items-center justify-between">
@@ -107,10 +107,20 @@ export function ProjectConfigBar({ projectId, projectName, iconPath, onIconChang
         <input ref={fileRef} type="file" accept="image/*" className="hidden" onChange={handleIconUpload} />
         <button
           onClick={() => fileRef.current?.click()}
-          className="w-9 h-9 rounded-lg overflow-hidden border-2 border-[#edeae5] hover:border-[#f59e0b] transition-colors shrink-0"
+          className="relative w-9 h-9 rounded-lg overflow-hidden border-2 border-[#edeae5] hover:border-[#f59e0b] transition-colors shrink-0 bg-gradient-to-br from-amber-400 to-orange-500"
           title="修改项目图标"
         >
-          <img src={iconUrl} alt="" className="w-full h-full object-cover" />
+          <img
+            src={iconUrl}
+            alt=""
+            className="w-full h-full object-cover"
+            onError={(e) => {
+              (e.target as HTMLImageElement).style.display = "none";
+            }}
+          />
+          <span className="absolute inset-0 flex items-center justify-center text-white text-xs font-bold pointer-events-none">
+            {projectName.charAt(0).toUpperCase()}
+          </span>
         </button>
       </div>
     </div>
