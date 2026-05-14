@@ -24,6 +24,7 @@ async function cropSquare(image: HTMLImageElement, size = 200): Promise<Blob> {
 export function ProjectConfigBar({ projectId, projectName, onIconChange, onNameChange }: ProjectConfigBarProps) {
   const [editing, setEditing] = useState(false);
   const [nameDraft, setNameDraft] = useState(projectName);
+  const [iconError, setIconError] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
   const navigate = useNavigate();
 
@@ -109,17 +110,20 @@ export function ProjectConfigBar({ projectId, projectName, onIconChange, onNameC
           className="relative w-9 h-9 rounded-lg overflow-hidden border-2 border-[#edeae5] hover:border-[#f59e0b] transition-colors shrink-0 bg-gradient-to-br from-amber-400 to-orange-500"
           title="修改项目图标"
         >
-          <img
-            src={iconUrl}
-            alt=""
-            className="w-full h-full object-cover"
-            onError={(e) => {
-              (e.target as HTMLImageElement).style.display = "none";
-            }}
-          />
-          <span className="absolute inset-0 flex items-center justify-center text-white text-xs font-bold pointer-events-none">
-            {projectName.charAt(0).toUpperCase()}
-          </span>
+          {!iconError && (
+            <img
+              src={iconUrl}
+              alt=""
+              className="w-full h-full object-cover"
+              onLoad={() => setIconError(false)}
+              onError={() => setIconError(true)}
+            />
+          )}
+          {iconError && (
+            <span className="flex items-center justify-center w-full h-full text-white text-xs font-bold">
+              {projectName.charAt(0).toUpperCase()}
+            </span>
+          )}
         </button>
       </div>
     </div>
