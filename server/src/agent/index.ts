@@ -8,7 +8,7 @@ import { buildToolList } from "./tools/registry";
 import { buildSkillPrompt } from "./tools/skill";
 import { buildMcpPrompt } from "./tools/mcp";
 import { buildSystemMessage } from "./prompt/builder";
-import { classifyTask, getPhase, advancePhase, getPhaseHint, type Phase } from "./workflow";
+import { getPhase, advancePhase, type Phase } from "./workflow";
 import { buildMemoryContext, extractMemories } from "./memory/store";
 import { agentLoop } from "./loop";
 import type { ExecContext } from "./executor";
@@ -56,9 +56,8 @@ export const agentRoutes = new Hono()
       .orderBy(asc(conversations.createdAt)).limit(80);
 
     // === Workflow: determine phase ===
-    const taskLevel = classifyTask(body.message || "");
     const currentPhase = await getPhase(projectId);
-    const phase: Phase = await advancePhase(projectId, currentPhase, body.message || "", taskLevel);
+    const phase: Phase = await advancePhase(projectId, currentPhase, body.message || "");
 
     // === Build system prompt ===
     const memoryCtx = await buildMemoryContext(userId, projectId);
@@ -144,9 +143,7 @@ export const agentRoutes = new Hono()
           try { await extractMemories(userId, projectId, body.message || "", fullResponse); } catch {}
         })());
 
-        // Phase hint for heavy tasks
-        const hint = getPhaseHint(phase);
-        if (hint) emit(eventQueue, { type: "text", content: hint });
+        // Phase transition hints are handled by the phase-specific prompts
 
         emit(eventQueue, { type: "done", toolId });
       } catch (err) {
