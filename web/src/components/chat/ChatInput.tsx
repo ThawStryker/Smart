@@ -190,7 +190,7 @@ export function ChatInput({ value, onChange, onSubmit, onGenerate, isLoading, mo
         />
 
         {showCommands && (
-          <div ref={commandsRef} className="absolute left-0 bottom-full mb-1 w-80 bg-white border border-neutral-200 rounded-xl shadow-xl z-[100] max-h-52 overflow-y-auto">
+          <div ref={commandsRef} className="absolute left-0 bottom-full mb-1 w-[26rem] bg-white border border-neutral-200 rounded-xl shadow-xl z-[100] max-h-52 overflow-y-auto">
             {allCommands.length === 0 ? (
               <p className="text-xs text-neutral-400 p-3">加载中...</p>
             ) : filteredCommands.length === 0 ? (
