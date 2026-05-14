@@ -160,7 +160,9 @@ export async function getSkillCommands(selectedSkills?: string[]): Promise<
       { name: "/brainstorming", description: "启动需求分析和方案设计" },
       { name: "/writing-plans", description: "编写详细的实施计划" },
       { name: "/subagent-driven", description: "按计划分步执行实施" },
+      { name: "/test-driven", description: "先写测试再写实现代码" },
       { name: "/debugging", description: "系统化调试问题和错误" },
+      { name: "/code-review", description: "完成前进行代码审查" },
       { name: "/verification", description: "完成前验证所有修改" },
     ],
   });
