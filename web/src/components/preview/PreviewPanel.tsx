@@ -35,8 +35,6 @@ export function PreviewPanel({ projectId, toolId, generatedFiles = [] }: Preview
   const [activeTab, setActiveTab] = useState("code");
   const [selectedFileIdx, setSelectedFileIdx] = useState(0);
   const [previewKey, setPreviewKey] = useState(0);
-  const [previewScale, setPreviewScale] = useState(1);
-  const [previewDim, setPreviewDim] = useState({ w: 0, h: 0 });
   const iframeRef = useRef<HTMLIFrameElement>(null);
   const previewContainerRef = useRef<HTMLDivElement>(null);
   const pollRef = useRef<AbortController | null>(null);
@@ -49,8 +47,6 @@ export function PreviewPanel({ projectId, toolId, generatedFiles = [] }: Preview
   const [deployStep, setDeployStep] = useState(0); // 0=idle, 1-4=steps
   const [deployError, setDeployError] = useState("");
   const [existingDomain, setExistingDomain] = useState("");
-
-  const rescaleRef = useRef<() => void>(null);
 
   const hasHtml = generatedFiles.some((f) => f.path.endsWith(".html") || f.language === "html");
   const previewUrl = toolId && hasHtml
@@ -169,16 +165,6 @@ export function PreviewPanel({ projectId, toolId, generatedFiles = [] }: Preview
   };
 
   useEffect(() => {
-    const container = previewContainerRef.current;
-    if (!container) return;
-    const ro = new ResizeObserver(() => {
-      rescaleRef.current?.();
-    });
-    ro.observe(container);
-    return () => ro.disconnect();
-  }, []);
-
-  useEffect(() => {
     if (generatedFiles.length > 0) {
       setSelectedFileIdx(generatedFiles.length - 1);
       setActiveTab("code");
@@ -240,38 +226,18 @@ export function PreviewPanel({ projectId, toolId, generatedFiles = [] }: Preview
       >
         {activeTab === "preview" ? (
           previewUrl ? (
-            <div style={{ width: "100%", height: previewDim.h * previewScale || "100%", overflow: "hidden" }}>
+            <div style={{ width: "100%", height: "100%" }}>
               <iframe
                 key={previewKey}
                 ref={iframeRef}
                 src={previewUrl}
                 style={{
                   width: "100%",
-                  height: previewDim.h || "100%",
+                  height: "100%",
                   border: 0,
-                  transform: `scale(1, ${previewScale})`,
-                  transformOrigin: "top left",
                 }}
                 sandbox="allow-scripts allow-forms allow-same-origin"
                 title="Preview"
-                onLoad={() => {
-                  const rescale = () => {
-                    try {
-                      const iframe = iframeRef.current;
-                      const container = previewContainerRef.current;
-                      const doc = iframe?.contentDocument || iframe?.contentWindow?.document;
-                      if (doc && container) {
-                        const body = doc.body;
-                        const ch = Math.max(body.scrollHeight, body.offsetHeight, 400);
-                        const scaleH = Math.min(container.clientHeight / ch, 1);
-                        setPreviewScale(scaleH);
-                        setPreviewDim({ w: 0, h: ch });
-                      }
-                    } catch { /* cross-origin */ }
-                  };
-                  rescaleRef.current = rescale;
-                  rescale();
-                }}
               />
             </div>
           ) : (
