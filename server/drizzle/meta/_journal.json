@@ -64,6 +64,13 @@
       "when": 1778743020794,
       "tag": "0008_shocking_jackpot",
       "breakpoints": true
+    },
+    {
+      "idx": 9,
+      "version": "6",
+      "when": 1778756116593,
+      "tag": "0009_luxuriant_vermin",
+      "breakpoints": true
     }
   ]
 }

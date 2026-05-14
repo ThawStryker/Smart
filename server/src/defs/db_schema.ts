@@ -161,3 +161,35 @@ export const mcps = sqliteTable("mcps", {
   createdAt: text("created_at").default(sql`(datetime('now'))`),
   updatedAt: text("updated_at").default(sql`(datetime('now'))`),
 });
+
+// 用户记忆
+export const userMemories = sqliteTable("user_memories", {
+  id: integer("id").primaryKey({ autoIncrement: true }),
+  userId: text("user_id").notNull(),
+  type: text("type").notNull(), // "preference" | "pattern" | "feedback" | "fact"
+  key: text("key").notNull(),
+  value: text("value").notNull(),
+  confidence: real("confidence").default(0.5),
+  createdAt: text("created_at").default(sql`(datetime('now'))`),
+  updatedAt: text("updated_at").default(sql`(datetime('now'))`),
+});
+
+// 项目记忆
+export const projectMemories = sqliteTable("project_memories", {
+  id: integer("id").primaryKey({ autoIncrement: true }),
+  projectId: integer("project_id").notNull(),
+  type: text("type").notNull(), // "decision" | "architecture" | "issue" | "pattern"
+  title: text("title").notNull(),
+  content: text("content").notNull(),
+  createdAt: text("created_at").default(sql`(datetime('now'))`),
+});
+
+// 对话阶段状态
+export const conversationStates = sqliteTable("conversation_states", {
+  id: integer("id").primaryKey({ autoIncrement: true }),
+  projectId: integer("project_id").notNull().unique(),
+  phase: text("phase").notNull().default("execute"), // "brainstorm" | "plan" | "execute" | "verify"
+  pendingConfirm: integer("pending_confirm", { mode: "boolean" }).default(false),
+  contextJson: text("context_json"), // JSON: 阶段上下文
+  updatedAt: text("updated_at").default(sql`(datetime('now'))`),
+});
