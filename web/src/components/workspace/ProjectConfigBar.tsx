@@ -101,9 +101,6 @@ export function ProjectConfigBar({ projectId, projectName, onIconChange, onNameC
         </div>
       </div>
       <div className="flex items-center gap-3">
-        <button className="px-3 py-1.5 rounded-lg text-sm text-secondary hover:bg-[#f5f0e8] transition-colors">
-          协作
-        </button>
         <input ref={fileRef} type="file" accept="image/*" className="hidden" onChange={handleIconUpload} />
         <button
           onClick={() => fileRef.current?.click()}
