@@ -329,6 +329,15 @@ Smart SDK 全局 API：
       }
     }
 
+    // Always inject superpowers SKILL.md as built-in capability
+    const [superpowersSkill] = await db.select().from(skillsDef).where(eq(skillsDef.name, "superpowers"));
+    if (superpowersSkill && superpowersSkill.status === "installed" && superpowersSkill.storagePath) {
+      const spMd = await storage.from(buckets.sourceBuckets).get(superpowersSkill.storagePath + "SKILL.md");
+      if (spMd) {
+        apiMessages[0] = { role: "system", content: (apiMessages[0].content as string) + "\n\n## 内置 Skill: superpowers\n\n" + new TextDecoder().decode(spMd.body).slice(0, 3000) };
+      }
+    }
+
     // Build tools list — dynamically add MCP tools
     const activeTools: Array<Record<string, unknown>> = [...TOOLS];
     const mcpToolMap = new Map<string, Record<string, unknown>>();
