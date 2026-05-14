@@ -34,8 +34,29 @@ export function ChatInput({ value, onChange, onSubmit, onGenerate, isLoading, mo
   const [skillList, setSkillList] = useState<Array<{ id: number; name: string; description: string; enabled: boolean; status: string }>>([]);
   const [showMcpPop, setShowMcpPop] = useState(false);
   const [showSkillPop, setShowSkillPop] = useState(false);
-  const [selectedMcps, setSelectedMcps] = useState<string[]>([]);
-  const [selectedSkills, setSelectedSkills] = useState<string[]>([]);
+  const storageKey = `smart_selections_${window.location.pathname}`;
+
+  const [selectedMcps, setSelectedMcps] = useState<string[]>(() => {
+    try {
+      const saved = localStorage.getItem(storageKey);
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        return parsed.mcps || [];
+      }
+    } catch {}
+    return [];
+  });
+
+  const [selectedSkills, setSelectedSkills] = useState<string[]>(() => {
+    try {
+      const saved = localStorage.getItem(storageKey);
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        return parsed.skills || [];
+      }
+    } catch {}
+    return [];
+  });
 
   const [commands, setCommands] = useState<Array<{ skillName: string; skillId: number; commands: Array<{ name: string; description: string }> }>>([]);
   const [showCommands, setShowCommands] = useState(false);
@@ -55,6 +76,11 @@ export function ChatInput({ value, onChange, onSubmit, onGenerate, isLoading, mo
       if (Array.isArray(data)) setCommands(data);
     }).catch(() => {});
   }, [selectedSkills]);
+
+  // Persist selections to localStorage
+  useEffect(() => {
+    localStorage.setItem(storageKey, JSON.stringify({ mcps: selectedMcps, skills: selectedSkills }));
+  }, [selectedMcps, selectedSkills, storageKey]);
 
   const allCommands: Command[] = commands.flatMap(c =>
     c.commands.map(cmd => ({ name: cmd.name, description: cmd.description, skillName: c.skillName }))
