@@ -89,6 +89,31 @@ const TOOLS = [
       },
     },
   },
+  {
+    type: "function",
+    function: {
+      name: "web_search",
+      description: "在网络上搜索实时信息",
+      parameters: {
+        type: "object",
+        properties: {
+          query: { type: "string", description: "搜索关键词" },
+        },
+        required: ["query"],
+      },
+    },
+  },
+  {
+    type: "function",
+    function: {
+      name: "smart_market",
+      description: "浏览 Smart 工具市场中的已发布工具",
+      parameters: {
+        type: "object",
+        properties: {},
+      },
+    },
+  },
 ];
 
 export const vibeRoutes = new Hono()
@@ -239,6 +264,27 @@ Smart SDK 全局 API：
 
 你有大上下文窗口。当历史对话变深时，倾向于追加新证据而非总结删除旧内容。引用已有结论而非重新推导。
 
+## Superpowers 研发流程
+
+你是 Smart Agent，内置 Superpowers 研发方法论。根据用户任务复杂度，自动采用分级流程：
+
+### 复杂度判断
+
+| 等级 | 判断标准 | 流程 |
+|------|---------|------|
+| **轻量** | 样式微调、文案修改、单行 fix、简单问答 | 直接实施 → 验证结果 |
+| **中等** | Bug 修复、小功能追加、单文件改动 | 简要分析 → 实施 → 验证 → 完成 |
+| **重量** | 新功能、架构改动、跨文件重构、多步骤任务 | 需求分析 → 设计方案 → 编写计划 → 分步实施 → 验证 → 审查 → 完成 |
+
+### 执行规则
+
+- 接到任务后，**先声明任务等级和将采用的流程**，再开始工作
+- 重量级任务：先理解现状，提出 2-3 种方案和权衡，让用户确认后再实施
+- 中等任务：简要说明问题原因和修复思路，然后实施
+- 轻量任务：直接动手，完成后验证
+- 所有任务完成后必须验证结果——文件存在、内容正确、编译通过
+- 对于重量级任务，在实施完成后提示用户可以生成项目说明文档
+
 ## 输出格式
 
 - 用简洁的段落解释
@@ -286,6 +332,22 @@ Smart SDK 全局 API：
     // Build tools list — dynamically add MCP tools
     const activeTools: Array<Record<string, unknown>> = [...TOOLS];
     const mcpToolMap = new Map<string, Record<string, unknown>>();
+
+    // Always inject smart-deploy as a built-in tool
+    const [smartDeployMcp] = await db.select().from(mcps).where(eq(mcps.name, "smart-deploy"));
+    if (smartDeployMcp && smartDeployMcp.enabled && smartDeployMcp.config) {
+      try {
+        const cfg = JSON.parse(smartDeployMcp.config);
+        activeTools.push({
+          type: "function",
+          function: {
+            name: "smart_deploy",
+            description: cfg.description || smartDeployMcp.description || "Deploy the current project",
+            parameters: cfg.parameters || { type: "object", properties: {} },
+          },
+        });
+      } catch {}
+    }
     if (selectedMcps.length > 0) {
       const mcpRows = await db.select().from(mcps).where(inArray(mcps.name, selectedMcps));
       for (const m of mcpRows) {
@@ -655,10 +717,6 @@ Smart SDK 全局 API：
                         result = `Search failed: ${searchRes.status}`;
                       }
                     } catch { result = "Web search unavailable"; }
-                    break;
-                  }
-                  case "smart_deploy": {
-                    result = "使用 Smart 部署功能需要用户在 Smart 前端操作。当前项目部署地址：部署按钮在编辑页面右上角。已部署的项目可在工具市场中查看。";
                     break;
                   }
                   case "smart_market": {

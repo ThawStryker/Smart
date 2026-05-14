@@ -11,9 +11,12 @@ export const mcpsRoutes = new Hono()
       .select()
       .from(mcps)
       .where(
-        or(
-          eq(mcps.visibility, "global"),
-          and(eq(mcps.visibility, "private"), eq(mcps.ownerId, userId))
+        and(
+          eq(mcps.hidden, false),
+          or(
+            eq(mcps.visibility, "global"),
+            and(eq(mcps.visibility, "private"), eq(mcps.ownerId, userId))
+          )
         )
       )
       .orderBy(mcps.createdAt);

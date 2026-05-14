@@ -50,9 +50,12 @@ export const skillsRoutes = new Hono()
         .select()
         .from(skills)
         .where(
-          or(
-            eq(skills.visibility, "global"),
-            and(eq(skills.visibility, "private"), eq(skills.ownerId, userId))
+          and(
+            eq(skills.hidden, false),
+            or(
+              eq(skills.visibility, "global"),
+              and(eq(skills.visibility, "private"), eq(skills.ownerId, userId))
+            )
           )
         )
         .orderBy(skills.createdAt);
@@ -180,4 +183,57 @@ export const skillsRoutes = new Hono()
 
     await db.delete(skills).where(eq(skills.id, id));
     return c.json({ success: true });
+  })
+
+  .get("/api/skills/commands", async (c) => {
+    const userId = auth.user!.id;
+    const rows = await db
+      .select()
+      .from(skills)
+      .where(
+        and(
+          eq(skills.enabled, true),
+          eq(skills.status, "installed"),
+          or(
+            eq(skills.visibility, "global"),
+            and(eq(skills.visibility, "private"), eq(skills.ownerId, userId))
+          )
+        )
+      );
+
+    const result: Array<{ skillName: string; skillId: number; commands: Array<{ name: string; description: string }> }> = [];
+
+    for (const skill of rows) {
+      if (!skill.storagePath) continue;
+      const skillMd = await storage.from(buckets.sourceBuckets).get(skill.storagePath + "SKILL.md");
+      let content: string | null = null;
+      if (skillMd) {
+        content = new TextDecoder().decode(skillMd.body);
+      } else {
+        const list = await storage.from(buckets.sourceBuckets).list({ prefix: skill.storagePath, limit: 50 });
+        const mdPath = list.files.find(f => f.path.endsWith("/SKILL.md") || f.path.endsWith("SKILL.md"));
+        if (mdPath) {
+          const obj = await storage.from(buckets.sourceBuckets).get(mdPath.path);
+          if (obj) content = new TextDecoder().decode(obj.body);
+        }
+      }
+      if (!content) continue;
+
+      const commandsMatch = content.match(/###\s+Commands\s*\n([\s\S]*?)(?=\n###|\n##|$)/i);
+      if (!commandsMatch) continue;
+
+      const commands: Array<{ name: string; description: string }> = [];
+      const lines = commandsMatch[1].split("\n");
+      for (const line of lines) {
+        const cmdMatch = line.match(/-\s+`(\/[a-z_-]+)`\s*[—–-]?\s*(.*)/i);
+        if (cmdMatch) {
+          commands.push({ name: cmdMatch[1], description: cmdMatch[2].trim() });
+        }
+      }
+      if (commands.length > 0) {
+        result.push({ skillName: skill.name, skillId: skill.id, commands });
+      }
+    }
+
+    return c.json(result);
   });
