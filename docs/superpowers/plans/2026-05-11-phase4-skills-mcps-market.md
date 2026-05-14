@@ -1,6 +1,8 @@
 # Phase 4 Implementation Plan: Skills / MCPs / 工具市场
 
-> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
+> **Status: COMPLETED** (2026-05-14)
+>
+> 实际完成超出原计划范围，新增 SmartAgent 架构重构、斜杠命令系统、动态 Skill 加载、记忆系统、设计升级。
 
 **Goal:** Add Skills management, MCPs management, and a tool marketplace with admin review to the Smart platform.
 
