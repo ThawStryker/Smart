@@ -32,6 +32,7 @@ import { skillsRoutes } from "./routes/skills";
 import { mcpsRoutes } from "./routes/mcps";
 import { marketRoutes } from "./routes/market";
 import { adminRoutes } from "./routes/admin";
+import { workRoutes } from "./routes/work";
 
 const app = new Hono()
   .get("/api/public/hello", (c) =>
@@ -52,6 +53,7 @@ const app = new Hono()
   .route("/", skillsRoutes)
   .route("/", mcpsRoutes)
   .route("/", marketRoutes)
-  .route("/", adminRoutes);
+  .route("/", adminRoutes)
+  .route("/", workRoutes);
 
 export default app;

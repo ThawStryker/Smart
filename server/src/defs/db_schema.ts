@@ -195,3 +195,16 @@ export const conversationStates = sqliteTable("conversation_states", {
   contextJson: text("context_json"), // JSON: 阶段上下文
   updatedAt: text("updated_at").default(sql`(datetime('now'))`),
 });
+
+// Work — 多角色协同 Agent
+export const workAgents = sqliteTable("work_agents", {
+  id: integer("id").primaryKey({ autoIncrement: true }),
+  userId: text("user_id").notNull(),
+  name: text("name").notNull(),
+  role: text("role").notNull().default("developer"), // architect|developer|reviewer|designer|custom
+  systemPrompt: text("system_prompt").notNull().default(""),
+  tools: text("tools").default("read,write,edit,list,grep"), // comma-separated
+  skills: text("skills").default(""), // comma-separated skill names
+  createdAt: text("created_at").default(sql`(datetime('now'))`),
+  updatedAt: text("updated_at").default(sql`(datetime('now'))`),
+});
