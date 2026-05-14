@@ -1,0 +1,1 @@
+ALTER TABLE `market_listings` ADD `featured` integer DEFAULT false;

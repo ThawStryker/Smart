@@ -90,6 +90,7 @@ export const marketListings = sqliteTable("market_listings", {
   type: text("type").default("tool"),          // NEW: "tool" | "url"
   url: text("url"),                             // NEW: external URL
   version: integer("version").default(1),       // NEW: version number
+  featured: integer("featured", { mode: "boolean" }).default(false),
   createdAt: text("created_at").default(sql`(datetime('now'))`),
 });
 

@@ -6,10 +6,14 @@ import { marketListings, tools, domains } from "@defs";
 
 export const marketRoutes = new Hono()
   .get("/api/public/market", async (c) => {
+    const featuredOnly = c.req.query("featured") === "true";
+    const where = featuredOnly
+      ? and(eq(marketListings.status, "approved"), eq(marketListings.featured, true))
+      : eq(marketListings.status, "approved");
     const rows = await db
       .select()
       .from(marketListings)
-      .where(eq(marketListings.status, "approved"))
+      .where(where)
       .orderBy(desc(marketListings.createdAt));
 
     // Get domain info for tool-type listings

@@ -1,9 +1,9 @@
 import { Hono } from "hono";
 import type { Context, Next } from "hono";
-import { db } from "edgespark";
+import { db, storage } from "edgespark";
 import { auth } from "edgespark/http";
 import { eq, inArray, desc } from "drizzle-orm";
-import { marketListings, skills, mcps, tools } from "@defs";
+import { marketListings, skills, mcps, tools, buckets } from "@defs";
 import { isAdmin } from "../lib/admin-check";
 
 async function requireAdmin(c: Context): Promise<Response | null> {
@@ -73,6 +73,16 @@ export const adminRoutes = new Hono()
     return c.json({ success: true });
   })
 
+  .post("/api/admin/market/:id/featured", async (c) => {
+    const id = parseInt(c.req.param("id"), 10);
+    const [row] = await db.select().from(marketListings).where(eq(marketListings.id, id));
+    if (!row) return c.json({ error: "Not found" }, 404);
+
+    const body = await c.req.json<{ featured: boolean }>();
+    await db.update(marketListings).set({ featured: body.featured }).where(eq(marketListings.id, id));
+    return c.json({ success: true, featured: body.featured });
+  })
+
   .post("/api/admin/market/:id/reject", async (c) => {
     const id = parseInt(c.req.param("id"), 10);
     const [row] = await db.select().from(marketListings).where(eq(marketListings.id, id));
@@ -100,8 +110,15 @@ export const adminRoutes = new Hono()
   })
 
   .post("/api/admin/skills", async (c) => {
-    const body = await c.req.json<{ name: string; description?: string; gitUrl?: string; hidden?: boolean }>();
+    const body = await c.req.json<{ name: string; description?: string; gitUrl?: string; hidden?: boolean; skillMd?: string }>();
     if (!body.name) return c.json({ error: "name required" }, 400);
+
+    const storagePath = `skills/global/${Date.now()}/`;
+
+    // If SKILL.md content provided inline, write directly to R2
+    if (body.skillMd) {
+      await storage.from(buckets.sourceBuckets).put(storagePath + "SKILL.md", new TextEncoder().encode(body.skillMd));
+    }
 
     const [row] = await db.insert(skills).values({
       name: body.name,
@@ -110,8 +127,9 @@ export const adminRoutes = new Hono()
       ownerId: auth.user!.id,
       sourceType: body.gitUrl ? "git" : "zip",
       sourceUrl: body.gitUrl || null,
-      storagePath: `skills/global/${Date.now()}/`,
+      storagePath,
       hidden: body.hidden ?? false,
+      status: body.skillMd ? "installed" : "installing",
     }).returning();
     return c.json(row, 201);
   })

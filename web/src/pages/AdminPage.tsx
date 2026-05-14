@@ -61,6 +61,15 @@ export function AdminPage() {
     fetchPending();
   };
 
+  const toggleFeatured = async (id: number, featured: boolean) => {
+    await client.api.fetch(`/api/admin/market/${id}/featured`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ featured: !featured }),
+    });
+    fetchApproved();
+  };
+
   const delist = async (id: number) => {
     await client.api.fetch(`/api/admin/market/${id}/delist`, { method: "POST" });
     fetchApproved();
@@ -156,9 +165,17 @@ export function AdminPage() {
                   <div key={a.id} className="p-3 bg-white border border-[#f0f0f0] rounded-xl mb-2 flex items-center justify-between">
                     <div>
                       <div className="font-semibold text-sm text-neutral-900">{a.title}</div>
-                      <div className="text-xs text-neutral-400">{a.type === "url" ? "外部链接" : "Smart 工具"}</div>
+                      <div className="text-xs text-neutral-400">
+                        {a.type === "url" ? "外部链接" : "Smart 工具"}
+                        {a.featured && <span className="ml-2 text-amber-500">热门</span>}
+                      </div>
                     </div>
-                    <button onClick={() => delist(a.id)} className="text-xs bg-red-500 text-white px-3 py-1 rounded hover:bg-red-600">下架</button>
+                    <div className="flex items-center gap-2">
+                      <button onClick={() => toggleFeatured(a.id, a.featured)} className={`text-xs px-2 py-1 rounded ${a.featured ? "bg-amber-50 text-amber-600" : "bg-neutral-100 text-neutral-400"}`}>
+                        {a.featured ? "取消热门" : "热门"}
+                      </button>
+                      <button onClick={() => delist(a.id)} className="text-xs bg-red-500 text-white px-3 py-1 rounded hover:bg-red-600">下架</button>
+                    </div>
                   </div>
                 ))
               }

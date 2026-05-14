@@ -43,9 +43,9 @@ export function LandingPage() {
 
   useEffect(() => {
     client.api
-      .fetch("/api/public/market")
+      .fetch("/api/public/market?featured=true")
       .then((r) => r.json())
-      .then((data) => setListings((data as Listing[]).slice(0, 4)))
+      .then((data) => setListings(data as Listing[]))
       .catch(() => {})
       .finally(() => setMarketLoading(false));
   }, []);

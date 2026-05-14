@@ -82,7 +82,7 @@ export function ChatInput({ value, onChange, onSubmit, onGenerate, isLoading, mo
     const lastSlashIdx = textBeforeCursor.lastIndexOf("/");
     if (lastSlashIdx !== -1) {
       const afterSlash = textBeforeCursor.slice(lastSlashIdx + 1);
-      if (!afterSlash.includes(" ") && allCommands.length > 0) {
+      if (!afterSlash.includes(" ")) {
         setShowCommands(true);
         setCommandFilter(afterSlash);
         setCommandIndex(0);
@@ -183,7 +183,9 @@ export function ChatInput({ value, onChange, onSubmit, onGenerate, isLoading, mo
 
         {showCommands && (
           <div className="absolute left-0 right-0 bottom-full mb-1 mx-3 bg-white border border-neutral-200 rounded-xl shadow-xl z-[100] max-h-64 overflow-y-auto">
-            {filteredCommands.length === 0 ? (
+            {allCommands.length === 0 ? (
+              <p className="text-xs text-neutral-400 p-3">加载中...</p>
+            ) : filteredCommands.length === 0 ? (
               <p className="text-xs text-neutral-400 p-3">无匹配命令</p>
             ) : (
               filteredCommands.map((cmd, i) => (
