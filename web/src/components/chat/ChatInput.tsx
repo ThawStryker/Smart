@@ -189,9 +189,11 @@ export function ChatInput({ value, onChange, onSubmit, onGenerate, isLoading, mo
   };
 
   return (
-    <div className="bg-white border-t border-neutral-200 p-4">
-      <div className={`border rounded-lg relative transition-colors ${isLoading ? "border-amber-300" : "border-neutral-200"}`}>
-        <div className="px-4 py-2 border-b border-neutral-200 bg-neutral-50 flex items-center gap-2">
+    <div className="bg-card border-t border-[#edeae5] p-4">
+      <div className={`border rounded-xl relative transition-all duration-300 ${
+        isLoading ? "border-amber-300 shadow-[0_0_0_3px_rgba(245,158,11,0.1)]" : "border-[#edeae5] hover:border-[#d4cfc7]"
+      }`}>
+        <div className="px-4 py-2 border-b border-[#edeae5] bg-[#faf9f7] flex items-center gap-2 rounded-t-xl">
           <span className="text-neutral-500 text-sm">⚡</span>
           <span className="text-xs text-neutral-500">内置能力</span>
           {isLoading && (
@@ -243,7 +245,7 @@ export function ChatInput({ value, onChange, onSubmit, onGenerate, isLoading, mo
           </div>
         )}
 
-        <div className="px-4 py-2 flex items-center justify-between border-t border-neutral-200 bg-neutral-50">
+        <div className="px-4 py-2 flex items-center justify-between border-t border-[#edeae5] bg-[#faf9f7] rounded-b-xl">
           <div className="flex items-center gap-4">
             <div className="relative">
               <button onClick={() => { setShowMcpPop(!showMcpPop); setShowSkillPop(false); }} className={`flex items-center gap-1.5 text-xs transition-colors ${selectedMcps.length > 0 ? "text-amber-600 font-medium" : "text-neutral-600 hover:text-amber-600"}`}>

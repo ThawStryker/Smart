@@ -273,7 +273,7 @@ export function ProjectDetail() {
               onNameChange={(name) => setProject((prev) => prev ? { ...prev, name } : null)}
             />
             {/* 标签切换栏 */}
-            <div className="border-b border-neutral-200 bg-neutral-50 px-4 flex items-center gap-0 shrink-0">
+            <div className="border-b border-[#edeae5] bg-[#faf9f7] px-5 flex items-center shrink-0">
               {[
                 { key: "chat", label: "对话" },
                 { key: "log", label: "执行日志" },
@@ -281,10 +281,10 @@ export function ProjectDetail() {
                 <button
                   key={tab.key}
                   onClick={() => setLeftTab(tab.key as typeof leftTab)}
-                  className={`px-4 py-2 text-sm border-b-2 transition-colors ${
+                  className={`tab-underline px-4 py-3 text-[13px] font-medium transition-colors ${
                     leftTab === tab.key
-                      ? "border-amber-500 text-amber-600 font-medium"
-                      : "border-transparent text-neutral-500 hover:text-neutral-700"
+                      ? "active text-[#1e1e1e]"
+                      : "text-tertiary hover:text-secondary"
                   }`}
                 >
                   {tab.label}
@@ -296,7 +296,7 @@ export function ProjectDetail() {
                   await fetch(`/api/projects/${numProjectId}/clear-context`, { method: "POST", credentials: "include" });
                   setMessages([]);
                 }}
-                className="text-xs text-neutral-400 hover:text-red-500 transition-colors px-2 py-1 shrink-0"
+                className="text-xs text-tertiary hover:text-red-500 transition-colors px-2 py-1 shrink-0"
               >
                 清空上下文
               </button>

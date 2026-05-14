@@ -5,8 +5,8 @@
 html { scroll-behavior: smooth; }
 
 body {
-  background: #fafafa;
-  color: #1a1a1a;
+  background: #faf9f7;
+  color: #1e1e1e;
   -webkit-font-smoothing: antialiased;
 }
 
@@ -16,66 +16,129 @@ body {
 ::-webkit-scrollbar-thumb { background: #d4d4d4; border-radius: 3px; }
 ::-webkit-scrollbar-thumb:hover { background: #a3a3a3; }
 
-/* Design tokens as utility classes */
-.bg-surface { background: #fafafa; }
-.bg-card { background: #ffffff; }
-.border-subtle { border-color: #f0f0f0; }
-.text-primary { color: #1a1a1a; }
-.text-secondary { color: #737373; }
-.text-tertiary { color: #a3a3a3; }
+/* === Design Tokens === */
+:root {
+  --brand: #f59e0b;
+  --brand-deep: #d97706;
+  --surface: #faf9f7;
+  --card: #ffffff;
+  --border: #edeae5;
+  --text-primary: #1e1e1e;
+  --text-secondary: #6b6b6b;
+  --text-tertiary: #999999;
+  --shadow-sm: 0 1px 2px rgba(0,0,0,0.04);
+  --shadow-md: 0 4px 16px rgba(0,0,0,0.06);
+  --shadow-lg: 0 8px 32px rgba(0,0,0,0.08);
+  --radius-sm: 8px;
+  --radius-md: 12px;
+  --radius-lg: 16px;
+}
 
-/* Card base */
+/* Utility classes */
+.bg-surface { background: var(--surface); }
+.bg-card { background: var(--card); }
+.border-subtle { border-color: var(--border); }
+.text-primary { color: var(--text-primary); }
+.text-secondary { color: var(--text-secondary); }
+.text-tertiary { color: var(--text-tertiary); }
+
+/* === Card === */
 .smart-card {
-  background: #fff;
-  border: 1px solid #f0f0f0;
-  border-radius: 12px;
-  transition: all 0.2s ease;
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-sm);
+  transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
 }
 .smart-card:hover {
-  border-color: #e5e5e5;
-  box-shadow: 0 4px 12px rgba(0,0,0,0.04);
+  border-color: #e5e0d8;
+  box-shadow: var(--shadow-md);
   transform: translateY(-1px);
 }
 
-/* Button variants */
+/* === Buttons === */
 .btn-primary {
-  background: linear-gradient(135deg, #f59e0b, #d97706);
+  background: linear-gradient(135deg, var(--brand), var(--brand-deep));
   color: #fff;
-  border-radius: 8px;
+  border-radius: var(--radius-sm);
   font-weight: 500;
-  transition: all 0.2s ease;
+  box-shadow: 0 2px 8px rgba(245,158,11,0.15);
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
 }
 .btn-primary:hover {
-  box-shadow: 0 4px 12px rgba(245,158,11,0.25);
+  box-shadow: 0 4px 16px rgba(245,158,11,0.25);
   transform: translateY(-0.5px);
 }
+.btn-primary:active { transform: translateY(0); }
 
 .btn-secondary {
   background: #f5f5f5;
   color: #525252;
-  border-radius: 8px;
+  border-radius: var(--radius-sm);
   font-weight: 500;
   transition: all 0.2s ease;
 }
-.btn-secondary:hover { background: #eeeeee; }
+.btn-secondary:hover { background: #ebebeb; }
 
-/* Page entrance */
+/* === Input === */
+.input-field {
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--card);
+  transition: border-color 0.2s, box-shadow 0.2s;
+  outline: none;
+}
+.input-field:focus {
+  border-color: var(--brand);
+  box-shadow: 0 0 0 3px rgba(245,158,11,0.1);
+}
+
+/* === Page Entrance === */
 @keyframes pageIn {
   from { opacity: 0; transform: translateY(8px); }
   to { opacity: 1; transform: translateY(0); }
 }
 .animate-pageIn {
-  animation: pageIn 0.35s ease-out forwards;
+  animation: pageIn 0.4s cubic-bezier(0.4, 0, 0.2, 1) forwards;
 }
 
-/* Skeleton loading */
+/* === Skeleton === */
 @keyframes shimmer {
   0% { background-position: -200% 0; }
   100% { background-position: 200% 0; }
 }
 .skeleton {
-  background: linear-gradient(90deg, #f0f0f0 25%, #e8e8e8 50%, #f0f0f0 75%);
+  background: linear-gradient(90deg, #f0ede8 25%, #e8e5e0 50%, #f0ede8 75%);
   background-size: 200% 100%;
   animation: shimmer 1.5s infinite;
-  border-radius: 8px;
+  border-radius: var(--radius-sm);
+}
+
+/* === Chat message bubbles === */
+.chat-bubble-user {
+  background: linear-gradient(135deg, #f5f0e8, #faf6f0);
+  border-radius: var(--radius-md) var(--radius-md) 4px var(--radius-md);
+}
+.chat-bubble-assistant {
+  background: transparent;
+  border-radius: var(--radius-md);
+}
+
+/* === Tab underline animation === */
+.tab-underline {
+  position: relative;
+}
+.tab-underline::after {
+  content: "";
+  position: absolute;
+  bottom: -1px;
+  left: 0;
+  right: 0;
+  height: 2px;
+  background: var(--brand);
+  transform: scaleX(0);
+  transition: transform 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+}
+.tab-underline.active::after {
+  transform: scaleX(1);
 }

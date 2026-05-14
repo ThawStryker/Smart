@@ -193,7 +193,7 @@ export function PreviewPanel({ projectId, toolId, generatedFiles = [] }: Preview
   return (
     <div className="h-full flex flex-col bg-white">
       {/* Tab bar + deploy button */}
-      <div className="bg-neutral-50 border-b border-neutral-200 px-4 py-2 flex items-center gap-3 shrink-0">
+      <div className="bg-[#faf9f7] border-b border-[#edeae5] px-4 py-2 flex items-center gap-3 shrink-0">
         {tabs.map((tab) => (
           <button
             key={tab.key}
@@ -248,7 +248,7 @@ export function PreviewPanel({ projectId, toolId, generatedFiles = [] }: Preview
         ) : activeTab === "code" ? (
           hasFiles ? (
             <div className="flex h-full">
-              <div className="w-48 border-r border-neutral-200 bg-neutral-50 overflow-y-auto shrink-0">
+              <div className="w-48 border-r border-[#edeae5] bg-[#faf9f7] overflow-y-auto shrink-0">
                 {generatedFiles.map((f, i) => (
                   <div
                     key={i}

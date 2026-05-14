@@ -25,16 +25,18 @@ export function ProjectConfigBar({ projectId, projectName, onNameChange }: Proje
   };
 
   return (
-    <div className="bg-white border-b border-neutral-200 px-6 py-4 flex items-center justify-between">
+    <div className="bg-card border-b border-[#edeae5] px-6 py-3.5 flex items-center justify-between">
       <div className="flex items-center gap-4">
         <button
           onClick={() => navigate("/dashboard")}
-          className="text-neutral-400 hover:text-blue-600 transition-colors mr-2"
+          className="text-tertiary hover:text-[#f59e0b] transition-colors text-sm"
           title="返回项目列表"
         >
           ← 返回
         </button>
-        <span className="text-neutral-400 text-lg">⚡</span>
+        <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-amber-400 to-orange-500 flex items-center justify-center text-white text-sm font-bold shadow-sm">
+          {projectName.charAt(0).toUpperCase()}
+        </div>
         <div className="flex flex-col">
           <div className="flex items-center gap-2">
             {editing ? (
@@ -47,11 +49,11 @@ export function ProjectConfigBar({ projectId, projectName, onNameChange }: Proje
                   if (e.key === "Enter") handleSave();
                   if (e.key === "Escape") setEditing(false);
                 }}
-                className="font-medium border border-blue-300 rounded px-2 py-0.5 text-sm outline-none focus:border-blue-500"
+                className="font-semibold text-[15px] input-field px-2 py-0.5"
               />
             ) : (
               <h1
-                className="font-medium cursor-pointer hover:text-blue-600 transition-colors"
+                className="font-semibold text-[15px] cursor-pointer hover:text-[#f59e0b] transition-colors"
                 onClick={() => { setNameDraft(projectName); setEditing(true); }}
               >
                 {projectName}
@@ -59,18 +61,18 @@ export function ProjectConfigBar({ projectId, projectName, onNameChange }: Proje
             )}
             <button
               onClick={() => { setNameDraft(projectName); setEditing(true); }}
-              className="text-neutral-400 hover:text-blue-600 transition-colors"
+              className="text-tertiary hover:text-[#f59e0b] transition-colors text-xs"
             >
               ✏️
             </button>
           </div>
-          <div className="text-xs text-neutral-500 mt-0.5">
+          <div className="text-xs text-tertiary mt-0.5">
             创建于 {new Date().toLocaleDateString("zh-CN")}
           </div>
         </div>
       </div>
       <div className="flex items-center gap-2">
-        <button className="px-3 py-1.5 rounded text-sm text-neutral-600 hover:bg-neutral-100 transition-colors">
+        <button className="px-3 py-1.5 rounded-lg text-sm text-secondary hover:bg-[#f5f0e8] transition-colors">
           协作
         </button>
       </div>
