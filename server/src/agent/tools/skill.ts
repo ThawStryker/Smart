@@ -85,7 +85,7 @@ export async function buildSkillPrompt(selectedSkills: string[]): Promise<string
     const content = await readSkillMd(skill.storagePath);
     if (content) {
       if (skill.name === "superpowers") foundSuperpowers = true;
-      result += `\n\n## Skill: ${skill.name}\n\n${content.slice(0, 3000)}`;
+      result += `\n\n## Skill: ${skill.name}\n\n${content.slice(0, 8000)}`;
     }
   }
 
