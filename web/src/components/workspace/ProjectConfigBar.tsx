@@ -10,7 +10,7 @@ interface ProjectConfigBarProps {
   onNameChange: (newName: string) => void;
 }
 
-function cropSquare(image: HTMLImageElement, size = 200): Blob {
+async function cropSquare(image: HTMLImageElement, size = 200): Promise<Blob> {
   const canvas = document.createElement("canvas");
   canvas.width = size;
   canvas.height = size;
@@ -45,7 +45,7 @@ export function ProjectConfigBar({ projectId, projectName, iconPath, onIconChang
     const img = new Image();
     img.src = URL.createObjectURL(file);
     img.onload = async () => {
-      const blob = cropSquare(img);
+      const blob = await cropSquare(img);
       const fd = new FormData();
       fd.append("file", blob, "icon.png");
       const res = await client.api.fetch(`/api/projects/${projectId}/icon`, { method: "POST", body: fd });
