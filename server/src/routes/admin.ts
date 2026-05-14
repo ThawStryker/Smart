@@ -100,7 +100,7 @@ export const adminRoutes = new Hono()
   })
 
   .post("/api/admin/skills", async (c) => {
-    const body = await c.req.json<{ name: string; description?: string; gitUrl?: string }>();
+    const body = await c.req.json<{ name: string; description?: string; gitUrl?: string; hidden?: boolean }>();
     if (!body.name) return c.json({ error: "name required" }, 400);
 
     const [row] = await db.insert(skills).values({
@@ -111,12 +111,13 @@ export const adminRoutes = new Hono()
       sourceType: body.gitUrl ? "git" : "zip",
       sourceUrl: body.gitUrl || null,
       storagePath: `skills/global/${Date.now()}/`,
+      hidden: body.hidden ?? false,
     }).returning();
     return c.json(row, 201);
   })
 
   .post("/api/admin/mcps", async (c) => {
-    const body = await c.req.json<{ name: string; description?: string; config?: Record<string, unknown> }>();
+    const body = await c.req.json<{ name: string; description?: string; config?: Record<string, unknown>; hidden?: boolean }>();
     if (!body.name) return c.json({ error: "name required" }, 400);
 
     const [row] = await db.insert(mcps).values({
@@ -125,6 +126,7 @@ export const adminRoutes = new Hono()
       visibility: "global",
       ownerId: auth.user!.id,
       config: body.config ? JSON.stringify(body.config) : null,
+      hidden: body.hidden ?? false,
     }).returning();
     return c.json(row, 201);
   });
