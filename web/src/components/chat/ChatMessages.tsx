@@ -16,7 +16,7 @@ interface ChatMessagesProps {
 
 function MessageContent({ content }: { content: string }) {
   const html = content
-    .replace(/```(\w+)?\n([\s\S]*?)```/g, (_: string, lang: string, code: string) =>
+    .replace(/```(?:\w+)?\n([\s\S]*?)```/g, (_: string, code: string) =>
       `<pre class="bg-[#f5f2ed] rounded-lg p-4 my-3 overflow-x-auto text-[13px] leading-relaxed"><code>${escapeHtml(code.trim())}</code></pre>`
     )
     .replace(/`([^`]+)`/g, (_: string, code: string) =>
