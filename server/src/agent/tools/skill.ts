@@ -109,46 +109,33 @@ export async function getSkillCommands(selectedSkills?: string[]): Promise<
 > {
   const result: Array<{ skillName: string; skillId: number; commands: Array<{ name: string; description: string }> }> = [];
 
-  // Only show commands for selected skills (not all installed)
-  if (!selectedSkills || selectedSkills.length === 0) {
-    // No skills selected — still add built-in commands
-    result.push({
-      skillName: "Smart 内置", skillId: -1,
-      commands: [
-        { name: "/deploy", description: "部署当前项目到生产环境" },
-        { name: "/market", description: "浏览 Smart 工具市场" },
-        { name: "/web-search", description: "在网络上搜索实时信息" },
-        { name: "/list-files", description: "列出项目中的所有文件" },
-        { name: "/read-file", description: "读取指定文件内容" },
-      ],
-    });
-    return result;
-  }
+  // Load selected skills (if any) and parse their commands
+  if (selectedSkills && selectedSkills.length > 0) {
+    const rows = await db.select().from(skillsDef).where(inArray(skillsDef.name, selectedSkills));
 
-  const rows = await db.select().from(skillsDef).where(inArray(skillsDef.name, selectedSkills));
-
-  for (const skill of rows) {
-    if (!skill.storagePath) continue;
-    const content = await readSkillMd(skill.storagePath);
-    const slug = "/" + skill.name.toLowerCase().replace(/\s+/g, "-");
-    if (!content) {
-      result.push({ skillName: skill.name, skillId: skill.id, commands: [{ name: slug, description: `调用 ${skill.name} 技能` }] });
-      continue;
-    }
-    const m = content.match(/###\s+Commands\s*\n([\s\S]*?)(?=\n###|\n##|$)/i);
-    if (!m) {
-      result.push({ skillName: skill.name, skillId: skill.id, commands: [{ name: slug, description: `调用 ${skill.name} 技能` }] });
-      continue;
-    }
-    const commands: Array<{ name: string; description: string }> = [];
-    for (const line of m[1].split("\n")) {
-      const cmdMatch = line.match(/-\s+`(\/[a-z_-]+)`\s*[—–-]?\s*(.*)/i);
-      if (cmdMatch) commands.push({ name: cmdMatch[1], description: cmdMatch[2].trim() });
-    }
-    if (commands.length > 0) {
-      result.push({ skillName: skill.name, skillId: skill.id, commands });
-    } else {
-      result.push({ skillName: skill.name, skillId: skill.id, commands: [{ name: slug, description: `调用 ${skill.name} 技能` }] });
+    for (const skill of rows) {
+      if (!skill.storagePath) continue;
+      const content = await readSkillMd(skill.storagePath);
+      const slug = "/" + skill.name.toLowerCase().replace(/\s+/g, "-");
+      if (!content) {
+        result.push({ skillName: skill.name, skillId: skill.id, commands: [{ name: slug, description: `调用 ${skill.name} 技能` }] });
+        continue;
+      }
+      const m = content.match(/###\s+Commands\s*\n([\s\S]*?)(?=\n###|\n##|$)/i);
+      if (!m) {
+        result.push({ skillName: skill.name, skillId: skill.id, commands: [{ name: slug, description: `调用 ${skill.name} 技能` }] });
+        continue;
+      }
+      const commands: Array<{ name: string; description: string }> = [];
+      for (const line of m[1].split("\n")) {
+        const cmdMatch = line.match(/-\s+`(\/[a-z_-]+)`\s*[—–-]?\s*(.*)/i);
+        if (cmdMatch) commands.push({ name: cmdMatch[1], description: cmdMatch[2].trim() });
+      }
+      if (commands.length > 0) {
+        result.push({ skillName: skill.name, skillId: skill.id, commands });
+      } else {
+        result.push({ skillName: skill.name, skillId: skill.id, commands: [{ name: slug, description: `调用 ${skill.name} 技能` }] });
+      }
     }
   }
 
