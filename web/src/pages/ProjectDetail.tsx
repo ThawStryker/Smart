@@ -270,8 +270,7 @@ export function ProjectDetail() {
             <ProjectConfigBar
               projectId={project.id}
               projectName={project.name}
-              iconPath={(project as any).iconPath}
-              onIconChange={(url) => setProject((prev) => prev ? { ...prev, iconPath: url } as any : null)}
+              onIconChange={() => {}}
               onNameChange={(name) => setProject((prev) => prev ? { ...prev, name } : null)}
             />
             {/* 标签切换栏 */}

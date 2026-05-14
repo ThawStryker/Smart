@@ -5,7 +5,6 @@ import { client } from "@/lib/edgespark";
 interface ProjectConfigBarProps {
   projectId: number;
   projectName: string;
-  iconPath?: string | null;
   onIconChange: (path: string) => void;
   onNameChange: (newName: string) => void;
 }
@@ -22,7 +21,7 @@ async function cropSquare(image: HTMLImageElement, size = 200): Promise<Blob> {
   return new Promise<Blob>((resolve) => canvas.toBlob((b) => resolve(b!), "image/png"));
 }
 
-export function ProjectConfigBar({ projectId, projectName, iconPath, onIconChange, onNameChange }: ProjectConfigBarProps) {
+export function ProjectConfigBar({ projectId, projectName, onIconChange, onNameChange }: ProjectConfigBarProps) {
   const [editing, setEditing] = useState(false);
   const [nameDraft, setNameDraft] = useState(projectName);
   const fileRef = useRef<HTMLInputElement>(null);
