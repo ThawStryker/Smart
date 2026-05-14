@@ -28,7 +28,7 @@ const CalendarIcon = () => (
 );
 
 export function Dashboard() {
-  const { projectsList, loading: projectsLoading, createProject } = useProjects();
+  const { projectsList, loading: projectsLoading, createProject, deleteProject } = useProjects();
   const navigate = useNavigate();
   const [showNewForm, setShowNewForm] = useState(false);
   const [newName, setNewName] = useState("");
@@ -117,10 +117,21 @@ export function Dashboard() {
                   <p className="text-sm text-neutral-600 mb-4 line-clamp-2">
                     {project.description || "点击进入项目编辑"}
                   </p>
-                  <div className="flex items-center text-xs text-neutral-400">
+                  <div className="flex items-center justify-between text-xs text-neutral-400">
                     <span className="text-xs px-1.5 py-0.5 rounded-full bg-green-50 text-green-600">
                       {project.status || "活跃"}
                     </span>
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        if (confirm(`确定删除项目「${project.name}」？`)) {
+                          deleteProject(project.id);
+                        }
+                      }}
+                      className="text-xs text-neutral-300 hover:text-red-500 hover:bg-red-50 rounded-lg transition-colors px-2 py-1 opacity-0 group-hover:opacity-100"
+                    >
+                      删除
+                    </button>
                   </div>
                 </div>
               ))}
