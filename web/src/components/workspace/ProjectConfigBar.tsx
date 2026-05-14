@@ -70,18 +70,9 @@ export function ProjectConfigBar({ projectId, projectName, onNameChange }: Proje
         </div>
       </div>
       <div className="flex items-center gap-2">
-        {["预览", "文件", "收藏", "协作", "删除"].map((label) => (
-          <button
-            key={label}
-            className={`px-3 py-1.5 rounded text-sm transition-colors ${
-              label === "删除"
-                ? "text-red-500 hover:bg-red-50"
-                : "text-neutral-600 hover:bg-neutral-100"
-            }`}
-          >
-            {label}
-          </button>
-        ))}
+        <button className="px-3 py-1.5 rounded text-sm text-neutral-600 hover:bg-neutral-100 transition-colors">
+          协作
+        </button>
       </div>
     </div>
   );

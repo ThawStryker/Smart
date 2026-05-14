@@ -2,7 +2,7 @@ import { Hono } from "hono";
 import { db, storage, ctx } from "edgespark";
 import { auth } from "edgespark/http";
 import { eq, desc, and, inArray } from "drizzle-orm";
-import { projects, tools, domains, executionSteps, conversations, versions, marketListings, toolData, toolUsers, buckets } from "@defs";
+import { projects, tools, domains, executionSteps, conversations, conversationStates, versions, marketListings, toolData, toolUsers, buckets } from "@defs";
 import { listDnsRecords, deleteDnsRecord } from "../lib/aliyun-dns";
 
 export const projectsRoutes = new Hono()
@@ -50,6 +50,15 @@ export const projectsRoutes = new Hono()
       .values({ userId, name: body.name, description: body.description ?? null })
       .returning();
     return c.json(row, 201);
+  })
+  .post("/:projectId/clear-context", async (c) => {
+    const userId = auth.user!.id;
+    const projectId = parseInt(c.req.param("projectId"), 10);
+    const [p] = await db.select().from(projects).where(and(eq(projects.id, projectId), eq(projects.userId, userId)));
+    if (!p) return c.json({ error: "Not found" }, 404);
+    await db.delete(conversations).where(eq(conversations.projectId, projectId));
+    await db.delete(conversationStates).where(eq(conversationStates.projectId, projectId));
+    return c.json({ success: true });
   })
   .patch("/:id", async (c) => {
     const userId = auth.user!.id;
