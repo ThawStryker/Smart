@@ -8,7 +8,7 @@ import { buildToolList } from "./tools/registry";
 import { buildSkillPrompt } from "./tools/skill";
 import { buildMcpPrompt } from "./tools/mcp";
 import { buildSystemMessage } from "./prompt/builder";
-import { getPhase, advancePhase, type Phase } from "./workflow";
+import { getPhase, advancePhase, setPhase, type Phase } from "./workflow";
 import { buildMemoryContext, extractMemories } from "./memory/store";
 import { agentLoop } from "./loop";
 import type { ExecContext } from "./executor";
@@ -57,7 +57,15 @@ export const agentRoutes = new Hono()
 
     // === Workflow: determine phase ===
     const currentPhase = await getPhase(projectId);
-    const phase: Phase = await advancePhase(projectId, currentPhase, body.message || "");
+    let phase: Phase = await advancePhase(projectId, currentPhase, body.message || "");
+
+    // Slash command detection — force phase based on command
+    const msg = body.message || "";
+    if (msg.startsWith("/brainstorming")) phase = "brainstorm";
+    else if (msg.startsWith("/writing-plans")) phase = "plan";
+    else if (msg.startsWith("/code-review") || msg.startsWith("/verification")) phase = "verify";
+    else if (msg.startsWith("/subagent-driven") || msg.startsWith("/test-driven") || msg.startsWith("/debugging") || msg.startsWith("/deploy")) phase = "execute";
+    if (phase !== currentPhase) await setPhase(projectId, phase);
 
     // === Build system prompt ===
     const memoryCtx = await buildMemoryContext(userId, projectId);
