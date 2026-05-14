@@ -2,7 +2,7 @@ import { Hono } from "hono";
 import { db } from "edgespark";
 import { auth } from "edgespark/http";
 import { eq, and, desc, inArray } from "drizzle-orm";
-import { marketListings, tools, domains } from "@defs";
+import { marketListings, tools, domains, projects } from "@defs";
 
 export const marketRoutes = new Hono()
   .get("/api/public/market", async (c) => {

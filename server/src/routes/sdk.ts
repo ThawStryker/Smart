@@ -5,7 +5,7 @@ import { projects, buckets } from "@defs";
 
 export const sdkRoutes = new Hono()
   .get("/api/public/smart/icon/:projectId.png", async (c) => {
-    const projectId = parseInt(c.req.param("projectId"), 10);
+    const projectId = parseInt(c.req.param("projectId")!, 10);
     const [p] = await db.select().from(projects).where(eq(projects.id, projectId));
     if (!p?.iconPath) return c.notFound();
     const obj = await storage.from(buckets.sourceBuckets).get(p.iconPath);
