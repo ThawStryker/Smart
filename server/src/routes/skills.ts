@@ -167,7 +167,7 @@ export const skillsRoutes = new Hono()
       return c.json({ error: "Not authorized" }, 403);
     }
 
-    const body = await c.req.json<{ name?: string; description?: string; enabled?: boolean }>();
+    const body = await c.req.json<{ name?: string; description?: string; enabled?: boolean; hidden?: boolean }>();
     await db.update(skills).set({ ...body, updatedAt: new Date().toISOString() }).where(eq(skills.id, id));
     return c.json({ success: true });
   })

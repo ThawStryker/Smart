@@ -47,12 +47,13 @@ export const mcpsRoutes = new Hono()
       return c.json({ error: "Not authorized" }, 403);
     }
 
-    const body = await c.req.json<{ name?: string; description?: string; config?: Record<string, unknown>; enabled?: boolean }>();
+    const body = await c.req.json<{ name?: string; description?: string; config?: Record<string, unknown>; enabled?: boolean; hidden?: boolean }>();
     const update: Record<string, unknown> = { updatedAt: new Date().toISOString() };
     if (body.name !== undefined) update.name = body.name;
     if (body.description !== undefined) update.description = body.description;
     if (body.config !== undefined) update.config = JSON.stringify(body.config);
     if (body.enabled !== undefined) update.enabled = body.enabled;
+    if (body.hidden !== undefined) update.hidden = body.hidden;
 
     await db.update(mcps).set(update).where(eq(mcps.id, id));
     return c.json({ success: true });
