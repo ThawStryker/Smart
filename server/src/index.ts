@@ -17,7 +17,7 @@
 
 import { Hono } from "hono";
 import { projectsRoutes } from "./routes/projects";
-import { vibeRoutes } from "./routes/vibe";
+import { agentRoutes } from "./agent";
 import { stepsRoutes } from "./routes/steps";
 import { dataRoutes } from "./routes/data";
 import { toolDataRoutes } from "./routes/toolData";
@@ -38,7 +38,7 @@ const app = new Hono()
     c.json({ message: "Hello from EdgeSpark! Spark your idea to the Edge." })
   )
   .route("/api/projects", projectsRoutes)
-  .route("/api/projects", vibeRoutes)
+  .route("/api/projects", agentRoutes)
   .route("/api/projects", stepsRoutes)
   .route("/api/projects", dataRoutes)
   .route("/api/projects", deployRoutes)

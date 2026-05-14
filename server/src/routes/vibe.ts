@@ -3,7 +3,7 @@ import { db, storage, secret, vars, ctx } from "edgespark";
 import { auth } from "edgespark/http";
 import { eq, asc, inArray } from "drizzle-orm";
 import { projects, conversations, tools, executionSteps, buckets, userProfiles, mcps, skills as skillsDef, marketListings } from "@defs";
-import { buildMemoryContext, extractMemoriesFromMessage } from "../agent/memory";
+// vibe.ts is deprecated — use agent/ instead
 
 const SSE_HEADERS = {
   "Content-Type": "text/event-stream",
@@ -358,11 +358,7 @@ Smart SDK 全局 API：
       }
     }
 
-    // Inject user + project memory
-    const memoryCtx = await buildMemoryContext(userId, projectId);
-    if (memoryCtx) {
-      apiMessages[0] = { role: "system", content: (apiMessages[0].content as string) + memoryCtx };
-    }
+    // Memory injection handled by agent/ module
 
     // Build tools list — dynamically add MCP tools
     const activeTools: Array<Record<string, unknown>> = [...TOOLS];
@@ -840,12 +836,7 @@ Smart SDK 全局 API：
             })()
           );
 
-        // Extract memories from completed conversation
-        ctx.runInBackground((async () => {
-          try {
-            await extractMemoriesFromMessage(userId, projectId, body.message || "", fullResponse);
-          } catch { /* best-effort */ }
-        })());
+        // Memory extraction handled by agent/ module
 
         emit(eventQueue, { type: "done", toolId });
       } catch (err) {
