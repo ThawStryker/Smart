@@ -143,6 +143,7 @@ export const skills = sqliteTable("skills", {
   enabled: integer("enabled", { mode: "boolean" }).default(true),
   status: text("status").default("installing"), // installing → installed → failed
   errorMessage: text("error_message"),
+  hidden: integer("hidden", { mode: "boolean" }).default(false),
   createdAt: text("created_at").default(sql`(datetime('now'))`),
   updatedAt: text("updated_at").default(sql`(datetime('now'))`),
 });
@@ -156,6 +157,7 @@ export const mcps = sqliteTable("mcps", {
   ownerId: text("owner_id").notNull(),
   config: text("config"), // JSON
   enabled: integer("enabled", { mode: "boolean" }).default(true),
+  hidden: integer("hidden", { mode: "boolean" }).default(false),
   createdAt: text("created_at").default(sql`(datetime('now'))`),
   updatedAt: text("updated_at").default(sql`(datetime('now'))`),
 });
