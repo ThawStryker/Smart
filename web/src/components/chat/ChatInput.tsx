@@ -27,6 +27,7 @@ interface Command {
 
 export function ChatInput({ value, onChange, onSubmit, onGenerate, isLoading, model, onModelChange, images, onImagesChange, isAdmin }: ChatInputProps) {
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const commandsRef = useRef<HTMLDivElement>(null);
   const models = allModels.filter(m => !m.adminOnly || isAdmin);
 
   const [mcpList, setMcpList] = useState<Array<{ id: number; name: string; description: string; enabled: boolean }>>([]);
@@ -55,6 +56,13 @@ export function ChatInput({ value, onChange, onSubmit, onGenerate, isLoading, mo
   const filteredCommands = commandFilter
     ? allCommands.filter(c => c.name.toLowerCase().includes(commandFilter.toLowerCase()))
     : allCommands;
+
+  useEffect(() => {
+    if (showCommands && commandsRef.current) {
+      const selected = commandsRef.current.children[commandIndex] as HTMLElement;
+      if (selected) selected.scrollIntoView({ block: "nearest" });
+    }
+  }, [commandIndex, showCommands]);
 
   const handleSend = () => {
     if ((!value.trim() && images.length === 0) || isLoading) return;
@@ -182,7 +190,7 @@ export function ChatInput({ value, onChange, onSubmit, onGenerate, isLoading, mo
         />
 
         {showCommands && (
-          <div className="absolute left-0 right-0 bottom-full mb-1 mx-3 bg-white border border-neutral-200 rounded-xl shadow-xl z-[100] max-h-64 overflow-y-auto">
+          <div ref={commandsRef} className="absolute left-0 right-0 bottom-full mb-1 mx-3 bg-white border border-neutral-200 rounded-xl shadow-xl z-[100] max-h-64 overflow-y-auto">
             {allCommands.length === 0 ? (
               <p className="text-xs text-neutral-400 p-3">加载中...</p>
             ) : filteredCommands.length === 0 ? (
