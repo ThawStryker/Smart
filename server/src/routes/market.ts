@@ -100,8 +100,16 @@ export const marketRoutes = new Hono()
       .select()
       .from(marketListings)
       .where(and(eq(marketListings.toolId, tool.id), eq(marketListings.type, "tool")));
+
     if (existing) {
-      return c.json({ error: "Already published. Use update instead.", id: existing.id }, 409);
+      if (existing.status === "pending_review") {
+        return c.json({ error: "已提交审核，请等待管理员审核。", id: existing.id }, 409);
+      }
+      if (existing.status === "approved") {
+        return c.json({ error: "已发布。如需更新请使用更新功能。", id: existing.id }, 409);
+      }
+      // rejected or delisted — clean up old listing and allow re-publish
+      await db.delete(marketListings).where(eq(marketListings.id, existing.id));
     }
 
     const [row] = await db.insert(marketListings).values({

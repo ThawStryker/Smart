@@ -17,12 +17,17 @@ export const projectsRoutes = new Hono()
     // Enrich with deploy/publish status
     const enriched = await Promise.all(rows.map(async (p) => {
       const [domain] = await db.select().from(domains).where(eq(domains.projectId, p.id)).limit(1);
-      const [listing] = await db.select().from(marketListings)
-        .where(and(eq(marketListings.toolId, p.id), eq(marketListings.status, "approved"))).limit(1);
+      const [tool] = await db.select().from(tools).where(eq(tools.projectId, p.id)).limit(1);
+      let publishStatus = "unpublished";
+      if (tool) {
+        const [listing] = await db.select().from(marketListings)
+          .where(and(eq(marketListings.toolId, tool.id), eq(marketListings.status, "approved"))).limit(1);
+        if (listing) publishStatus = "published";
+      }
       return {
         ...p,
         deployStatus: domain ? (domain.status === "active" ? "deployed" : "deploying") : "none",
-        publishStatus: listing ? "published" : "unpublished",
+        publishStatus,
       };
     }));
     return c.json(enriched);

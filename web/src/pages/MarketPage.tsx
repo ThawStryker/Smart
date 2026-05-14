@@ -13,6 +13,25 @@ interface Listing {
   link: string;
 }
 
+const gradients = [
+  "from-amber-400 to-orange-500",
+  "from-indigo-400 to-violet-500",
+  "from-emerald-400 to-teal-500",
+  "from-rose-400 to-pink-500",
+  "from-sky-400 to-blue-500",
+  "from-fuchsia-400 to-purple-500",
+];
+
+function getGradient(name: string): string {
+  let hash = 0;
+  for (let i = 0; i < name.length; i++) hash = name.charCodeAt(i) + ((hash << 5) - hash);
+  return gradients[Math.abs(hash) % gradients.length];
+}
+
+function getInitials(name: string): string {
+  return name.slice(0, 2).toUpperCase();
+}
+
 export function MarketPage() {
   const [listings, setListings] = useState<Listing[]>([]);
   const [loading, setLoading] = useState(true);
@@ -52,14 +71,21 @@ export function MarketPage() {
                 href={l.link || "#"}
                 target="_blank"
                 rel="noopener noreferrer"
-                className="block p-4 bg-white border border-[#f0f0f0] rounded-xl hover:shadow-md transition-shadow"
+                className="smart-card p-4 group"
               >
-                <div className="font-semibold text-sm text-neutral-900 mb-1">{l.title}</div>
-                <div className="text-xs text-neutral-400 mb-2 line-clamp-2">{l.description}</div>
-                <div className="flex items-center justify-between text-xs text-neutral-400">
-                  <span>{l.category}</span>
-                  <span>{l.type === "url" ? "外部链接" : "Smart 工具"}</span>
+                <div className="flex items-center gap-3 mb-3">
+                  <div className={`w-9 h-9 rounded-lg bg-gradient-to-br ${getGradient(l.title)} flex items-center justify-center text-white text-xs font-bold shadow-sm shrink-0 group-hover:scale-105 transition-transform duration-300`}>
+                    {getInitials(l.title)}
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <div className="font-semibold text-sm text-primary truncate">{l.title}</div>
+                    <div className="flex items-center gap-2 mt-0.5">
+                      {l.category && <span className="text-[10px] text-tertiary">{l.category}</span>}
+                      <span className="text-[10px] text-tertiary">{l.type === "url" ? "外部链接" : "Smart 工具"}</span>
+                    </div>
+                  </div>
                 </div>
+                <p className="text-xs text-secondary line-clamp-2">{l.description}</p>
               </a>
             ))}
           </div>

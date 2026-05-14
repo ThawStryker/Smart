@@ -15,6 +15,25 @@ interface Listing {
   link: string;
 }
 
+const gradients = [
+  "from-amber-400 to-orange-500",
+  "from-indigo-400 to-violet-500",
+  "from-emerald-400 to-teal-500",
+  "from-rose-400 to-pink-500",
+  "from-sky-400 to-blue-500",
+  "from-fuchsia-400 to-purple-500",
+];
+
+function getGradient(name: string): string {
+  let hash = 0;
+  for (let i = 0; i < name.length; i++) hash = name.charCodeAt(i) + ((hash << 5) - hash);
+  return gradients[Math.abs(hash) % gradients.length];
+}
+
+function getInitials(name: string): string {
+  return name.slice(0, 2).toUpperCase();
+}
+
 export function LandingPage() {
   const navigate = useNavigate();
   const { user, loading: authLoading } = useAuth();
@@ -110,6 +129,7 @@ export function LandingPage() {
         {/* Tool showcase row */}
         {listings.length > 0 && (
           <div className="max-w-4xl mx-auto w-full">
+            <p className="text-center text-xs text-tertiary mb-4">热门工具</p>
             <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
               {listings.map((l) => (
                 <a
@@ -117,13 +137,20 @@ export function LandingPage() {
                   href={l.link || "#"}
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="block p-4 bg-white border border-[#f0f0f0] rounded-xl hover:shadow-md transition-shadow"
+                  className="smart-card p-4 group"
                 >
-                  <div className="w-8 h-8 rounded-lg bg-amber-50 text-amber-600 flex items-center justify-center text-xs font-bold mb-3">
-                    {l.title.charAt(0)}
+                  <div className="flex items-center gap-3 mb-3">
+                    <div className={`w-9 h-9 rounded-lg bg-gradient-to-br ${getGradient(l.title)} flex items-center justify-center text-white text-xs font-bold shadow-sm shrink-0 group-hover:scale-105 transition-transform duration-300`}>
+                      {getInitials(l.title)}
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <div className="text-sm font-semibold text-primary truncate">{l.title}</div>
+                      {l.category && (
+                        <span className="text-[10px] text-tertiary">{l.category}</span>
+                      )}
+                    </div>
                   </div>
-                  <div className="text-sm font-semibold text-neutral-900 mb-1 truncate">{l.title}</div>
-                  <div className="text-xs text-neutral-400 line-clamp-1">{l.description}</div>
+                  <p className="text-xs text-secondary line-clamp-2">{l.description}</p>
                 </a>
               ))}
             </div>
