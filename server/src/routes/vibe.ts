@@ -3,6 +3,7 @@ import { db, storage, secret, vars, ctx } from "edgespark";
 import { auth } from "edgespark/http";
 import { eq, asc, inArray } from "drizzle-orm";
 import { projects, conversations, tools, executionSteps, buckets, userProfiles, mcps, skills as skillsDef, marketListings } from "@defs";
+import { buildMemoryContext, extractMemoriesFromMessage } from "../agent/memory";
 
 const SSE_HEADERS = {
   "Content-Type": "text/event-stream",
@@ -264,26 +265,45 @@ Smart SDK 全局 API：
 
 你有大上下文窗口。当历史对话变深时，倾向于追加新证据而非总结删除旧内容。引用已有结论而非重新推导。
 
-## Superpowers 研发流程
+## Superpowers 研发流程（强制执行）
 
-你是 Smart Agent，内置 Superpowers 研发方法论。根据用户任务复杂度，自动采用分级流程：
+你是 Smart Agent，内置 Superpowers 研发方法论。**这不是建议，是规则。违反此流程视为执行失败。**
 
-### 复杂度判断
+### 响应前强制步骤
 
-| 等级 | 判断标准 | 流程 |
-|------|---------|------|
-| **轻量** | 样式微调、文案修改、单行 fix、简单问答 | 直接实施 → 验证结果 |
-| **中等** | Bug 修复、小功能追加、单文件改动 | 简要分析 → 实施 → 验证 → 完成 |
-| **重量** | 新功能、架构改动、跨文件重构、多步骤任务 | 需求分析 → 设计方案 → 编写计划 → 分步实施 → 验证 → 审查 → 完成 |
+**在回复用户之前，你必须先在 thinking 中完成以下判断，并在回复的第一句话声明结果：**
 
-### 执行规则
+1. 判断任务等级（轻量/中等/重量）
+2. 声明将采用的流程
+3. 然后才能开始执行
 
-- 接到任务后，**先声明任务等级和将采用的流程**，再开始工作
-- 重量级任务：先理解现状，提出 2-3 种方案和权衡，让用户确认后再实施
-- 中等任务：简要说明问题原因和修复思路，然后实施
-- 轻量任务：直接动手，完成后验证
-- 所有任务完成后必须验证结果——文件存在、内容正确、编译通过
-- 对于重量级任务，在实施完成后提示用户可以生成项目说明文档
+**声明格式（必须在第一条回复中输出）：**
+"任务等级：**[轻量/中等/重量]**，流程：**[具体步骤]**"
+
+### 分级标准与执行规则
+
+**轻量任务**（样式微调、文案修改、单行 fix、简单问答）：
+- 流程：直接实施 → 验证结果
+- 第一步回复直接动手
+
+**中等任务**（Bug 修复、小功能追加、单文件改动）：
+- 流程：简要分析 → 实施 → 验证 → 完成
+- 第一步回复先说明问题原因和修复思路，然后动手
+
+**重量任务**（新功能、架构改动、跨文件重构、多步骤任务）：
+- 流程：⚠️ **禁止直接写代码** ⚠️
+- 第一步：理解现状，探索项目结构
+- 第二步：提出 2-3 种方案，分析权衡，推荐方案
+- 第三步：等用户确认方案后，再编写详细实施计划
+- 第四步：按计划分步实施，每步验证
+- 第五步：全部完成后验证编译通过
+- 最后：提示用户可生成项目说明文档
+
+### 禁止行为
+
+- **绝对禁止**在重量任务的第一步就开始写代码
+- **绝对禁止**跳过方案确认直接实施
+- **绝对禁止**完成任务后不验证结果
 
 ## 输出格式
 
@@ -336,6 +356,12 @@ Smart SDK 全局 API：
       if (spMd) {
         apiMessages[0] = { role: "system", content: (apiMessages[0].content as string) + "\n\n## 内置 Skill: superpowers\n\n" + new TextDecoder().decode(spMd.body).slice(0, 3000) };
       }
+    }
+
+    // Inject user + project memory
+    const memoryCtx = await buildMemoryContext(userId, projectId);
+    if (memoryCtx) {
+      apiMessages[0] = { role: "system", content: (apiMessages[0].content as string) + memoryCtx };
     }
 
     // Build tools list — dynamically add MCP tools
@@ -813,6 +839,13 @@ Smart SDK 全局 API：
                 .where(eq(tools.id, toolId));
             })()
           );
+
+        // Extract memories from completed conversation
+        ctx.runInBackground((async () => {
+          try {
+            await extractMemoriesFromMessage(userId, projectId, body.message || "", fullResponse);
+          } catch { /* best-effort */ }
+        })());
 
         emit(eventQueue, { type: "done", toolId });
       } catch (err) {
