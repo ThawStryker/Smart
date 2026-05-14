@@ -19,7 +19,7 @@ function cropSquare(image: HTMLImageElement, size = 200): Blob {
   const sx = (image.width - min) / 2;
   const sy = (image.height - min) / 2;
   ctx.drawImage(image, sx, sy, min, min, 0, 0, size, size);
-  return new Promise((resolve) => canvas.toBlob((b) => resolve(b!), "image/png"));
+  return new Promise<Blob>((resolve) => canvas.toBlob((b) => resolve(b!), "image/png"));
 }
 
 export function ProjectConfigBar({ projectId, projectName, iconPath, onIconChange, onNameChange }: ProjectConfigBarProps) {
