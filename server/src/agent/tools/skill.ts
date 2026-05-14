@@ -104,19 +104,28 @@ export async function buildSkillPrompt(selectedSkills: string[]): Promise<string
   return result;
 }
 
-export async function getSkillCommands(extraSkills?: string[]): Promise<
+export async function getSkillCommands(selectedSkills?: string[]): Promise<
   Array<{ skillName: string; skillId: number; commands: Array<{ name: string; description: string }> }>
 > {
-  const rows = await db.select().from(skillsDef).where(eq(skillsDef.status, "installed"));
-
-  // Also load named skills that might not be installed yet
-  if (extraSkills && extraSkills.length > 0) {
-    const extra = await db.select().from(skillsDef).where(inArray(skillsDef.name, extraSkills));
-    for (const s of extra) {
-      if (!rows.some(r => r.id === s.id)) rows.push(s);
-    }
-  }
   const result: Array<{ skillName: string; skillId: number; commands: Array<{ name: string; description: string }> }> = [];
+
+  // Only show commands for selected skills (not all installed)
+  if (!selectedSkills || selectedSkills.length === 0) {
+    // No skills selected — still add built-in commands
+    result.push({
+      skillName: "Smart 内置", skillId: -1,
+      commands: [
+        { name: "/deploy", description: "部署当前项目到生产环境" },
+        { name: "/market", description: "浏览 Smart 工具市场" },
+        { name: "/web-search", description: "在网络上搜索实时信息" },
+        { name: "/list-files", description: "列出项目中的所有文件" },
+        { name: "/read-file", description: "读取指定文件内容" },
+      ],
+    });
+    return result;
+  }
+
+  const rows = await db.select().from(skillsDef).where(inArray(skillsDef.name, selectedSkills));
 
   for (const skill of rows) {
     if (!skill.storagePath) continue;
@@ -143,25 +152,20 @@ export async function getSkillCommands(extraSkills?: string[]): Promise<
     }
   }
 
-  // Add fallback superpowers + built-in commands
-  const hasSuperpowers = result.some(r => r.skillName === "superpowers");
-  if (!hasSuperpowers) {
-    result.push({
-      skillName: "superpowers",
-      skillId: 0,
-      commands: [
-        { name: "/brainstorming", description: "启动需求分析和方案设计" },
-        { name: "/writing-plans", description: "编写详细的实施计划" },
-        { name: "/subagent-driven", description: "按计划分步执行实施" },
-        { name: "/test-driven", description: "先写测试再写实现代码" },
-        { name: "/debugging", description: "系统化调试问题和错误" },
-        { name: "/code-review", description: "完成前进行代码审查" },
-        { name: "/verification", description: "完成前验证所有修改" },
-      ],
-    });
-  }
+  // Always add superpowers commands (it's always auto-loaded)
+  result.push({
+    skillName: "superpowers",
+    skillId: 0,
+    commands: [
+      { name: "/brainstorming", description: "启动需求分析和方案设计" },
+      { name: "/writing-plans", description: "编写详细的实施计划" },
+      { name: "/subagent-driven", description: "按计划分步执行实施" },
+      { name: "/debugging", description: "系统化调试问题和错误" },
+      { name: "/verification", description: "完成前验证所有修改" },
+    ],
+  });
 
-  // Add built-in system commands
+  // Always add built-in system commands
   result.push({
     skillName: "Smart 内置",
     skillId: -1,
