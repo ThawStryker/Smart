@@ -8,6 +8,7 @@ import { NotFound } from "@/pages/NotFound";
 import { SkillsPage } from "@/pages/SkillsPage";
 import { McpsPage } from "@/pages/McpsPage";
 import { MarketPage } from "@/pages/MarketPage";
+import { WorkPage } from "@/pages/WorkPage";
 import { AdminPage } from "@/pages/AdminPage";
 
 export default function App() {
@@ -17,6 +18,7 @@ export default function App() {
         <Route path="/" element={<LandingPage />} />
         <Route path="/login" element={<LoginPage />} />
         <Route element={<AppLayout />}>
+          <Route path="/work" element={<WorkPage />} />
           <Route path="/dashboard" element={<Dashboard />} />
           <Route path="/project/:projectId" element={<ProjectDetail />} />
           <Route path="/skills" element={<SkillsPage />} />

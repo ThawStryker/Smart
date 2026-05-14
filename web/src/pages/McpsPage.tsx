@@ -9,7 +9,6 @@ interface Mcp {
   visibility: string;
   config: unknown;
   enabled: boolean;
-  hidden?: boolean;
 }
 
 export function McpsPage() {
@@ -48,15 +47,6 @@ export function McpsPage() {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ enabled: !enabled }),
-    });
-    fetchMcps();
-  };
-
-  const toggleHidden = async (id: number, hidden: boolean) => {
-    await client.api.fetch(`/api/mcps/${id}`, {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ hidden: !hidden }),
     });
     fetchMcps();
   };
@@ -114,9 +104,6 @@ export function McpsPage() {
                           <button onClick={() => toggleMcp(m.id, m.enabled)} className={`text-xs px-3 py-1 rounded-lg transition-colors ${m.enabled ? "bg-green-50 text-green-600 hover:bg-green-100" : "bg-neutral-100 text-neutral-400 hover:bg-neutral-200"}`}>
                             {m.enabled ? "已启用" : "已禁用"}
                           </button>
-                          <button onClick={() => toggleHidden(m.id, m.hidden ?? false)} className={`text-xs px-2 py-1 rounded-lg ${m.hidden ? "bg-neutral-100 text-neutral-400" : "text-neutral-400 hover:bg-neutral-100"}`}>
-                            {m.hidden ? "已隐藏" : "隐藏"}
-                          </button>
                           <button onClick={() => deleteMcp(m.id)} className="text-xs text-red-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors px-2 py-1">删除</button>
                         </div>
                       </div>
@@ -138,9 +125,6 @@ export function McpsPage() {
                         <div className="flex items-center gap-2">
                           <button onClick={() => toggleMcp(m.id, m.enabled)} className={`text-xs px-3 py-1 rounded-lg transition-colors ${m.enabled ? "bg-green-50 text-green-600 hover:bg-green-100" : "bg-neutral-100 text-neutral-400 hover:bg-neutral-200"}`}>
                             {m.enabled ? "已启用" : "已禁用"}
-                          </button>
-                          <button onClick={() => toggleHidden(m.id, m.hidden ?? false)} className={`text-xs px-2 py-1 rounded-lg ${m.hidden ? "bg-neutral-100 text-neutral-400" : "text-neutral-400 hover:bg-neutral-100"}`}>
-                            {m.hidden ? "已隐藏" : "隐藏"}
                           </button>
                           <button onClick={() => deleteMcp(m.id)} className="text-xs text-red-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors px-2 py-1">删除</button>
                         </div>

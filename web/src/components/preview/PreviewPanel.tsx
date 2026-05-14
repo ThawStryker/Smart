@@ -214,8 +214,8 @@ export function PreviewPanel({ projectId, toolId, generatedFiles = [] }: Preview
             onClick={() => setActiveTab(tab.key)}
             className={`px-3 py-1.5 rounded text-sm transition-colors ${
               activeTab === tab.key
-                ? "bg-white border border-neutral-200 font-medium text-neutral-800"
-                : "text-neutral-500 hover:bg-neutral-100"
+                ? "bg-neutral-100 font-medium text-neutral-900 rounded-lg"
+                : "text-neutral-600 hover:bg-neutral-100 rounded-lg"
             }`}
           >
             {tab.label}
@@ -289,7 +289,7 @@ export function PreviewPanel({ projectId, toolId, generatedFiles = [] }: Preview
                     onClick={() => setSelectedFileIdx(i)}
                     className={`px-3 py-2 text-xs cursor-pointer border-b border-neutral-100 transition-colors ${
                       i === selectedFileIdx
-                        ? "bg-blue-50 text-blue-700 font-medium"
+                        ? "bg-amber-50 text-amber-700 font-medium"
                         : "text-neutral-600 hover:bg-neutral-100"
                     }`}
                   >

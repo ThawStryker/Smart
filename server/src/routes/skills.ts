@@ -1,7 +1,7 @@
 import { Hono } from "hono";
 import { db, storage } from "edgespark";
 import { auth } from "edgespark/http";
-import { eq, and, or } from "drizzle-orm";
+import { eq, and, or, ne } from "drizzle-orm";
 import { skills, buckets } from "@defs";
 import { ZipReader, BlobReader, Uint8ArrayWriter } from "@zip.js/zip.js";
 
@@ -51,6 +51,7 @@ export const skillsRoutes = new Hono()
         .from(skills)
         .where(
           and(
+            ne(skills.name, "superpowers"),
             eq(skills.hidden, false),
             or(
               eq(skills.visibility, "global"),

@@ -32,15 +32,15 @@ export function MarketPage() {
   if (loading) return <LoadingSpinner />;
 
   return (
-    <div className="p-6">
+    <div className="p-6 animate-pageIn bg-[#fafafa]">
       <div className="max-w-5xl mx-auto">
-          <h1 className="text-xl font-medium mb-4">工具市场</h1>
+          <h1 className="text-xl font-semibold text-neutral-900 mb-4">工具市场</h1>
 
           {categories.length > 0 && (
             <div className="flex gap-2 mb-4">
-              <button onClick={() => setFilter("")} className={`px-3 py-1 rounded text-xs ${!filter ? "bg-blue-600 text-white" : "bg-neutral-100"}`}>全部</button>
+              <button onClick={() => setFilter("")} className={`px-3 py-1 rounded-lg text-xs ${!filter ? "bg-amber-500 text-white" : "bg-neutral-100 text-neutral-600"}`}>全部</button>
               {categories.map(c => (
-                <button key={c} onClick={() => setFilter(c)} className={`px-3 py-1 rounded text-xs ${filter === c ? "bg-blue-600 text-white" : "bg-neutral-100"}`}>{c}</button>
+                <button key={c} onClick={() => setFilter(c)} className={`px-3 py-1 rounded-lg text-xs ${filter === c ? "bg-amber-500 text-white" : "bg-neutral-100 text-neutral-600"}`}>{c}</button>
               ))}
             </div>
           )}
@@ -52,11 +52,11 @@ export function MarketPage() {
                 href={l.link || "#"}
                 target="_blank"
                 rel="noopener noreferrer"
-                className="block p-4 bg-white border rounded hover:shadow transition-shadow"
+                className="block p-4 bg-white border border-[#f0f0f0] rounded-xl hover:shadow-md transition-shadow"
               >
-                <div className="font-medium text-sm mb-1">{l.title}</div>
+                <div className="font-semibold text-sm text-neutral-900 mb-1">{l.title}</div>
                 <div className="text-xs text-neutral-400 mb-2 line-clamp-2">{l.description}</div>
-                <div className="flex items-center justify-between text-xs text-neutral-300">
+                <div className="flex items-center justify-between text-xs text-neutral-400">
                   <span>{l.category}</span>
                   <span>{l.type === "url" ? "外部链接" : "Smart 工具"}</span>
                 </div>

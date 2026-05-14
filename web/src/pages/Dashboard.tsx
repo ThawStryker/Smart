@@ -41,17 +41,19 @@ export function Dashboard() {
     navigate(`/project/${project.id}`);
   };
 
+  if (projectsLoading) return <LoadingSpinner />;
+
   return (
-    <div className="p-6 bg-gradient-to-br from-white to-blue-50/30">
+    <div className="p-6 animate-pageIn bg-[#fafafa]">
       <div className="max-w-6xl mx-auto">
           <div className="flex items-center justify-between mb-8">
             <div>
-              <h1 className="text-3xl font-bold bg-gradient-to-r from-blue-600 to-indigo-600 bg-clip-text text-transparent">我的项目</h1>
-              <p className="text-neutral-500 mt-1">管理和创建你的 AI 工具项目</p>
+              <h1 className="text-3xl font-semibold text-neutral-900">我的项目</h1>
+              <p className="text-neutral-600 mt-1">管理和创建你的 AI 工具项目</p>
             </div>
             <button
               onClick={() => setShowNewForm(true)}
-              className="px-5 py-2.5 bg-gradient-to-r from-blue-600 to-indigo-600 text-white rounded-lg text-sm font-medium hover:shadow-lg hover:shadow-blue-200 transition-all duration-300 flex items-center gap-2"
+              className="px-5 py-2.5 bg-gradient-to-r from-amber-500 to-orange-500 text-white rounded-lg text-sm font-medium shadow-sm hover:shadow-md hover:shadow-amber-100 transition-all flex items-center gap-2"
             >
               <PlusIcon />
               新建项目
@@ -59,8 +61,8 @@ export function Dashboard() {
           </div>
 
           {showNewForm && (
-            <div className="bg-white/80 backdrop-blur-sm border border-neutral-200 rounded-xl p-6 mb-6 shadow-sm animate-fadeIn">
-              <h3 className="font-medium text-lg mb-4">创建新项目</h3>
+            <div className="bg-white border border-[#f0f0f0] rounded-xl p-6 mb-6 shadow-sm">
+              <h3 className="text-lg font-semibold text-neutral-900 mb-4">创建新项目</h3>
               <div className="flex gap-3">
                 <input
                   autoFocus
@@ -68,17 +70,17 @@ export function Dashboard() {
                   onChange={(e) => setNewName(e.target.value)}
                   onKeyDown={(e) => e.key === "Enter" && handleCreate()}
                   placeholder="输入项目名称..."
-                  className="flex-1 px-4 py-2.5 border border-neutral-300 rounded-lg text-sm outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100 transition-all"
+                  className="flex-1 px-4 py-2.5 border border-neutral-200 rounded-lg text-sm outline-none focus:border-amber-400 focus:ring-1 focus:ring-amber-100 transition-all"
                 />
                 <button
                   onClick={handleCreate}
-                  className="px-5 py-2.5 bg-blue-600 text-white rounded-lg text-sm hover:bg-blue-700 transition-colors"
+                  className="px-5 py-2.5 bg-gradient-to-r from-amber-500 to-orange-500 text-white rounded-lg text-sm font-medium shadow-sm hover:shadow-md hover:shadow-amber-100 transition-all"
                 >
                   创建
                 </button>
                 <button
                   onClick={() => setShowNewForm(false)}
-                  className="px-5 py-2.5 text-neutral-500 rounded-lg text-sm hover:bg-neutral-100 transition-colors"
+                  className="px-5 py-2.5 bg-neutral-100 text-neutral-600 rounded-lg text-sm hover:bg-neutral-200 transition-colors"
                 >
                   取消
                 </button>
@@ -86,15 +88,13 @@ export function Dashboard() {
             </div>
           )}
 
-          {projectsLoading ? (
-            <LoadingSpinner />
-          ) : projectsList.length === 0 ? (
-            <div className="text-center text-neutral-400 py-20 bg-white/80 backdrop-blur-sm rounded-2xl border border-neutral-100 shadow-sm">
+          {projectsList.length === 0 ? (
+            <div className="text-center text-neutral-400 py-20 bg-white border border-[#f0f0f0] rounded-xl shadow-sm">
               <div className="w-20 h-20 bg-neutral-100 rounded-full flex items-center justify-center mx-auto mb-4">
                 <FileIcon />
               </div>
-              <p className="text-xl font-medium text-neutral-700 mb-2">暂无项目</p>
-              <p className="text-sm mt-2">点击上方按钮创建你的第一个 AI 工具</p>
+              <p className="text-xl font-semibold text-neutral-900 mb-2">暂无项目</p>
+              <p className="text-sm text-neutral-600 mt-2">点击上方按钮创建你的第一个 AI 工具</p>
             </div>
           ) : (
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
@@ -102,10 +102,10 @@ export function Dashboard() {
                 <div
                   key={project.id}
                   onClick={() => navigate(`/project/${project.id}`)}
-                  className="bg-white/80 backdrop-blur-sm border border-neutral-200 rounded-xl p-6 cursor-pointer hover:border-blue-300 hover:shadow-md hover:shadow-blue-50 transition-all duration-300 hover:-translate-y-1 group"
+                  className="bg-white border border-[#f0f0f0] rounded-xl p-6 cursor-pointer hover:shadow-md hover:-translate-y-0.5 transition-all group"
                 >
                   <div className="flex items-start justify-between mb-4">
-                    <div className="w-12 h-12 bg-gradient-to-br from-blue-50 to-blue-100 rounded-xl flex items-center justify-center text-blue-600 group-hover:scale-110 transition-transform duration-300">
+                    <div className="w-12 h-12 bg-amber-50 rounded-xl flex items-center justify-center text-amber-600 group-hover:scale-110 transition-transform duration-300">
                       <FileIcon />
                     </div>
                     <div className="text-xs text-neutral-400 flex items-center gap-1">
@@ -113,12 +113,12 @@ export function Dashboard() {
                       {new Date(project.createdAt).toLocaleDateString()}
                     </div>
                   </div>
-                  <h3 className="font-semibold text-lg mb-2 text-neutral-800 group-hover:text-blue-600 transition-colors">{project.name}</h3>
-                  <p className="text-sm text-neutral-500 mb-4 line-clamp-2">
+                  <h3 className="font-semibold text-lg mb-2 text-neutral-900 group-hover:text-amber-600 transition-colors">{project.name}</h3>
+                  <p className="text-sm text-neutral-600 mb-4 line-clamp-2">
                     {project.description || "点击进入项目编辑"}
                   </p>
                   <div className="flex items-center text-xs text-neutral-400">
-                    <span className="px-2 py-1 bg-green-50 text-green-600 rounded-full">
+                    <span className="text-xs px-1.5 py-0.5 rounded-full bg-green-50 text-green-600">
                       {project.status || "活跃"}
                     </span>
                   </div>

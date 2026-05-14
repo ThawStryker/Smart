@@ -57,8 +57,8 @@ export function PublishModal({ projectId, onClose }: PublishModalProps) {
 
   return (
     <div className="fixed inset-0 bg-black/30 flex items-center justify-center z-50">
-      <div className="bg-white rounded-lg shadow-xl w-full max-w-md p-6">
-        <h2 className="text-lg font-medium mb-4">发布工具</h2>
+      <div className="bg-white rounded-xl shadow-xl w-full max-w-md p-6">
+        <h2 className="text-lg font-semibold text-neutral-900 mb-4">发布工具</h2>
 
         {status === "loading" && (
           <p className="text-sm text-neutral-400">检查发布状态...</p>
@@ -68,7 +68,7 @@ export function PublishModal({ projectId, onClose }: PublishModalProps) {
           <div className="text-center py-4">
             <div className="text-amber-600 text-sm mb-2">请先部署项目</div>
             <p className="text-xs text-neutral-400">项目需要先完成部署才能发布到市场</p>
-            <button onClick={onClose} className="mt-4 px-4 py-2 text-sm bg-blue-600 text-white rounded">知道了</button>
+            <button onClick={onClose} className="mt-4 px-4 py-2 text-sm bg-gradient-to-r from-amber-500 to-orange-500 text-white rounded-lg font-medium shadow-sm hover:shadow-md hover:shadow-amber-100 transition-all">知道了</button>
           </div>
         )}
 
@@ -80,7 +80,7 @@ export function PublishModal({ projectId, onClose }: PublishModalProps) {
               value={title}
               onChange={e => setTitle(e.target.value)}
               placeholder="给你的工具起个名字"
-              className="w-full px-3 py-2 border border-neutral-300 rounded text-sm mb-3 outline-none focus:border-blue-500"
+              className="w-full px-3 py-2 border border-neutral-200 rounded-lg text-sm mb-3 outline-none focus:border-amber-400 focus:ring-1 focus:ring-amber-100"
             />
             <label className="block text-sm text-neutral-600 mb-2">描述</label>
             <textarea
@@ -88,18 +88,18 @@ export function PublishModal({ projectId, onClose }: PublishModalProps) {
               onChange={e => setDesc(e.target.value)}
               placeholder="简单描述工具的功能"
               rows={3}
-              className="w-full px-3 py-2 border border-neutral-300 rounded text-sm mb-3 outline-none focus:border-blue-500 resize-none"
+              className="w-full px-3 py-2 border border-neutral-200 rounded-lg text-sm mb-3 outline-none focus:border-amber-400 focus:ring-1 focus:ring-amber-100 resize-none"
             />
             <label className="block text-sm text-neutral-600 mb-2">分类</label>
             <input
               value={category}
               onChange={e => setCategory(e.target.value)}
               placeholder="如：游戏、工具、教育"
-              className="w-full px-3 py-2 border border-neutral-300 rounded text-sm mb-4 outline-none focus:border-blue-500"
+              className="w-full px-3 py-2 border border-neutral-200 rounded-lg text-sm mb-4 outline-none focus:border-amber-400 focus:ring-1 focus:ring-amber-100"
             />
             <div className="flex gap-3 justify-end">
-              <button onClick={onClose} className="px-4 py-2 text-sm text-neutral-500 hover:bg-neutral-100 rounded">取消</button>
-              <button onClick={handleSubmit} disabled={!title.trim()} className="px-4 py-2 text-sm bg-blue-600 text-white rounded hover:bg-blue-700 disabled:opacity-40">提交审核</button>
+              <button onClick={onClose} className="px-4 py-2 text-sm bg-neutral-100 text-neutral-600 rounded-lg hover:bg-neutral-200 transition-colors">取消</button>
+              <button onClick={handleSubmit} disabled={!title.trim()} className="px-4 py-2 text-sm bg-gradient-to-r from-amber-500 to-orange-500 text-white rounded-lg font-medium shadow-sm hover:shadow-md hover:shadow-amber-100 transition-all disabled:opacity-40">提交审核</button>
             </div>
           </>
         )}
@@ -112,7 +112,7 @@ export function PublishModal({ projectId, onClose }: PublishModalProps) {
           <div className="text-center py-4">
             <div className="text-amber-600 text-sm mb-2">审核中</div>
             <p className="text-xs text-neutral-400">你的工具已提交审核，通过后将出现在工具市场中</p>
-            <button onClick={onClose} className="mt-4 px-4 py-2 text-sm bg-blue-600 text-white rounded">知道了</button>
+            <button onClick={onClose} className="mt-4 px-4 py-2 text-sm bg-gradient-to-r from-amber-500 to-orange-500 text-white rounded-lg font-medium shadow-sm hover:shadow-md hover:shadow-amber-100 transition-all">知道了</button>
           </div>
         )}
 
@@ -120,7 +120,7 @@ export function PublishModal({ projectId, onClose }: PublishModalProps) {
           <div className="text-center py-4">
             <div className="text-green-600 text-sm mb-2">已发布</div>
             <p className="text-xs text-neutral-400">你的工具已经在市场中上线</p>
-            <button onClick={onClose} className="mt-4 px-4 py-2 text-sm bg-blue-600 text-white rounded">完成</button>
+            <button onClick={onClose} className="mt-4 px-4 py-2 text-sm bg-gradient-to-r from-amber-500 to-orange-500 text-white rounded-lg font-medium shadow-sm hover:shadow-md hover:shadow-amber-100 transition-all">完成</button>
           </div>
         )}
 
@@ -128,7 +128,7 @@ export function PublishModal({ projectId, onClose }: PublishModalProps) {
           <div className="text-center py-4">
             <div className="text-red-500 text-sm mb-2">审核未通过</div>
             <p className="text-xs text-neutral-400 mb-4">请修改后重新提交</p>
-            <button onClick={() => setStatus("idle")} className="px-4 py-2 text-sm bg-blue-600 text-white rounded">重新提交</button>
+            <button onClick={() => setStatus("idle")} className="px-4 py-2 text-sm bg-gradient-to-r from-amber-500 to-orange-500 text-white rounded-lg font-medium shadow-sm hover:shadow-md hover:shadow-amber-100 transition-all">重新提交</button>
           </div>
         )}
 
@@ -137,8 +137,8 @@ export function PublishModal({ projectId, onClose }: PublishModalProps) {
             <div className="text-red-500 text-sm mb-2">发布失败</div>
             <p className="text-xs text-neutral-500 mb-4">{error}</p>
             <div className="flex gap-3 justify-center">
-              <button onClick={onClose} className="px-4 py-2 text-sm text-neutral-500 rounded">关闭</button>
-              <button onClick={() => setStatus("idle")} className="px-4 py-2 text-sm bg-blue-600 text-white rounded">重试</button>
+              <button onClick={onClose} className="px-4 py-2 text-sm bg-neutral-100 text-neutral-600 rounded-lg hover:bg-neutral-200 transition-colors">关闭</button>
+              <button onClick={() => setStatus("idle")} className="px-4 py-2 text-sm bg-gradient-to-r from-amber-500 to-orange-500 text-white rounded-lg font-medium shadow-sm hover:shadow-md hover:shadow-amber-100 transition-all">重试</button>
             </div>
           </div>
         )}

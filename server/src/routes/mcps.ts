@@ -1,7 +1,7 @@
 import { Hono } from "hono";
 import { db } from "edgespark";
 import { auth } from "edgespark/http";
-import { eq, and, or } from "drizzle-orm";
+import { eq, and, or, ne } from "drizzle-orm";
 import { mcps } from "@defs";
 
 export const mcpsRoutes = new Hono()
@@ -12,6 +12,7 @@ export const mcpsRoutes = new Hono()
       .from(mcps)
       .where(
         and(
+          ne(mcps.name, "smart-deploy"),
           eq(mcps.hidden, false),
           or(
             eq(mcps.visibility, "global"),

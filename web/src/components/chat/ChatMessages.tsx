@@ -45,8 +45,8 @@ export function ChatMessages({ messages }: ChatMessagesProps) {
             <div
               className={`max-w-[85%] rounded-lg px-4 py-3 text-sm ${
                 msg.role === "user"
-                  ? "bg-blue-50 text-neutral-800"
-                  : "bg-white border border-neutral-200 text-neutral-700"
+                  ? "bg-amber-50 text-neutral-800"
+                  : "bg-white border border-neutral-100 text-neutral-700"
               }`}
             >
               {/* Thinking as streaming grey text */}

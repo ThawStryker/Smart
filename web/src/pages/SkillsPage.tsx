@@ -12,7 +12,6 @@ interface Skill {
   enabled: boolean;
   status: string;
   errorMessage: string | null;
-  hidden?: boolean;
 }
 
 const statusBadge = (s: Skill) => {
@@ -94,15 +93,6 @@ export function SkillsPage() {
     fetchSkills();
   };
 
-  const toggleHidden = async (id: number, hidden: boolean) => {
-    await client.api.fetch(`/api/skills/${id}`, {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ hidden: !hidden }),
-    });
-    fetchSkills();
-  };
-
   const deleteSkill = async (id: number) => {
     if (!confirm("确定删除？")) return;
     await client.api.fetch(`/api/skills/${id}`, { method: "DELETE" });
@@ -161,9 +151,6 @@ export function SkillsPage() {
                         <button onClick={() => toggleSkill(s.id, s.enabled)} className={`text-xs px-3 py-1 rounded-lg transition-colors ${s.enabled ? "bg-green-50 text-green-600 hover:bg-green-100" : "bg-neutral-100 text-neutral-400 hover:bg-neutral-200"}`}>
                           {s.enabled ? "已启用" : "已禁用"}
                         </button>
-                        <button onClick={() => toggleHidden(s.id, s.hidden ?? false)} className={`text-xs px-2 py-1 rounded-lg ${s.hidden ? "bg-neutral-100 text-neutral-400" : "text-neutral-400 hover:bg-neutral-100"}`}>
-                          {s.hidden ? "已隐藏" : "隐藏"}
-                        </button>
                         <button onClick={() => deleteSkill(s.id)} className="text-xs text-red-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors px-2 py-1">删除</button>
                       </div>
                     </div>
@@ -186,9 +173,6 @@ export function SkillsPage() {
                       <div className="flex items-center gap-2">
                         <button onClick={() => toggleSkill(s.id, s.enabled)} className={`text-xs px-3 py-1 rounded-lg transition-colors ${s.enabled ? "bg-green-50 text-green-600 hover:bg-green-100" : "bg-neutral-100 text-neutral-400 hover:bg-neutral-200"}`}>
                           {s.enabled ? "已启用" : "已禁用"}
-                        </button>
-                        <button onClick={() => toggleHidden(s.id, s.hidden ?? false)} className={`text-xs px-2 py-1 rounded-lg ${s.hidden ? "bg-neutral-100 text-neutral-400" : "text-neutral-400 hover:bg-neutral-100"}`}>
-                          {s.hidden ? "已隐藏" : "隐藏"}
                         </button>
                         <button onClick={() => deleteSkill(s.id)} className="text-xs text-red-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors px-2 py-1">删除</button>
                       </div>

@@ -283,7 +283,7 @@ export function ProjectDetail() {
                   onClick={() => setLeftTab(tab.key as typeof leftTab)}
                   className={`px-4 py-2 text-sm border-b-2 transition-colors ${
                     leftTab === tab.key
-                      ? "border-blue-600 text-blue-600 font-medium"
+                      ? "border-amber-500 text-amber-600 font-medium"
                       : "border-transparent text-neutral-500 hover:text-neutral-700"
                   }`}
                 >
