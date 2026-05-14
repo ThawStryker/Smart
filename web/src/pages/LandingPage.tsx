@@ -143,7 +143,7 @@ export function LandingPage() {
                 >
                   <div className="flex items-center gap-3 mb-3">
                     {l._hasIcon && l._projectId ? (
-                      <img src={`/api/public/smart/icon/${l._projectId}.png`} alt="" className="w-9 h-9 rounded-lg object-cover shadow-sm shrink-0 group-hover:scale-105 transition-transform duration-300" />
+                      <img src={`/api/public/smart/icon/${l._projectId}`} alt="" className="w-9 h-9 rounded-lg object-cover shadow-sm shrink-0 group-hover:scale-105 transition-transform duration-300" />
                     ) : (
                       <div className={`w-9 h-9 rounded-lg bg-gradient-to-br ${getGradient(l.title)} flex items-center justify-center text-white text-xs font-bold shadow-sm shrink-0 group-hover:scale-105 transition-transform duration-300`}>
                         {getInitials(l.title)}

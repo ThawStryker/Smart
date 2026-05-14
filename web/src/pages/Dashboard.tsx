@@ -123,7 +123,7 @@ export function Dashboard() {
                 >
                   <div className="flex items-start gap-4 mb-3">
                     {project.iconPath ? (
-                      <img src={`/api/public/smart/icon/${project.id}.png`} alt="" className="w-11 h-11 rounded-xl object-cover shadow-sm shrink-0 group-hover:scale-105 transition-transform duration-300" />
+                      <img src={`/api/public/smart/icon/${project.id}`} alt="" className="w-11 h-11 rounded-xl object-cover shadow-sm shrink-0 group-hover:scale-105 transition-transform duration-300" />
                     ) : (
                       <div className={`w-11 h-11 rounded-xl bg-gradient-to-br ${getGradient(project.name)} flex items-center justify-center text-white text-sm font-bold shadow-sm shrink-0 group-hover:scale-105 transition-transform duration-300`}>
                         {getInitials(project.name)}

@@ -4,7 +4,7 @@ import { eq } from "drizzle-orm";
 import { projects, buckets } from "@defs";
 
 export const sdkRoutes = new Hono()
-  .get("/api/public/smart/icon/:projectId.png", async (c) => {
+  .get("/api/public/smart/icon/:projectId", async (c) => {
     const projectId = parseInt(c.req.param("projectId")!, 10);
     const [p] = await db.select().from(projects).where(eq(projects.id, projectId));
     if (!p?.iconPath) return c.notFound();
