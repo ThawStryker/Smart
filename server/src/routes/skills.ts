@@ -188,6 +188,8 @@ export const skillsRoutes = new Hono()
   })
 
   .get("/api/skills/commands", async (c) => {
-    const result = await getSkillCommands();
+    const skillsParam = c.req.query("skills");
+    const extraSkills = skillsParam ? skillsParam.split(",").filter(Boolean) : undefined;
+    const result = await getSkillCommands(extraSkills);
     return c.json(result);
   });

@@ -45,10 +45,16 @@ export function ChatInput({ value, onChange, onSubmit, onGenerate, isLoading, mo
   useEffect(() => {
     client.api.fetch("/api/mcps").then(r => r.json()).then(setMcpList).catch(() => {});
     client.api.fetch("/api/skills").then(r => r.json()).then(setSkillList).catch(() => {});
-    client.api.fetch("/api/skills/commands").then(r => r.json()).then(data => {
+  }, []);
+
+  useEffect(() => {
+    const url = selectedSkills.length > 0
+      ? `/api/skills/commands?skills=${selectedSkills.join(",")}`
+      : "/api/skills/commands";
+    client.api.fetch(url).then(r => r.json()).then(data => {
       if (Array.isArray(data)) setCommands(data);
     }).catch(() => {});
-  }, []);
+  }, [selectedSkills]);
 
   const allCommands: Command[] = commands.flatMap(c =>
     c.commands.map(cmd => ({ name: cmd.name, description: cmd.description, skillName: c.skillName }))

@@ -79,14 +79,21 @@ export async function buildSkillPrompt(selectedSkills: string[]): Promise<string
   skillsToLoad.add("superpowers");
 
   let foundSuperpowers = false;
+  const loadedNames: string[] = [];
   const rows = await db.select().from(skillsDef).where(inArray(skillsDef.name, [...skillsToLoad]));
   for (const skill of rows) {
     if (skill.status !== "installed" || !skill.storagePath) continue;
     const content = await readSkillMd(skill.storagePath);
     if (content) {
       if (skill.name === "superpowers") foundSuperpowers = true;
+      loadedNames.push(skill.name);
       result += `\n\n## Skill: ${skill.name}\n\n${content.slice(0, 8000)}`;
     }
+  }
+
+  // Tell the Agent to actively use loaded skills
+  if (loadedNames.length > 0) {
+    result += `\n\n## 可用技能\n\n当前已加载以下技能。你需要自行判断何时使用哪个技能：当用户的需求匹配某个技能的专长时，主动采用该技能的方法论和流程来完成任务。\n\n${loadedNames.map(n => `- **${n}**`).join("\n")}`;
   }
 
   // Fallback: if no superpowers record in DB, use hardcoded version
@@ -97,24 +104,43 @@ export async function buildSkillPrompt(selectedSkills: string[]): Promise<string
   return result;
 }
 
-export async function getSkillCommands(): Promise<
+export async function getSkillCommands(extraSkills?: string[]): Promise<
   Array<{ skillName: string; skillId: number; commands: Array<{ name: string; description: string }> }>
 > {
   const rows = await db.select().from(skillsDef).where(eq(skillsDef.status, "installed"));
+
+  // Also load named skills that might not be installed yet
+  if (extraSkills && extraSkills.length > 0) {
+    const extra = await db.select().from(skillsDef).where(inArray(skillsDef.name, extraSkills));
+    for (const s of extra) {
+      if (!rows.some(r => r.id === s.id)) rows.push(s);
+    }
+  }
   const result: Array<{ skillName: string; skillId: number; commands: Array<{ name: string; description: string }> }> = [];
 
   for (const skill of rows) {
     if (!skill.storagePath) continue;
     const content = await readSkillMd(skill.storagePath);
-    if (!content) continue;
+    const slug = "/" + skill.name.toLowerCase().replace(/\s+/g, "-");
+    if (!content) {
+      result.push({ skillName: skill.name, skillId: skill.id, commands: [{ name: slug, description: `调用 ${skill.name} 技能` }] });
+      continue;
+    }
     const m = content.match(/###\s+Commands\s*\n([\s\S]*?)(?=\n###|\n##|$)/i);
-    if (!m) continue;
+    if (!m) {
+      result.push({ skillName: skill.name, skillId: skill.id, commands: [{ name: slug, description: `调用 ${skill.name} 技能` }] });
+      continue;
+    }
     const commands: Array<{ name: string; description: string }> = [];
     for (const line of m[1].split("\n")) {
       const cmdMatch = line.match(/-\s+`(\/[a-z_-]+)`\s*[—–-]?\s*(.*)/i);
       if (cmdMatch) commands.push({ name: cmdMatch[1], description: cmdMatch[2].trim() });
     }
-    if (commands.length > 0) result.push({ skillName: skill.name, skillId: skill.id, commands });
+    if (commands.length > 0) {
+      result.push({ skillName: skill.name, skillId: skill.id, commands });
+    } else {
+      result.push({ skillName: skill.name, skillId: skill.id, commands: [{ name: slug, description: `调用 ${skill.name} 技能` }] });
+    }
   }
 
   // Add fallback superpowers + built-in commands
