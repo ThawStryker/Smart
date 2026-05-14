@@ -190,7 +190,7 @@ export function ChatInput({ value, onChange, onSubmit, onGenerate, isLoading, mo
         />
 
         {showCommands && (
-          <div ref={commandsRef} className="absolute left-0 bottom-full mb-1 w-56 bg-white border border-neutral-200 rounded-xl shadow-xl z-[100] max-h-52 overflow-y-auto">
+          <div ref={commandsRef} className="absolute left-0 bottom-full mb-1 w-80 bg-white border border-neutral-200 rounded-xl shadow-xl z-[100] max-h-52 overflow-y-auto">
             {allCommands.length === 0 ? (
               <p className="text-xs text-neutral-400 p-3">加载中...</p>
             ) : filteredCommands.length === 0 ? (
@@ -200,9 +200,9 @@ export function ChatInput({ value, onChange, onSubmit, onGenerate, isLoading, mo
                 <button
                   key={cmd.name}
                   onClick={() => handleSlashSelect(cmd.name)}
-                  className={`w-full text-left px-4 py-2.5 flex items-center gap-3 text-xs hover:bg-neutral-50 transition-colors ${i === commandIndex ? "bg-amber-50" : ""}`}
+                  className={`w-full text-left px-3 py-2 flex items-center gap-2.5 text-xs hover:bg-neutral-50 transition-colors ${i === commandIndex ? "bg-amber-50" : ""}`}
                 >
-                  <span className="text-amber-600 font-mono font-medium">{cmd.name}</span>
+                  <span className="text-amber-600 font-mono font-medium shrink-0">{cmd.name}</span>
                   <span className="text-neutral-400 flex-1 truncate">{cmd.description}</span>
                   <span className="text-neutral-300 text-[10px] shrink-0">{cmd.skillName}</span>
                 </button>
