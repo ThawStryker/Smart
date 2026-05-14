@@ -11,21 +11,35 @@ const PlusIcon = () => (
   </svg>
 );
 
-const FileIcon = () => (
-  <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-    <path d="M14.5 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7.5L14.5 2z" />
-    <polyline points="14,2 14,8 20,8" />
-  </svg>
-);
+// Generate a consistent gradient color from project name
+const gradients = [
+  "from-amber-400 to-orange-500",
+  "from-indigo-400 to-violet-500",
+  "from-emerald-400 to-teal-500",
+  "from-rose-400 to-pink-500",
+  "from-sky-400 to-blue-500",
+  "from-fuchsia-400 to-purple-500",
+];
 
-const CalendarIcon = () => (
-  <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-    <rect x="3" y="4" width="18" height="18" rx="2" ry="2" />
-    <line x1="16" y1="2" x2="16" y2="6" />
-    <line x1="8" y1="2" x2="8" y2="6" />
-    <line x1="3" y1="10" x2="21" y2="10" />
-  </svg>
-);
+function getGradient(name: string): string {
+  let hash = 0;
+  for (let i = 0; i < name.length; i++) hash = name.charCodeAt(i) + ((hash << 5) - hash);
+  return gradients[Math.abs(hash) % gradients.length];
+}
+
+function getInitials(name: string): string {
+  return name.slice(0, 2).toUpperCase();
+}
+
+function StatusBadge({ project }: { project: any }) {
+  if (project.publishStatus === "published") {
+    return <span className="text-xs px-2 py-0.5 rounded-full bg-green-50 text-green-600 font-medium">已发布</span>;
+  }
+  if (project.deployStatus === "deployed" || project.deployStatus === "deploying") {
+    return <span className="text-xs px-2 py-0.5 rounded-full bg-amber-50 text-amber-600 font-medium">未发布</span>;
+  }
+  return <span className="text-xs px-2 py-0.5 rounded-full bg-neutral-100 text-neutral-400 font-medium">未上线</span>;
+}
 
 export function Dashboard() {
   const { projectsList, loading: projectsLoading, createProject, deleteProject } = useProjects();
@@ -98,29 +112,29 @@ export function Dashboard() {
             </div>
           ) : (
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-              {projectsList.map((project) => (
+              {projectsList.map((project: any) => (
                 <div
                   key={project.id}
                   onClick={() => navigate(`/project/${project.id}`)}
-                  className="bg-white border border-[#f0f0f0] rounded-xl p-6 cursor-pointer hover:shadow-md hover:-translate-y-0.5 transition-all group"
+                  className="smart-card p-5 cursor-pointer group"
                 >
-                  <div className="flex items-start justify-between mb-4">
-                    <div className="w-12 h-12 bg-amber-50 rounded-xl flex items-center justify-center text-amber-600 group-hover:scale-110 transition-transform duration-300">
-                      <FileIcon />
+                  <div className="flex items-start gap-4 mb-3">
+                    <div className={`w-11 h-11 rounded-xl bg-gradient-to-br ${getGradient(project.name)} flex items-center justify-center text-white text-sm font-bold shadow-sm shrink-0 group-hover:scale-105 transition-transform duration-300`}>
+                      {getInitials(project.name)}
                     </div>
-                    <div className="text-xs text-neutral-400 flex items-center gap-1">
-                      <CalendarIcon />
-                      {new Date(project.createdAt).toLocaleDateString()}
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center justify-between gap-2">
+                        <h3 className="font-semibold text-[15px] text-primary truncate group-hover:text-amber-600 transition-colors">{project.name}</h3>
+                        <StatusBadge project={project} />
+                      </div>
+                      {project.description ? (
+                        <p className="text-xs text-secondary mt-1 line-clamp-1">{project.description}</p>
+                      ) : (
+                        <p className="text-xs text-tertiary mt-1">{new Date(project.createdAt).toLocaleDateString()} 创建</p>
+                      )}
                     </div>
                   </div>
-                  <h3 className="font-semibold text-lg mb-2 text-neutral-900 group-hover:text-amber-600 transition-colors">{project.name}</h3>
-                  <p className="text-sm text-neutral-600 mb-4 line-clamp-2">
-                    {project.description || "点击进入项目编辑"}
-                  </p>
-                  <div className="flex items-center justify-between text-xs text-neutral-400">
-                    <span className="text-xs px-1.5 py-0.5 rounded-full bg-green-50 text-green-600">
-                      {project.status || "活跃"}
-                    </span>
+                  <div className="flex items-center justify-end">
                     <button
                       onClick={(e) => {
                         e.stopPropagation();

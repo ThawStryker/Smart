@@ -9,6 +9,8 @@ export interface Project {
   status: string;
   progress: number;
   config: string | null;
+  deployStatus?: string;
+  publishStatus?: string;
   createdAt: string;
   updatedAt: string;
 }

@@ -13,7 +13,19 @@ export const projectsRoutes = new Hono()
       .from(projects)
       .where(eq(projects.userId, userId))
       .orderBy(desc(projects.updatedAt));
-    return c.json(rows);
+
+    // Enrich with deploy/publish status
+    const enriched = await Promise.all(rows.map(async (p) => {
+      const [domain] = await db.select().from(domains).where(eq(domains.projectId, p.id)).limit(1);
+      const [listing] = await db.select().from(marketListings)
+        .where(and(eq(marketListings.toolId, p.id), eq(marketListings.status, "approved"))).limit(1);
+      return {
+        ...p,
+        deployStatus: domain ? (domain.status === "active" ? "deployed" : "deploying") : "none",
+        publishStatus: listing ? "published" : "unpublished",
+      };
+    }));
+    return c.json(enriched);
   })
   .get("/:id", async (c) => {
     const userId = auth.user!.id;
