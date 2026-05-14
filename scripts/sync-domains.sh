@@ -63,16 +63,22 @@ while true; do
   echo "$resp" | jq -c '.domains[] | select(.status == "dns_ready")' 2>/dev/null | while read -r d; do
     id=$(echo "$d" | jq -r '.id')
     domain=$(echo "$d" | jq -r '.domain')
+    log "START VERIFY: $domain"
+    api_post "/api/public/smart/domains/${id}/start-verify" '{}'
+  done
+
+  echo "$resp" | jq -c '.domains[] | select(.status == "verifying")' 2>/dev/null | while read -r d; do
+    id=$(echo "$d" | jq -r '.id')
+    domain=$(echo "$d" | jq -r '.domain')
     log "VERIFY: $domain"
 
-    api_post "/api/public/smart/domains/${id}/start-verify" '{}'
     verify_output=$(edgespark domain verify "$domain" --timeout "$VERIFY_TIMEOUT" 2>&1) || true
 
     if echo "$verify_output" | grep -q "active"; then
       log "  ACTIVE"
       api_post "/api/public/smart/domains/${id}/verify-result" '{"success": true}'
     else
-      log "  NOT ACTIVE"
+      log "  NOT YET ACTIVE (will retry)"
     fi
   done
 
