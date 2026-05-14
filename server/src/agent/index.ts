@@ -69,7 +69,20 @@ export const agentRoutes = new Hono()
 
     // === Build system prompt ===
     const memoryCtx = await buildMemoryContext(userId, projectId);
-    const skillCtx = await buildSkillPrompt(body.skills || [], selectedModel);
+
+    // Detect skill trigger from slash command: /<skill-name>
+    let triggerSkill: string | undefined;
+    const selected = body.skills || [];
+    if (body.message) {
+      for (const s of selected) {
+        const slug = "/" + s.toLowerCase().replace(/\s+/g, "-");
+        if (body.message.startsWith(slug)) {
+          triggerSkill = s;
+          break;
+        }
+      }
+    }
+    const skillCtx = await buildSkillPrompt(selected, selectedModel, triggerSkill);
     const selectedMcps = (body.mcps || []).filter(Boolean);
     const mcpCtx = await buildMcpPrompt(selectedMcps);
 

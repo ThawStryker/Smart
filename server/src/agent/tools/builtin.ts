@@ -97,10 +97,22 @@ export const BUILTIN_TOOLS: ToolDef[] = [
       parameters: { type: "object", properties: {} },
     },
   },
+  {
+    type: "function",
+    function: {
+      name: "load_skill",
+      description: "加载指定 Skill 的完整内容。当需要使用某个可用但未加载的 Skill 时调用此工具获取详细指令。",
+      parameters: {
+        type: "object",
+        properties: { name: { type: "string", description: "Skill 名称" } },
+        required: ["name"],
+      },
+    },
+  },
 ];
 
 // Tools allowed per phase
-const READ_TOOLS = new Set(["read_file", "list_files", "grep_files", "web_search", "smart_market"]);
+const READ_TOOLS = new Set(["read_file", "list_files", "grep_files", "web_search", "smart_market", "load_skill"]);
 const WRITE_TOOLS = new Set(["write_file", "edit_file"]);
 
 export function filterToolsForPhase(tools: ToolDef[], phase: string): ToolDef[] {

@@ -1,6 +1,7 @@
 import { db, storage, ctx as edgeCtx } from "edgespark";
 import { eq } from "drizzle-orm";
 import { buckets, executionSteps, marketListings } from "@defs";
+import { loadSkillContent } from "./tools/skill";
 
 export interface ExecContext {
   prefix: string;
@@ -90,6 +91,11 @@ export async function executeTool(
           const ml = await db.select().from(marketListings).where(eq(marketListings.status, "approved")).limit(10);
           result = ml.map(i => `- ${i.title}: ${i.description || ""} (${i.type === "url" ? "外部链接" : "Smart 工具"})`).join("\n") || "暂无工具";
         } catch { result = "Market unavailable"; }
+        break;
+      }
+      case "load_skill": {
+        const skillContent = await loadSkillContent(args.name);
+        result = skillContent || `Skill "${args.name}" not found or not installed`;
         break;
       }
       default: {

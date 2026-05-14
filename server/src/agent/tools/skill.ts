@@ -72,44 +72,66 @@ async function readSkillMd(storagePath: string): Promise<string | null> {
 }
 
 function getSkillCharLimit(model: string): number {
-  // Context-window-based limits: roughly context_size / 20 to leave room for conversation
-  if (model === "deepseek") return 8000;   // 1M context
-  return 3000; // seed and any other model default
+  if (model === "deepseek") return 8000;
+  return 3000;
 }
 
-export async function buildSkillPrompt(selectedSkills: string[], model?: string): Promise<string> {
+// Always load superpowers fully. Other skills are loaded on-demand.
+export async function buildSkillPrompt(selectedSkills: string[], model?: string, triggerSkill?: string): Promise<string> {
   let result = "";
-
-  // Always inject superpowers
-  const skillsToLoad = new Set(selectedSkills);
-  skillsToLoad.add("superpowers");
-
   const charLimit = getSkillCharLimit(model || "seed");
 
+  // 1. Always inject superpowers
   let foundSuperpowers = false;
-  const loadedNames: string[] = [];
-  const rows = await db.select().from(skillsDef).where(inArray(skillsDef.name, [...skillsToLoad]));
-  for (const skill of rows) {
-    if (skill.status !== "installed" || !skill.storagePath) continue;
-    const content = await readSkillMd(skill.storagePath);
+  const [spRow] = await db.select().from(skillsDef).where(eq(skillsDef.name, "superpowers"));
+  if (spRow && spRow.status === "installed" && spRow.storagePath) {
+    const content = await readSkillMd(spRow.storagePath);
     if (content) {
-      if (skill.name === "superpowers") foundSuperpowers = true;
-      loadedNames.push(skill.name);
-      result += `\n\n## Skill: ${skill.name}\n\n${content.slice(0, charLimit)}`;
+      foundSuperpowers = true;
+      result += `\n\n## Skill: superpowers\n\n${content.slice(0, charLimit)}`;
     }
   }
-
-  // Tell the Agent to actively use loaded skills
-  if (loadedNames.length > 0) {
-    result += `\n\n## 可用技能\n\n当前已加载以下技能。你需要自行判断何时使用哪个技能：当用户的需求匹配某个技能的专长时，主动采用该技能的方法论和流程来完成任务。\n\n${loadedNames.map(n => `- **${n}**`).join("\n")}`;
-  }
-
-  // Fallback: if no superpowers record in DB, use hardcoded version
   if (!foundSuperpowers) {
     result += `\n\n## Skill: superpowers\n\n${FALLBACK_SUPERPOWERS}`;
   }
 
+  // 2. Determine which skill to load fully (triggered by slash command or mention)
+  const triggered = triggerSkill || detectSkillTrigger(selectedSkills, triggerSkill);
+  const otherSkills = selectedSkills.filter(s => s !== "superpowers" && s !== triggered);
+
+  // 3. Load triggered skill fully
+  if (triggered) {
+    const [skill] = await db.select().from(skillsDef).where(eq(skillsDef.name, triggered));
+    if (skill && skill.status === "installed" && skill.storagePath) {
+      const content = await readSkillMd(skill.storagePath);
+      if (content) {
+        result += `\n\n## 当前激活 Skill: ${skill.name}\n\n${content.slice(0, charLimit)}`;
+      }
+    }
+  }
+
+  // 4. List other available skills (names only, no content)
+  if (otherSkills.length > 0) {
+    result += `\n\n## 其他可用技能\n\n以下技能已启用但未加载完整内容。当用户需求匹配时，主动告知用户可以通过 \`/<skill-name>\` 调用：\n\n${otherSkills.map(n => `- **${n}** — 使用 \`/${n}\` 激活`).join("\n")}`;
+  }
+
   return result;
+}
+
+// Detect if user message triggers a specific skill
+function detectSkillTrigger(selectedSkills: string[], triggerSkill?: string): string | null {
+  if (triggerSkill) return triggerSkill;
+  return null;
+}
+
+// Load a specific skill's full content on demand
+export async function loadSkillContent(skillName: string, model?: string): Promise<string> {
+  const charLimit = getSkillCharLimit(model || "seed");
+  const [skill] = await db.select().from(skillsDef).where(eq(skillsDef.name, skillName));
+  if (!skill || skill.status !== "installed" || !skill.storagePath) return "";
+  const content = await readSkillMd(skill.storagePath);
+  if (!content) return "";
+  return `\n\n## Skill: ${skill.name}\n\n${content.slice(0, charLimit)}`;
 }
 
 export async function getSkillCommands(selectedSkills?: string[]): Promise<
