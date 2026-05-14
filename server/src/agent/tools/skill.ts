@@ -48,8 +48,16 @@ brainstorm → plan → execute → verify
 ### Commands
 - /brainstorming — 启动需求分析和方案设计
 - /writing-plans — 编写详细的实施计划
+- /subagent-driven — 按计划分步执行实施
+- /test-driven — 先写测试再写实现代码
 - /debugging — 系统化调试问题和错误
-- /verification — 完成前验证所有修改`;
+- /code-review — 完成前进行代码审查
+- /verification — 完成前验证所有修改
+- /deploy — 部署当前项目到生产环境
+- /market — 浏览 Smart 工具市场
+- /web-search — 在网络上搜索实时信息
+- /list-files — 列出项目中的所有文件
+- /read-file — 读取指定文件内容`;
 
 async function readSkillMd(storagePath: string): Promise<string | null> {
   const md = await storage.from(buckets.sourceBuckets).get(storagePath + "SKILL.md");
@@ -109,7 +117,7 @@ export async function getSkillCommands(): Promise<
     if (commands.length > 0) result.push({ skillName: skill.name, skillId: skill.id, commands });
   }
 
-  // Add fallback superpowers commands
+  // Add fallback superpowers + built-in commands
   const hasSuperpowers = result.some(r => r.skillName === "superpowers");
   if (!hasSuperpowers) {
     result.push({
@@ -118,11 +126,27 @@ export async function getSkillCommands(): Promise<
       commands: [
         { name: "/brainstorming", description: "启动需求分析和方案设计" },
         { name: "/writing-plans", description: "编写详细的实施计划" },
+        { name: "/subagent-driven", description: "按计划分步执行实施" },
+        { name: "/test-driven", description: "先写测试再写实现代码" },
         { name: "/debugging", description: "系统化调试问题和错误" },
+        { name: "/code-review", description: "完成前进行代码审查" },
         { name: "/verification", description: "完成前验证所有修改" },
       ],
     });
   }
+
+  // Add built-in system commands
+  result.push({
+    skillName: "Smart 内置",
+    skillId: -1,
+    commands: [
+      { name: "/deploy", description: "部署当前项目到生产环境" },
+      { name: "/market", description: "浏览 Smart 工具市场" },
+      { name: "/web-search", description: "在网络上搜索实时信息" },
+      { name: "/list-files", description: "列出项目中的所有文件" },
+      { name: "/read-file", description: "读取指定文件内容" },
+    ],
+  });
 
   return result;
 }
