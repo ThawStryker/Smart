@@ -1,5 +1,4 @@
 import { useState, useEffect, useRef } from "react";
-import { client } from "@/lib/edgespark";
 
 interface ChatMessage {
   id: string;
