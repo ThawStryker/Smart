@@ -20,6 +20,7 @@ export function WorkPage() {
   useEffect(() => { endRef.current?.scrollIntoView({ behavior: "smooth" }); }, [messages]);
 
   const newChat = async () => {
+    if (messages.length === 0 && !cid) return; // Already empty, don't create duplicate
     const r = await fetch("/api/work/conversations", { method: "POST", credentials: "include" });
     const c = await r.json();
     setConvs(prev => [c, ...prev]);
@@ -44,13 +45,14 @@ export function WorkPage() {
     fetchConvs();
   };
 
-  const saveMsg = (c: number, msgs: ChatMessage[]) => {
+  const saveMsg = async (c: number, msgs: ChatMessage[]) => {
     const title = msgs.find(m => m.role === "user")?.content.slice(0, 30) || "新对话";
-    fetch(`/api/work/conversations/${c}`, {
+    await fetch(`/api/work/conversations/${c}`, {
       method: "PATCH", credentials: "include",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ title, messagesJson: JSON.stringify(msgs.slice(-50)) }),
     }).catch(() => {});
+    fetchConvs(); // Refresh titles in dropdown
   };
 
   const activeConv = convs.find(c => c.id === cid);
