@@ -120,11 +120,16 @@ export function WorkPage() {
 
   const ChatBubble = ({ m }: { m: ChatMessage }) => (
     <div className={`flex ${m.role === "user" ? "justify-end" : "justify-start"}`}>
-      <div className={`max-w-[90%] px-3 py-2 rounded-lg text-xs leading-relaxed ${
-        m.role === "user" ? "bg-amber-50 text-amber-900" : "bg-[#f5f2ed] text-secondary"
+      {m.role === "assistant" && (
+        <div className="w-6 h-6 rounded-lg bg-gradient-to-br from-amber-400 to-orange-500 flex items-center justify-center text-white text-[10px] font-bold shrink-0 mr-2 mt-0.5">S</div>
+      )}
+      <div className={`max-w-[85%] px-3.5 py-2.5 rounded-2xl text-[13px] leading-relaxed ${
+        m.role === "user"
+          ? "bg-gradient-to-br from-amber-400 to-orange-500 text-white rounded-br-md"
+          : "bg-[#f5f2ed] text-secondary rounded-bl-md"
       }`}>
         {m.isLoading ? (
-          <div className="flex items-center gap-1.5 text-tertiary">
+          <div className="flex items-center gap-1.5">
             <span className="w-2 h-2 rounded-full bg-[#d4cfc7] animate-bounce" style={{ animationDelay: "0ms" }} />
             <span className="w-2 h-2 rounded-full bg-[#d4cfc7] animate-bounce" style={{ animationDelay: "150ms" }} />
             <span className="w-2 h-2 rounded-full bg-[#d4cfc7] animate-bounce" style={{ animationDelay: "300ms" }} />
@@ -139,26 +144,50 @@ export function WorkPage() {
   return (
     <div className="h-full flex bg-[#faf9f7]">
       {/* === LEFT: Chat === */}
-      <div className="w-[340px] flex flex-col shrink-0 bg-white border-r border-[#edeae5]">
-        <div className="px-4 py-3 border-b border-[#edeae5] flex items-center justify-between shrink-0">
-          <span className="font-semibold text-sm text-primary">对话</span>
+      <div className="w-[380px] flex flex-col shrink-0 bg-white border-r border-[#edeae5]">
+        <div className="px-4 py-2.5 border-b border-[#edeae5] flex items-center gap-3 shrink-0">
+          <div className="w-8 h-8 rounded-xl bg-gradient-to-br from-amber-400 to-orange-500 flex items-center justify-center text-white text-xs font-bold shadow-sm">S</div>
+          <div>
+            <div className="font-semibold text-[13px] text-primary">Smart Work</div>
+            <div className="text-[10px] text-tertiary">AI 工作助手</div>
+          </div>
+          <div className="flex-1" />
           <select value={model} onChange={e => setModel(e.target.value)}
-            className="text-[11px] border border-[#edeae5] rounded px-2 py-0.5 bg-white text-secondary outline-none">
+            className="text-[10px] border border-[#edeae5] rounded-md px-2 py-1 bg-[#faf9f7] text-secondary outline-none cursor-pointer">
             {models.map(m => <option key={m.key} value={m.key}>{m.label}</option>)}
           </select>
         </div>
-        <div className="flex-1 overflow-y-auto p-3 space-y-3">
+        <div className="flex-1 overflow-y-auto px-4 py-4 space-y-4">
           {messages.map(m => <ChatBubble key={m.id} m={m} />)}
-          {messages.length === 0 && <p className="text-xs text-tertiary text-center py-12">和 AI 对话，说需求、下命令</p>}
+          {messages.length === 0 && (
+            <div className="text-center py-16">
+              <div className="w-12 h-12 rounded-2xl bg-gradient-to-br from-amber-400 to-orange-500 flex items-center justify-center text-white text-lg font-bold shadow-md mx-auto mb-3">S</div>
+              <p className="text-sm text-secondary font-medium mb-1">Smart Work</p>
+              <p className="text-xs text-tertiary">说需求、下命令，我来帮你</p>
+            </div>
+          )}
           <div ref={endRef} />
         </div>
-        <div className="p-3 border-t border-[#edeae5] shrink-0">
-          <div className="flex gap-2">
-            <input value={input} onChange={e => setInput(e.target.value)}
-              onKeyDown={e => e.key === "Enter" && handleSend()} placeholder="输入需求或命令..."
-              className="flex-1 input-field px-3 py-2 text-xs" disabled={isStreaming} />
-            <button onClick={handleSend} disabled={isStreaming}
-              className="px-4 py-2 bg-amber-500 text-white rounded-lg text-xs font-medium hover:bg-amber-600 transition-colors disabled:opacity-40">发送</button>
+        <div className="p-3 border-t border-[#edeae5] shrink-0 bg-[#faf9f7]">
+          <div className="relative">
+            <textarea
+              value={input}
+              onChange={e => setInput(e.target.value)}
+              onKeyDown={e => {
+                if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); handleSend(); }
+              }}
+              placeholder="输入需求或命令... (Enter 发送，Shift+Enter 换行)"
+              rows={2}
+              disabled={isStreaming}
+              className="w-full resize-none input-field pl-4 pr-12 py-3 text-[13px] leading-relaxed rounded-xl bg-white disabled:opacity-50"
+            />
+            <button
+              onClick={handleSend}
+              disabled={isStreaming || !input.trim()}
+              className="absolute right-2 bottom-2 w-8 h-8 rounded-lg bg-gradient-to-br from-amber-400 to-orange-500 text-white flex items-center justify-center shadow-sm hover:shadow-md hover:shadow-amber-100 transition-all disabled:opacity-30 disabled:cursor-not-allowed"
+            >
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><line x1="12" y1="19" x2="12" y2="5"/><polyline points="5,12 12,5 19,12"/></svg>
+            </button>
           </div>
         </div>
       </div>
