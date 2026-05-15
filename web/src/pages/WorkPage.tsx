@@ -313,8 +313,8 @@ export function WorkPage() {
             <div className="flex items-center gap-1">
               <span className="text-[10px] font-normal opacity-40">3 文件</span>
               <button onClick={() => setRightCollapsed(true)}
-                className="p-1 rounded-md transition-colors hover:bg-black/5 ml-1" style={{ color: "#b8a088" }}>
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="9,18 15,12 9,6"/></svg>
+                className="p-1.5 rounded-lg transition-colors hover:bg-black/5 ml-1" style={{ color: "#b8a088" }}>
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="currentColor"><path d="M4 5v14h2V5H4zm7 0L8 8l4 4-4 4 3 3 7-7-7-7z"/></svg>
               </button>
             </div>
           </div>
@@ -415,11 +415,11 @@ export function WorkPage() {
         </div>
       </div>
       ) : (
-        <div className="shrink-0 relative" style={{ width: "16px" }}>
+        <div className="shrink-0 relative" style={{ width: "20px" }}>
           <button onClick={() => setRightCollapsed(false)}
-            className="absolute left-0 top-1/2 -translate-y-1/2 w-4 h-20 rounded-r-lg flex items-center justify-center transition-colors hover:bg-amber-100/40"
-            style={{ background: "#fbf9f2", border: "1px solid #e8e3d7", borderLeft: "none", color: "#b8a088" }}>
-            <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="15,18 9,12 15,6"/></svg>
+            className="absolute -left-1 top-1/2 -translate-y-1/2 w-8 h-16 rounded-r-xl flex items-center justify-center transition-all hover:shadow-md hover:bg-amber-100/80 shadow-sm"
+            style={{ background: "linear-gradient(135deg, #fdfaf2, #f5efe0)", border: "1.5px solid #d4c4a8", borderLeft: "2px solid #c7853a", color: "#b87333" }}>
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="15,18 9,12 15,6"/></svg>
           </button>
         </div>
       )}
