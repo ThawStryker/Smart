@@ -117,12 +117,10 @@ export const workRoutes = new Hono()
     const eventQueue: Array<Record<string, unknown>> = [];
     const stream = createSSEStream(eventQueue);
 
-    // Immediate test event
-    emit(eventQueue, { type: "text", content: "正在思考..." });
-
-    ctx.runInBackground((async () => {
+    const chatPromise = (async () => {
       let fullText = "";
       try {
+        emit(eventQueue, { type: "text", content: "正在思考..." });
         const reqBody: Record<string, unknown> = {
           model: modelName, messages, temperature: 0.5, max_tokens: 2048, stream: true,
         };
@@ -169,7 +167,9 @@ export const workRoutes = new Hono()
         emit(eventQueue, { type: "error", content: String(err) });
         emit(eventQueue, { type: "done" });
       }
-    })());
+    })();
+
+    ctx.runInBackground(chatPromise);
 
     return new Response(stream, { headers: SSE_HEADERS });
   });
