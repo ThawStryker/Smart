@@ -3,7 +3,7 @@ import { db, secret, vars, ctx } from "edgespark";
 import { auth } from "edgespark/http";
 import { eq, and, desc } from "drizzle-orm";
 import { workAgents, workConversations, userProfiles } from "@defs";
-import { SSE_HEADERS, emit, createSSEStream } from "../agent/stream";
+import { SSE_HEADERS } from "../agent/stream";
 
 export const workRoutes = new Hono()
   .get("/api/work/agents", async (c) => {
@@ -114,13 +114,22 @@ export const workRoutes = new Hono()
       { role: "user", content: body.message },
     ];
 
-    const eventQueue: Array<Record<string, unknown>> = [];
-    const stream = createSSEStream(eventQueue);
+    let controller: ReadableStreamDefaultController;
+    const stream = new ReadableStream({
+      start(c) { controller = c; },
+    });
+
+    function send(data: Record<string, unknown>) {
+      try {
+        controller.enqueue(new TextEncoder().encode(`data: ${JSON.stringify(data)}\n\n`));
+        if (data.type === "done") controller.close();
+      } catch {}
+    }
 
     const chatPromise = (async () => {
       let fullText = "";
       try {
-        emit(eventQueue, { type: "text", content: "正在思考..." });
+        send({ type: "text", content: "正在思考..." });
         const reqBody: Record<string, unknown> = {
           model: modelName, messages, temperature: 0.5, max_tokens: 2048, stream: true,
         };
@@ -132,8 +141,8 @@ export const workRoutes = new Hono()
         });
         if (!res.ok) {
           const errText = await res.text();
-          emit(eventQueue, { type: "error", content: `API ${res.status}: ${errText.slice(0, 150)}` });
-          emit(eventQueue, { type: "done" });
+          send({ type: "error", content: `API ${res.status}: ${errText.slice(0, 150)}` });
+          send({ type: "done" });
           return;
         }
 
@@ -156,16 +165,16 @@ export const workRoutes = new Hono()
               const delta = parsed.choices?.[0]?.delta;
               if (delta?.content) {
                 fullText += delta.content;
-                emit(eventQueue, { type: "text", content: delta.content });
+                send({ type: "text", content: delta.content });
               }
-              if (delta?.reasoning_content) emit(eventQueue, { type: "thinking", content: delta.reasoning_content });
+              if (delta?.reasoning_content) send({ type: "thinking", content: delta.reasoning_content });
             } catch {}
           }
         }
-        emit(eventQueue, { type: "done" });
+        send({ type: "done" });
       } catch (err: any) {
-        emit(eventQueue, { type: "error", content: String(err) });
-        emit(eventQueue, { type: "done" });
+        send({ type: "error", content: String(err) });
+        send({ type: "done" });
       }
     })();
 
