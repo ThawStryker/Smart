@@ -28,6 +28,7 @@ export function WorkPage() {
   const [agents, setAgents] = useState<WorkAgent[]>([]);
   const [rightTab, setRightTab] = useState<"assistant" | "team">("assistant");
   const [showCreate, setShowCreate] = useState(false);
+  const [rightCollapsed, setRightCollapsed] = useState(false);
   const [form, setForm] = useState({ name: "", role: "custom", systemPrompt: "", tools: "read,write,edit,list,grep", skills: "" });
 
   const fetchAgents = async () => {
@@ -303,12 +304,19 @@ export function WorkPage() {
       </div>
 
       {/* Right: Workspace + Roles */}
+      {!rightCollapsed ? (
       <div className="w-72 flex flex-col shrink-0 border-l relative" style={{ background: "#fbf9f2", borderColor: "#e8e3d7" }}>
         {/* Workspace */}
         <div className="h-1/2 flex flex-col border-b" style={{ borderColor: "#e8e3d7" }}>
           <div className="px-4 py-2.5 font-semibold text-[13px] shrink-0 flex items-center justify-between" style={{ color: "#4a3728" }}>
-            <span>Workspace</span>
-            <span className="text-[10px] font-normal opacity-40">3 文件</span>
+            <span>工作空间</span>
+            <div className="flex items-center gap-1">
+              <span className="text-[10px] font-normal opacity-40">3 文件</span>
+              <button onClick={() => setRightCollapsed(true)}
+                className="p-1 rounded-md transition-colors hover:bg-black/5 ml-1" style={{ color: "#b8a088" }}>
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="9,18 15,12 9,6"/></svg>
+              </button>
+            </div>
           </div>
           <div className="flex-1 overflow-y-auto px-2 pb-2">
             {[
@@ -406,6 +414,15 @@ export function WorkPage() {
           </div>
         </div>
       </div>
+      ) : (
+        <div className="shrink-0 relative" style={{ width: "16px" }}>
+          <button onClick={() => setRightCollapsed(false)}
+            className="absolute left-0 top-1/2 -translate-y-1/2 w-4 h-20 rounded-r-lg flex items-center justify-center transition-colors hover:bg-amber-100/40"
+            style={{ background: "#fbf9f2", border: "1px solid #e8e3d7", borderLeft: "none", color: "#b8a088" }}>
+            <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="15,18 9,12 15,6"/></svg>
+          </button>
+        </div>
+      )}
     </div>
   );
 }
