@@ -121,8 +121,8 @@ export const workRoutes = new Hono()
       try {
         const reqBody: Record<string, unknown> = {
           model: modelName, messages, temperature: 0.5, max_tokens: 4096, stream: true,
+          reasoning_effort: "high",
         };
-        if (selectedModel === "deepseek") reqBody.reasoning_effort = "high";
 
         const res = await fetch(`${baseURL}${apiPath}`, {
           method: "POST",
