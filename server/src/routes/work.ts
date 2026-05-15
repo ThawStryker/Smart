@@ -67,7 +67,7 @@ export const workRoutes = new Hono()
     } else if (selectedModel === "seed-pro") {
       baseURL = vars.get("SEED_BASE_URL") || "https://ark.cn-beijing.volces.com/api/v3";
       apiKey = secret.get("SEED_API_KEY");
-      modelName = "doubao-pro-32k";
+      modelName = "doubao-1.5-pro-32k";
     } else {
       baseURL = vars.get("SEED_BASE_URL") || "https://ark.cn-beijing.volces.com/api/v3";
       apiKey = secret.get("SEED_API_KEY");
