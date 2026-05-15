@@ -165,7 +165,7 @@ export function WorkPage() {
       const fullText = await streamChat(content, sysPrompt, new AbortController());
       const finalMsgs = newMsgs.map(m => m.id === aid ? { ...m, content: fullText || "无响应" } : m) as ChatMessage[];
       setMessages(finalMsgs);
-      saveMessages(convId, finalMsgs);
+      saveMessages(convId!, finalMsgs);
     } catch (err: any) {
       if (err.name !== "AbortError") {
         const errMsgs = newMsgs.map(m => m.id === aid ? { ...m, content: `错误: ${err.message}`, isLoading: false } : m) as ChatMessage[];
