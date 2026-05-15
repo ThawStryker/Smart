@@ -350,67 +350,94 @@ export function WorkPage() {
             ))}
           </div>
           <div className="flex-1 flex flex-col overflow-hidden">
-            {/* Create button */}
-            <div className="px-3 py-2">
-              <button onClick={() => setShowCreate(!showCreate)}
-                className="w-full py-1.5 text-[11px] font-medium rounded-lg transition-colors hover:bg-amber-100/40"
-                style={{ color: "#b87333", border: "1px dashed #d4c4a8" }}>
-                + 创建{rightTab === "assistant" ? "助理" : "伙伴"}
-              </button>
-            </div>
-            {showCreate && (
-              <div className="px-3 pb-2 space-y-1.5">
-                <input value={form.name} onChange={e => setForm(p => ({ ...p, name: e.target.value }))}
-                  placeholder="名称" className="w-full px-2 py-1.5 text-[11px] rounded-lg outline-none border"
-                  style={{ background: "#fffdf7", borderColor: "#e0d8c5", color: "#4a3728" }} />
-                <select value={form.role} onChange={e => setForm(p => ({ ...p, role: e.target.value }))}
-                  className="w-full px-2 py-1.5 text-[11px] rounded-lg outline-none border"
-                  style={{ background: "#fffdf7", borderColor: "#e0d8c5", color: "#4a3728" }}>
-                  {Object.entries(roleLabels).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
-                </select>
-                <textarea value={form.systemPrompt} onChange={e => setForm(p => ({ ...p, systemPrompt: e.target.value }))}
-                  placeholder="系统提示" rows={2}
-                  className="w-full px-2 py-1.5 text-[11px] rounded-lg outline-none border resize-none"
-                  style={{ background: "#fffdf7", borderColor: "#e0d8c5", color: "#4a3728" }} />
-                <div className="flex gap-1.5">
-                  <button onClick={async () => {
-                    if (!form.name.trim()) return;
-                    await client.api.fetch("/api/work/agents", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(form) });
-                    setShowCreate(false); setForm({ name: "", role: "custom", systemPrompt: "", tools: "read,write,edit,list,grep", skills: "" });
-                    fetchAgents();
-                  }} className="flex-1 py-1.5 rounded-lg text-[11px] font-medium text-white transition-colors hover:opacity-90"
-                    style={{ background: "linear-gradient(135deg, #c7853a, #a0622e)" }}>创建</button>
-                  <button onClick={() => setShowCreate(false)}
-                    className="px-3 py-1.5 rounded-lg text-[11px] transition-colors hover:bg-white/60"
-                    style={{ color: "#8b7355", border: "1px solid #e0d8c5" }}>取消</button>
+            {rightTab === "assistant" ? (
+              /* 助理 — system folders + AGENTS.md */
+              <div className="flex-1 overflow-y-auto px-3 py-2 space-y-1">
+                <div className="flex items-center gap-2 px-2 py-1.5 rounded-lg cursor-pointer hover:bg-white/60 transition-colors">
+                  <span className="text-sm">📁</span>
+                  <span className="text-xs font-medium" style={{ color: "#4a3728" }}>System</span>
+                </div>
+                <div className="ml-4 space-y-0.5">
+                  {["heartbeat", "memory", "skill"].map(f => (
+                    <div key={f} className="flex items-center gap-2 px-2 py-1 rounded-md cursor-pointer hover:bg-white/60 transition-colors">
+                      <span className="text-xs">📂</span>
+                      <span className="text-[11px]" style={{ color: "#8b7355" }}>{f}/</span>
+                    </div>
+                  ))}
+                </div>
+                <div className="flex items-center gap-2 px-2 py-1.5 rounded-lg cursor-pointer hover:bg-white/60 transition-colors">
+                  <span className="text-sm">📁</span>
+                  <span className="text-xs font-medium" style={{ color: "#4a3728" }}>Context</span>
+                </div>
+                <div className="flex items-center gap-2 px-2 py-1.5 rounded-lg">
+                  <span className="text-sm">📄</span>
+                  <span className="text-xs font-medium" style={{ color: "#4a3728" }}>AGENTS.md</span>
                 </div>
               </div>
-            )}
-            {/* Agent list */}
-            <div className="flex-1 overflow-y-auto px-2 pb-2">
-              {agents.map(a => (
-                <div key={a.id} className="flex items-center gap-2.5 px-3 py-2 rounded-lg transition-colors hover:bg-white/60 group cursor-pointer">
-                  <div className={`w-7 h-7 rounded-lg bg-gradient-to-br ${roleColors[a.role] || roleColors.custom} flex items-center justify-center text-white text-[10px] font-bold shrink-0 shadow-sm`}>
-                    {a.name.charAt(0).toUpperCase()}
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <div className="text-xs font-medium truncate" style={{ color: "#4a3728" }}>{a.name}</div>
-                    <div className="text-[10px] opacity-40">{roleLabels[a.role] || a.role}</div>
-                  </div>
-                  <button onClick={async () => {
-                    if (!confirm("删除？")) return;
-                    await client.api.fetch(`/api/work/agents/${a.id}`, { method: "DELETE" });
-                    fetchAgents();
-                  }} className="opacity-0 group-hover:opacity-100 p-1 rounded transition-all hover:bg-red-50"
-                    style={{ color: "#b8a088" }}>
-                    <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="3,6 5,6 21,6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>
+            ) : (
+              /* 团队 — create + agent list */
+              <>
+                <div className="px-3 py-2">
+                  <button onClick={() => setShowCreate(!showCreate)}
+                    className="w-full py-1.5 text-[11px] font-medium rounded-lg transition-colors hover:bg-amber-100/40"
+                    style={{ color: "#b87333", border: "1px dashed #d4c4a8" }}>
+                    + 创建伙伴
                   </button>
                 </div>
-              ))}
-              {agents.length === 0 && !showCreate && (
-                <p className="text-[11px] text-center py-6 opacity-40">暂无{rightTab === "assistant" ? "助理" : "伙伴"}</p>
-              )}
-            </div>
+                {showCreate && (
+                  <div className="px-3 pb-2 space-y-1.5">
+                    <input value={form.name} onChange={e => setForm(p => ({ ...p, name: e.target.value }))}
+                      placeholder="名称" className="w-full px-2 py-1.5 text-[11px] rounded-lg outline-none border"
+                      style={{ background: "#fffdf7", borderColor: "#e0d8c5", color: "#4a3728" }} />
+                    <select value={form.role} onChange={e => setForm(p => ({ ...p, role: e.target.value }))}
+                      className="w-full px-2 py-1.5 text-[11px] rounded-lg outline-none border"
+                      style={{ background: "#fffdf7", borderColor: "#e0d8c5", color: "#4a3728" }}>
+                      {Object.entries(roleLabels).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
+                    </select>
+                    <textarea value={form.systemPrompt} onChange={e => setForm(p => ({ ...p, systemPrompt: e.target.value }))}
+                      placeholder="系统提示" rows={2}
+                      className="w-full px-2 py-1.5 text-[11px] rounded-lg outline-none border resize-none"
+                      style={{ background: "#fffdf7", borderColor: "#e0d8c5", color: "#4a3728" }} />
+                    <div className="flex gap-1.5">
+                      <button onClick={async () => {
+                        if (!form.name.trim()) return;
+                        await client.api.fetch("/api/work/agents", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(form) });
+                        setShowCreate(false); setForm({ name: "", role: "custom", systemPrompt: "", tools: "read,write,edit,list,grep", skills: "" });
+                        fetchAgents();
+                      }} className="flex-1 py-1.5 rounded-lg text-[11px] font-medium text-white transition-colors hover:opacity-90"
+                        style={{ background: "linear-gradient(135deg, #c7853a, #a0622e)" }}>创建</button>
+                      <button onClick={() => setShowCreate(false)}
+                        className="px-3 py-1.5 rounded-lg text-[11px] transition-colors hover:bg-white/60"
+                        style={{ color: "#8b7355", border: "1px solid #e0d8c5" }}>取消</button>
+                    </div>
+                  </div>
+                )}
+                <div className="flex-1 overflow-y-auto px-2 pb-2">
+                  {agents.map(a => (
+                    <div key={a.id} className="flex items-center gap-2.5 px-3 py-2 rounded-lg transition-colors hover:bg-white/60 group cursor-pointer">
+                      <div className={`w-7 h-7 rounded-lg bg-gradient-to-br ${roleColors[a.role] || roleColors.custom} flex items-center justify-center text-white text-[10px] font-bold shrink-0 shadow-sm`}>
+                        {a.name.charAt(0).toUpperCase()}
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <div className="text-xs font-medium truncate" style={{ color: "#4a3728" }}>{a.name}</div>
+                        <div className="text-[10px] opacity-40">{roleLabels[a.role] || a.role}</div>
+                      </div>
+                      <button onClick={async () => {
+                        if (!confirm("删除？")) return;
+                        await client.api.fetch(`/api/work/agents/${a.id}`, { method: "DELETE" });
+                        fetchAgents();
+                      }} className="opacity-0 group-hover:opacity-100 p-1 rounded transition-all hover:bg-red-50"
+                        style={{ color: "#b8a088" }}>
+                        <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="3,6 5,6 21,6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>
+                      </button>
+                    </div>
+                  ))}
+                  {agents.length === 0 && !showCreate && (
+                    <p className="text-[11px] text-center py-6 opacity-40">暂无伙伴</p>
+                  )}
+                </div>
+              </>
+            )}
           </div>
         </div>
       </div>
