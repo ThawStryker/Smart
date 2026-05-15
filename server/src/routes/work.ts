@@ -40,6 +40,13 @@ export const workRoutes = new Hono()
     const [row] = await db.insert(workConversations).values({ userId }).returning();
     return c.json(row, 201);
   })
+  .patch("/api/work/conversations/:id", async (c) => {
+    const userId = auth.user!.id;
+    const id = parseInt(c.req.param("id"), 10);
+    const body = await c.req.json<{ title?: string; messagesJson?: string }>();
+    await db.update(workConversations).set({ ...body, updatedAt: new Date().toISOString() }).where(and(eq(workConversations.id, id), eq(workConversations.userId, userId)));
+    return c.json({ success: true });
+  })
   .delete("/api/work/conversations/:id", async (c) => {
     const userId = auth.user!.id;
     const id = parseInt(c.req.param("id"), 10);
