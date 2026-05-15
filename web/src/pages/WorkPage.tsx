@@ -61,6 +61,7 @@ export function WorkPage() {
       body: JSON.stringify({ title: editTitle.trim() }),
     });
     setEditId(null);
+    setShowConvs(false);
     fetchConvs();
   };
 
