@@ -20,7 +20,7 @@ export function WorkPage() {
   useEffect(() => { endRef.current?.scrollIntoView({ behavior: "smooth" }); }, [messages]);
 
   const newChat = async () => {
-    if (messages.length === 0 && !cid) return; // Already empty, don't create duplicate
+    if (messages.length === 0) return; // Already empty, don't create duplicate
     const r = await fetch("/api/work/conversations", { method: "POST", credentials: "include" });
     const c = await r.json();
     setConvs(prev => [c, ...prev]);
