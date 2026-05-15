@@ -31,8 +31,9 @@ export function WorkPage() {
   const selectConv = async (id: number) => {
     setCid(id);
     setShowConvs(false);
-    setMessages([]);
-    // Just start fresh - history could be loaded from DB later
+    const r = await fetch(`/api/work/conversations/${id}`, { credentials: "include" });
+    const c = await r.json();
+    try { setMessages(JSON.parse(c.messagesJson || "[]")); } catch { setMessages([]); }
   };
 
   const deleteConv = async (id: number, e: React.MouseEvent) => {

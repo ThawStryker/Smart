@@ -40,6 +40,13 @@ export const workRoutes = new Hono()
     const [row] = await db.insert(workConversations).values({ userId }).returning();
     return c.json(row, 201);
   })
+  .get("/api/work/conversations/:id", async (c) => {
+    const userId = auth.user!.id;
+    const id = parseInt(c.req.param("id"), 10);
+    const [row] = await db.select().from(workConversations).where(and(eq(workConversations.id, id), eq(workConversations.userId, userId)));
+    if (!row) return c.json({ error: "Not found" }, 404);
+    return c.json(row);
+  })
   .patch("/api/work/conversations/:id", async (c) => {
     const userId = auth.user!.id;
     const id = parseInt(c.req.param("id"), 10);
