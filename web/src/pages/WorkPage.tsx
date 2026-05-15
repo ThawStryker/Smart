@@ -116,7 +116,7 @@ export function WorkPage() {
 
     // Save to conversation
     const saved = [...newMsgs.filter(m => m.id !== aid), { id: aid, role: "assistant" as const, content: full || "(无响应)" }];
-    saveMsg(curId, saved);
+    saveMsg(curId!, saved);
   };
 
   return (
