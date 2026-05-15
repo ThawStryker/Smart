@@ -1,7 +1,17 @@
 import { useState, useEffect, useRef } from "react";
+import { client } from "@/lib/edgespark";
 
 interface ChatMessage { id: string; role: "user" | "assistant"; content: string; isLoading?: boolean; }
 interface Conv { id: number; title: string; createdAt: string; }
+interface WorkAgent { id: number; name: string; role: string; systemPrompt: string; tools: string; skills: string; }
+
+const roleLabels: Record<string, string> = {
+  architect: "架构师", developer: "开发者", reviewer: "审查者", designer: "设计师", custom: "自定义",
+};
+const roleColors: Record<string, string> = {
+  architect: "from-indigo-400 to-violet-500", developer: "from-amber-400 to-orange-500",
+  reviewer: "from-emerald-400 to-teal-500", designer: "from-rose-400 to-pink-500", custom: "from-sky-400 to-blue-500",
+};
 
 export function WorkPage() {
   const [convs, setConvs] = useState<Conv[]>([]);
@@ -14,6 +24,17 @@ export function WorkPage() {
   const [editTitle, setEditTitle] = useState("");
   const endRef = useRef<HTMLDivElement>(null);
   const dropRef = useRef<HTMLDivElement>(null);
+
+  const [agents, setAgents] = useState<WorkAgent[]>([]);
+  const [rightTab, setRightTab] = useState<"assistant" | "team">("assistant");
+  const [showCreate, setShowCreate] = useState(false);
+  const [form, setForm] = useState({ name: "", role: "custom", systemPrompt: "", tools: "read,write,edit,list,grep", skills: "" });
+
+  const fetchAgents = async () => {
+    const r = await client.api.fetch("/api/work/agents");
+    setAgents(await r.json());
+  };
+  useEffect(() => { fetchAgents(); }, []);
 
   useEffect(() => {
     if (!showConvs) return;
@@ -281,10 +302,109 @@ export function WorkPage() {
         <textarea className="flex-1 p-6 text-sm leading-relaxed resize-none outline-none font-mono" placeholder="文档、计划、设计稿..." />
       </div>
 
-      {/* Right: Agents placeholder */}
-      <div className="w-64 flex flex-col shrink-0 bg-white border-l border-[#edeae5]">
-        <div className="px-4 py-2.5 border-b border-[#edeae5] font-semibold text-sm text-primary">角色管理</div>
-        <div className="flex-1" />
+      {/* Right: Workspace + Roles */}
+      <div className="w-72 flex flex-col shrink-0 border-l relative" style={{ background: "#fbf9f2", borderColor: "#e8e3d7" }}>
+        {/* Workspace */}
+        <div className="h-1/2 flex flex-col border-b" style={{ borderColor: "#e8e3d7" }}>
+          <div className="px-4 py-2.5 font-semibold text-[13px] shrink-0 flex items-center justify-between" style={{ color: "#4a3728" }}>
+            <span>Workspace</span>
+            <span className="text-[10px] font-normal opacity-40">3 文件</span>
+          </div>
+          <div className="flex-1 overflow-y-auto px-2 pb-2">
+            {[
+              { name: "需求文档.md", type: "md", date: "今天" },
+              { name: "API 设计.md", type: "md", date: "昨天" },
+              { name: "设计系统.md", type: "md", date: "2天前" },
+            ].map(f => (
+              <div key={f.name} className="flex items-center gap-2 px-3 py-2 rounded-lg cursor-pointer transition-colors hover:bg-white/60 text-xs group">
+                <span className="text-base shrink-0">📄</span>
+                <div className="flex-1 min-w-0">
+                  <div className="truncate font-medium" style={{ color: "#4a3728" }}>{f.name}</div>
+                  <div className="text-[10px] opacity-40">{f.date}</div>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+
+        {/* Roles */}
+        <div className="h-1/2 flex flex-col">
+          <div className="flex border-b shrink-0" style={{ borderColor: "#e8e3d7" }}>
+            {(["assistant", "team"] as const).map(t => (
+              <button key={t} onClick={() => setRightTab(t)}
+                className={`flex-1 py-2 text-xs font-medium transition-colors relative ${
+                  rightTab === t ? "" : "opacity-40 hover:opacity-70"
+                }`}
+                style={{ color: "#5c4330" }}>
+                {{ assistant: "助理", team: "团队" }[t]}
+                {rightTab === t && <div className="absolute bottom-0 left-1/2 -translate-x-1/2 w-8 h-0.5 rounded-full" style={{ background: "#c7853a" }} />}
+              </button>
+            ))}
+          </div>
+          <div className="flex-1 flex flex-col overflow-hidden">
+            {/* Create button */}
+            <div className="px-3 py-2">
+              <button onClick={() => setShowCreate(!showCreate)}
+                className="w-full py-1.5 text-[11px] font-medium rounded-lg transition-colors hover:bg-amber-100/40"
+                style={{ color: "#b87333", border: "1px dashed #d4c4a8" }}>
+                + 创建{rightTab === "assistant" ? "助理" : "伙伴"}
+              </button>
+            </div>
+            {showCreate && (
+              <div className="px-3 pb-2 space-y-1.5">
+                <input value={form.name} onChange={e => setForm(p => ({ ...p, name: e.target.value }))}
+                  placeholder="名称" className="w-full px-2 py-1.5 text-[11px] rounded-lg outline-none border"
+                  style={{ background: "#fffdf7", borderColor: "#e0d8c5", color: "#4a3728" }} />
+                <select value={form.role} onChange={e => setForm(p => ({ ...p, role: e.target.value }))}
+                  className="w-full px-2 py-1.5 text-[11px] rounded-lg outline-none border"
+                  style={{ background: "#fffdf7", borderColor: "#e0d8c5", color: "#4a3728" }}>
+                  {Object.entries(roleLabels).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
+                </select>
+                <textarea value={form.systemPrompt} onChange={e => setForm(p => ({ ...p, systemPrompt: e.target.value }))}
+                  placeholder="系统提示" rows={2}
+                  className="w-full px-2 py-1.5 text-[11px] rounded-lg outline-none border resize-none"
+                  style={{ background: "#fffdf7", borderColor: "#e0d8c5", color: "#4a3728" }} />
+                <div className="flex gap-1.5">
+                  <button onClick={async () => {
+                    if (!form.name.trim()) return;
+                    await client.api.fetch("/api/work/agents", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(form) });
+                    setShowCreate(false); setForm({ name: "", role: "custom", systemPrompt: "", tools: "read,write,edit,list,grep", skills: "" });
+                    fetchAgents();
+                  }} className="flex-1 py-1.5 rounded-lg text-[11px] font-medium text-white transition-colors hover:opacity-90"
+                    style={{ background: "linear-gradient(135deg, #c7853a, #a0622e)" }}>创建</button>
+                  <button onClick={() => setShowCreate(false)}
+                    className="px-3 py-1.5 rounded-lg text-[11px] transition-colors hover:bg-white/60"
+                    style={{ color: "#8b7355", border: "1px solid #e0d8c5" }}>取消</button>
+                </div>
+              </div>
+            )}
+            {/* Agent list */}
+            <div className="flex-1 overflow-y-auto px-2 pb-2">
+              {agents.map(a => (
+                <div key={a.id} className="flex items-center gap-2.5 px-3 py-2 rounded-lg transition-colors hover:bg-white/60 group cursor-pointer">
+                  <div className={`w-7 h-7 rounded-lg bg-gradient-to-br ${roleColors[a.role] || roleColors.custom} flex items-center justify-center text-white text-[10px] font-bold shrink-0 shadow-sm`}>
+                    {a.name.charAt(0).toUpperCase()}
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <div className="text-xs font-medium truncate" style={{ color: "#4a3728" }}>{a.name}</div>
+                    <div className="text-[10px] opacity-40">{roleLabels[a.role] || a.role}</div>
+                  </div>
+                  <button onClick={async () => {
+                    if (!confirm("删除？")) return;
+                    await client.api.fetch(`/api/work/agents/${a.id}`, { method: "DELETE" });
+                    fetchAgents();
+                  }} className="opacity-0 group-hover:opacity-100 p-1 rounded transition-all hover:bg-red-50"
+                    style={{ color: "#b8a088" }}>
+                    <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="3,6 5,6 21,6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>
+                  </button>
+                </div>
+              ))}
+              {agents.length === 0 && !showCreate && (
+                <p className="text-[11px] text-center py-6 opacity-40">暂无{rightTab === "assistant" ? "助理" : "伙伴"}</p>
+              )}
+            </div>
+          </div>
+        </div>
       </div>
     </div>
   );
