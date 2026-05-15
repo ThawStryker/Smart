@@ -118,12 +118,11 @@ export const workRoutes = new Hono()
     const stream = createSSEStream(eventQueue);
 
     ctx.runInBackground((async () => {
+      let fullText = "";
       try {
         const reqBody: Record<string, unknown> = {
-          model: modelName, messages, tools: [], tool_choice: "auto",
-          temperature: 0.5, max_tokens: 4096, stream: true,
+          model: modelName, messages, temperature: 0.5, max_tokens: 4096, stream: true,
         };
-        if (selectedModel === "deepseek") (reqBody as any).reasoning_effort = "high";
 
         const res = await fetch(`${baseURL}${apiPath}`, {
           method: "POST",
@@ -132,7 +131,6 @@ export const workRoutes = new Hono()
         });
         if (!res.ok) {
           const errText = await res.text();
-          console.error("Work chat API error:", res.status, errText.slice(0, 300));
           emit(eventQueue, { type: "error", content: `API ${res.status}: ${errText.slice(0, 150)}` });
           emit(eventQueue, { type: "done" });
           return;
@@ -148,19 +146,24 @@ export const workRoutes = new Hono()
           const lines = buffer.split("\n");
           buffer = lines.pop() || "";
           for (const line of lines) {
-            if (!line.startsWith("data: ")) continue;
-            const data = line.slice(6).trim();
+            const trimmed = line.trim();
+            if (!trimmed.startsWith("data:")) continue;
+            const data = trimmed.slice(5).trim();
             if (data === "[DONE]") continue;
             try {
               const parsed = JSON.parse(data);
               const delta = parsed.choices?.[0]?.delta;
-              if (delta?.content) emit(eventQueue, { type: "text", content: delta.content });
+              if (delta?.content) {
+                fullText += delta.content;
+                emit(eventQueue, { type: "text", content: delta.content });
+              }
               if (delta?.reasoning_content) emit(eventQueue, { type: "thinking", content: delta.reasoning_content });
             } catch {}
           }
         }
         emit(eventQueue, { type: "done" });
       } catch (err) {
+        console.error("[work-chat] error:", String(err));
         emit(eventQueue, { type: "error", content: String(err) });
         emit(eventQueue, { type: "done" });
       }
