@@ -10,6 +10,8 @@ export function WorkPage() {
   const [input, setInput] = useState("");
   const [streaming, setStreaming] = useState(false);
   const [showConvs, setShowConvs] = useState(false);
+  const [editId, setEditId] = useState<number | null>(null);
+  const [editTitle, setEditTitle] = useState("");
   const endRef = useRef<HTMLDivElement>(null);
 
   const fetchConvs = async () => {
@@ -45,15 +47,20 @@ export function WorkPage() {
     fetchConvs();
   };
 
-  const editConvTitle = async (id: number, e: React.MouseEvent) => {
+  const startEdit = (id: number, title: string, e: React.MouseEvent) => {
     e.stopPropagation();
-    const title = prompt("修改对话名称:", convs.find(c => c.id === id)?.title || "");
-    if (!title?.trim()) return;
+    setEditId(id);
+    setEditTitle(title);
+  };
+
+  const saveEdit = async (id: number) => {
+    if (!editTitle.trim()) return;
     await fetch(`/api/work/conversations/${id}`, {
       method: "PATCH", credentials: "include",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ title: title.trim() }),
+      body: JSON.stringify({ title: editTitle.trim() }),
     });
+    setEditId(null);
     fetchConvs();
   };
 
@@ -147,10 +154,17 @@ export function WorkPage() {
             {showConvs && (
               <div className="absolute top-full left-0 right-0 mt-1 bg-white border border-[#edeae5] rounded-xl shadow-lg z-50 max-h-48 overflow-y-auto">
                 {convs.filter(c => c.title !== "新对话").map(c => (
-                  <div key={c.id} onClick={() => selectConv(c.id)} className={`px-3 py-2 text-xs cursor-pointer hover:bg-[#faf9f7] flex items-center justify-between ${c.id === cid ? "bg-amber-50" : ""}`}>
-                    <span className="truncate flex-1">{c.title}</span>
-                    <div className="flex items-center gap-1 shrink-0">
-                      <button onClick={(e) => editConvTitle(c.id, e)} className="text-tertiary hover:text-amber-500 p-0.5">
+                  <div key={c.id} onClick={() => { if (editId !== c.id) selectConv(c.id); }} className={`px-3 py-2 text-xs cursor-pointer hover:bg-[#faf9f7] flex items-center justify-between ${c.id === cid ? "bg-amber-50" : ""}`}>
+                    {editId === c.id ? (
+                      <input autoFocus value={editTitle} onChange={e => setEditTitle(e.target.value)}
+                        onBlur={() => saveEdit(c.id)} onKeyDown={e => { if (e.key === "Enter") saveEdit(c.id); if (e.key === "Escape") setEditId(null); }}
+                        onClick={e => e.stopPropagation()}
+                        className="flex-1 text-xs px-1 py-0.5 border border-amber-400 rounded outline-none" />
+                    ) : (
+                      <span className="truncate flex-1">{c.title}</span>
+                    )}
+                    <div className="flex items-center gap-1 shrink-0 ml-1">
+                      <button onClick={(e) => startEdit(c.id, c.title, e)} className="text-tertiary hover:text-amber-500 p-0.5">
                         <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 1 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
                       </button>
                       <button onClick={(e) => deleteConv(c.id, e)} className="text-tertiary hover:text-red-500 p-0.5">
