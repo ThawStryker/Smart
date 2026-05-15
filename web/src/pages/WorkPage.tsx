@@ -178,7 +178,7 @@ export function WorkPage() {
   };
 
   return (
-    <div className="h-full flex bg-[#faf9f7]">
+    <div className="h-full flex bg-[#faf9f7] overflow-x-hidden">
       {/* Left: Chat — refined editorial aesthetic */}
       <div className="w-[400px] flex flex-col shrink-0 border-r border-[#e8e3d7] relative" style={{ background: "#fbf9f2" }}>
         {/* Paper texture overlay */}
