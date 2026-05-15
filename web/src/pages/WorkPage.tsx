@@ -13,6 +13,19 @@ export function WorkPage() {
   const [editId, setEditId] = useState<number | null>(null);
   const [editTitle, setEditTitle] = useState("");
   const endRef = useRef<HTMLDivElement>(null);
+  const dropRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!showConvs) return;
+    const handler = (e: MouseEvent) => {
+      if (dropRef.current && !dropRef.current.contains(e.target as Node)) {
+        if (editId) saveEdit(editId);
+        else setShowConvs(false);
+      }
+    };
+    setTimeout(() => document.addEventListener("click", handler), 0);
+    return () => document.removeEventListener("click", handler);
+  }, [showConvs, editId, editTitle]);
 
   const fetchConvs = async () => {
     const r = await fetch("/api/work/conversations", { credentials: "include" });
@@ -153,7 +166,7 @@ export function WorkPage() {
               {activeConv?.title || "新对话"} <svg className="w-3 h-3 text-tertiary" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polyline points="6,9 12,15 18,9"/></svg>
             </button>
             {showConvs && (
-              <div className="absolute top-full left-0 right-0 mt-1 bg-white border border-[#edeae5] rounded-xl shadow-lg z-50 max-h-48 overflow-y-auto">
+              <div ref={dropRef} className="absolute top-full left-0 right-0 mt-1 bg-white border border-[#edeae5] rounded-xl shadow-lg z-50 max-h-48 overflow-y-auto">
                 {convs.filter(c => c.title !== "新对话").map(c => (
                   <div key={c.id} onClick={() => { if (editId !== c.id) selectConv(c.id); }} className={`px-3 py-2 text-xs cursor-pointer hover:bg-[#faf9f7] flex items-center justify-between ${c.id === cid ? "bg-amber-50" : ""}`}>
                     {editId === c.id ? (
