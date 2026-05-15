@@ -31,11 +31,103 @@ export function WorkPage() {
   const [rightCollapsed, setRightCollapsed] = useState(false);
   const [form, setForm] = useState({ name: "", role: "custom", systemPrompt: "", tools: "read,write,edit,list,grep", skills: "" });
 
+  // File tree state
+  interface FileNode { name: string; type: "file" | "folder"; children?: FileNode[]; expanded?: boolean; }
+  const [fileTree, setFileTree] = useState<FileNode[]>([
+    { name: "System", type: "folder", expanded: true, children: [
+      { name: "heartbeat", type: "folder", expanded: false, children: [] },
+      { name: "memory", type: "folder", expanded: false, children: [] },
+      { name: "skill", type: "folder", expanded: false, children: [] },
+    ]},
+    { name: "Context", type: "folder", expanded: false, children: [] },
+    { name: "AGENTS.md", type: "file" },
+  ]);
+  const [addingTo, setAddingTo] = useState<string | null>(null);
+  const [newItemName, setNewItemName] = useState("");
+  const [newItemType, setNewItemType] = useState<"file" | "folder">("file");
+
+  const toggleFolder = (path: number[]) => {
+    setFileTree(prev => {
+      const next = [...prev];
+      let node: any = next;
+      for (let i = 0; i < path.length - 1; i++) node = node[path[i]].children;
+      const target = node[path[path.length - 1]];
+      target.expanded = !target.expanded;
+      return next;
+    });
+  };
+
+  const addItem = (parentPath: number[]) => {
+    if (!newItemName.trim()) return;
+    setFileTree(prev => {
+      const next = JSON.parse(JSON.stringify(prev));
+      let node: any = next;
+      for (let i = 0; i < parentPath.length; i++) node = node[parentPath[i]].children;
+      const newItem: FileNode = newItemType === "folder"
+        ? { name: newItemName, type: "folder", expanded: false, children: [] }
+        : { name: newItemName + ".md", type: "file" };
+      node.push(newItem);
+      return next;
+    });
+    setAddingTo(null);
+    setNewItemName("");
+  };
+
   const fetchAgents = async () => {
     const r = await client.api.fetch("/api/work/agents");
     setAgents(await r.json());
   };
   useEffect(() => { fetchAgents(); }, []);
+
+  const renderFileTree = (nodes: FileNode[], parentPath: number[] = []): React.ReactNode => (
+    <div className="space-y-0.5">
+      {nodes.map((node, i) => {
+        const path = [...parentPath, i];
+        const isAdding = addingTo === path.join("-");
+        return (
+          <div key={path.join("-")}>
+            <div className="flex items-center gap-1 px-2 py-1 rounded-md hover:bg-white/60 transition-colors group">
+              {node.type === "folder" ? (
+                <button onClick={() => toggleFolder(path)} className="p-0.5 transition-transform" style={{ transform: node.expanded ? "rotate(90deg)" : "" }}>
+                  <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" style={{ color: "#b8a088" }}><polyline points="9,18 15,12 9,6"/></svg>
+                </button>
+              ) : (
+                <span className="w-4" />
+              )}
+              <span className="text-sm">{node.type === "folder" ? (node.expanded ? "📂" : "📁") : "📄"}</span>
+              <span className="text-[11px] font-medium flex-1 truncate" style={{ color: "#4a3728" }}>{node.name}{node.type === "folder" ? "/" : ""}</span>
+              <button onClick={(e) => { e.stopPropagation(); setAddingTo(path.join("-")); setNewItemName(""); setNewItemType("file"); }}
+                className="opacity-0 group-hover:opacity-100 p-0.5 rounded transition-all hover:bg-amber-100/50" style={{ color: "#b8a088" }}>
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+              </button>
+            </div>
+            {node.type === "folder" && node.expanded && node.children && (
+              <div className="ml-4 border-l border-[#e8e3d7] pl-2">
+                {renderFileTree(node.children, path)}
+              </div>
+            )}
+            {isAdding && (
+              <div className="ml-6 mt-1 flex items-center gap-1.5">
+                <select value={newItemType} onChange={e => setNewItemType(e.target.value as "file" | "folder")}
+                  className="text-[10px] px-1 py-0.5 rounded border bg-white" style={{ borderColor: "#e0d8c5", color: "#4a3728" }}>
+                  <option value="file">📄 文件</option>
+                  <option value="folder">📁 文件夹</option>
+                </select>
+                <input autoFocus value={newItemName} onChange={e => setNewItemName(e.target.value)}
+                  onKeyDown={e => { if (e.key === "Enter") addItem(path); if (e.key === "Escape") setAddingTo(null); }}
+                  placeholder={newItemType === "folder" ? "文件夹名" : "文件名"}
+                  className="flex-1 text-[10px] px-2 py-0.5 rounded border outline-none bg-white" style={{ borderColor: "#e0d8c5", color: "#4a3728" }} />
+                <button onClick={() => addItem(path)}
+                  className="text-[10px] px-2 py-0.5 rounded text-white font-medium" style={{ background: "#c7853a" }}>确定</button>
+                <button onClick={() => setAddingTo(null)}
+                  className="text-[10px] px-1.5 py-0.5 rounded" style={{ color: "#8b7355" }}>✕</button>
+              </div>
+            )}
+          </div>
+        );
+      })}
+    </div>
+  );
 
   useEffect(() => {
     if (!showConvs) return;
@@ -351,28 +443,9 @@ export function WorkPage() {
           </div>
           <div className="flex-1 flex flex-col overflow-hidden">
             {rightTab === "assistant" ? (
-              /* 助理 — system folders + AGENTS.md */
-              <div className="flex-1 overflow-y-auto px-3 py-2 space-y-1">
-                <div className="flex items-center gap-2 px-2 py-1.5 rounded-lg cursor-pointer hover:bg-white/60 transition-colors">
-                  <span className="text-sm">📁</span>
-                  <span className="text-xs font-medium" style={{ color: "#4a3728" }}>System</span>
-                </div>
-                <div className="ml-4 space-y-0.5">
-                  {["heartbeat", "memory", "skill"].map(f => (
-                    <div key={f} className="flex items-center gap-2 px-2 py-1 rounded-md cursor-pointer hover:bg-white/60 transition-colors">
-                      <span className="text-xs">📂</span>
-                      <span className="text-[11px]" style={{ color: "#8b7355" }}>{f}/</span>
-                    </div>
-                  ))}
-                </div>
-                <div className="flex items-center gap-2 px-2 py-1.5 rounded-lg cursor-pointer hover:bg-white/60 transition-colors">
-                  <span className="text-sm">📁</span>
-                  <span className="text-xs font-medium" style={{ color: "#4a3728" }}>Context</span>
-                </div>
-                <div className="flex items-center gap-2 px-2 py-1.5 rounded-lg">
-                  <span className="text-sm">📄</span>
-                  <span className="text-xs font-medium" style={{ color: "#4a3728" }}>AGENTS.md</span>
-                </div>
+              /* 助理 — collapsible file tree */
+              <div className="flex-1 overflow-y-auto px-2 py-2">
+                {renderFileTree(fileTree)}
               </div>
             ) : (
               /* 团队 — create + agent list */
