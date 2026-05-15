@@ -115,7 +115,7 @@ export function WorkPage() {
     const res = await fetch("/api/work/chat", {
       method: "POST", credentials: "include",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ message, model: "seed-pro", systemPrompt }),
+      body: JSON.stringify({ message, model: "seed", systemPrompt }),
       signal: abortController.signal,
     });
     if (!res.ok || !res.body) throw new Error(`API ${res.status}`);
