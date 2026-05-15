@@ -46,9 +46,7 @@ export function WorkPage() {
   const endRef = useRef<HTMLDivElement>(null);
 
   // Partners
-  const [activePartner, setActivePartner] = useState<WorkAgent | null>(null);
   const [partnerMessages, setPartnerMessages] = useState<Record<number, ChatMessage[]>>({});
-  const [partnerInputs, setPartnerInputs] = useState<Record<number, string>>({});
 
   const [meTab, setMeTab] = useState<"files" | "system">("files");
 
@@ -110,7 +108,7 @@ export function WorkPage() {
     const aid = `a-${Date.now()}`;
 
     if (chatTarget === "me") {
-      setMessages(prev => [...prev, { id: uid, role: "user", content }, { id: aid, role: "assistant", content: "", isLoading: true }]);
+      setMessages(prev => [...prev, { id: uid, role: "user" as const, content }, { id: aid, role: "assistant" as const, content: "", isLoading: true }]);
       setIsStreaming(true);
       try {
         const sysPrompt = "你是用户的私人 AI 助手，帮助用户分析需求、整理思路、准备材料。用简洁的语言回复。";
@@ -123,7 +121,7 @@ export function WorkPage() {
     } else {
       const agent = agents.find(a => a.id === chatTarget);
       if (!agent) return;
-      const msgs = [...(partnerMessages[chatTarget] || []), { id: uid, role: "user", content }, { id: aid, role: "assistant", content: "", isLoading: true }];
+      const msgs: ChatMessage[] = [...(partnerMessages[chatTarget] || []), { id: uid, role: "user" as const, content }, { id: aid, role: "assistant" as const, content: "", isLoading: true }];
       setPartnerMessages(prev => ({ ...prev, [chatTarget]: msgs }));
       setIsStreaming(true);
       try {
