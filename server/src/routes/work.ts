@@ -1,8 +1,9 @@
 import { Hono } from "hono";
-import { db } from "edgespark";
+import { db, secret, vars, ctx } from "edgespark";
 import { auth } from "edgespark/http";
 import { eq, and, desc } from "drizzle-orm";
-import { workAgents } from "@defs";
+import { workAgents, userProfiles } from "@defs";
+import { SSE_HEADERS, emit, createSSEStream } from "../agent/stream";
 
 export const workRoutes = new Hono()
   .get("/api/work/agents", async (c) => {
@@ -48,4 +49,87 @@ export const workRoutes = new Hono()
     if (!existing) return c.json({ error: "Not found" }, 404);
     await db.delete(workAgents).where(eq(workAgents.id, id));
     return c.json({ success: true });
+  })
+  .post("/api/work/chat", async (c) => {
+    const userId = auth.user!.id;
+    const body = await c.req.json<{ message: string; model?: string; systemPrompt?: string; tools?: string }>();
+    if (!body.message?.trim()) return c.json({ error: "Message required" }, 400);
+
+    const isAdmin = await db.select().from(userProfiles).where(eq(userProfiles.userId, userId)).then(r => r[0]?.role === "admin");
+    let selectedModel = body.model || "seed";
+    if (selectedModel === "deepseek" && !isAdmin) selectedModel = "seed";
+
+    let baseURL: string, apiKey: string | null, modelName: string;
+    if (selectedModel === "deepseek") {
+      baseURL = vars.get("DEEPSEEK_BASE_URL") || "https://api.deepseek.com";
+      apiKey = secret.get("DEEPSEEK_API_KEY");
+      modelName = "deepseek-v4-pro";
+    } else if (selectedModel === "seed-pro") {
+      baseURL = vars.get("SEED_BASE_URL") || "https://ark.cn-beijing.volces.com/api/v3";
+      apiKey = secret.get("SEED_API_KEY");
+      modelName = "doubao-pro-32k";
+    } else {
+      baseURL = vars.get("SEED_BASE_URL") || "https://ark.cn-beijing.volces.com/api/v3";
+      apiKey = secret.get("SEED_API_KEY");
+      modelName = "doubao-seed-2-0-code-preview-260215";
+    }
+    if (!apiKey) return c.json({ error: "API key not configured" }, 500);
+    const apiPath = selectedModel === "deepseek" ? "/v1/chat/completions" : "/chat/completions";
+
+    const systemContent = body.systemPrompt || "你是一个 AI 助手。";
+    const messages: Array<Record<string, unknown>> = [
+      { role: "system", content: systemContent },
+      { role: "user", content: body.message },
+    ];
+
+    const eventQueue: Array<Record<string, unknown>> = [];
+    const stream = createSSEStream(eventQueue);
+
+    ctx.runInBackground((async () => {
+      try {
+        const reqBody: Record<string, unknown> = {
+          model: modelName, messages, temperature: 0.5, max_tokens: 4096, stream: true,
+        };
+        if (selectedModel === "deepseek") reqBody.reasoning_effort = "high";
+
+        const res = await fetch(`${baseURL}${apiPath}`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json", Authorization: `Bearer ${apiKey}` },
+          body: JSON.stringify(reqBody),
+        });
+        if (!res.ok) {
+          emit(eventQueue, { type: "error", content: `API ${res.status}` });
+          emit(eventQueue, { type: "done" });
+          return;
+        }
+
+        const reader = res.body!.getReader();
+        const decoder = new TextDecoder();
+        let buffer = "";
+        while (true) {
+          const { done, value } = await reader.read();
+          if (done) break;
+          buffer += decoder.decode(value, { stream: true });
+          const lines = buffer.split("\n");
+          buffer = lines.pop() || "";
+          for (const line of lines) {
+            if (!line.startsWith("data: ")) continue;
+            const data = line.slice(6).trim();
+            if (data === "[DONE]") continue;
+            try {
+              const parsed = JSON.parse(data);
+              const delta = parsed.choices?.[0]?.delta;
+              if (delta?.content) emit(eventQueue, { type: "text", content: delta.content });
+              if (delta?.reasoning_content) emit(eventQueue, { type: "thinking", content: delta.reasoning_content });
+            } catch {}
+          }
+        }
+        emit(eventQueue, { type: "done" });
+      } catch (err) {
+        emit(eventQueue, { type: "error", content: String(err) });
+        emit(eventQueue, { type: "done" });
+      }
+    })());
+
+    return new Response(stream, { headers: SSE_HEADERS });
   });
