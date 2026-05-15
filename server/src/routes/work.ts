@@ -121,14 +121,18 @@ export const workRoutes = new Hono()
       let fullText = "";
       try {
         const reqBody: Record<string, unknown> = {
-          model: modelName, messages, temperature: 0.5, max_tokens: 4096, stream: true,
+          model: modelName, messages, temperature: 0.5, max_tokens: 2048, stream: true,
         };
+        const controller = new AbortController();
+        const timeout = setTimeout(() => controller.abort(), 30000);
 
         const res = await fetch(`${baseURL}${apiPath}`, {
           method: "POST",
           headers: { "Content-Type": "application/json", Authorization: `Bearer ${apiKey}` },
           body: JSON.stringify(reqBody),
+          signal: controller.signal,
         });
+        clearTimeout(timeout);
         if (!res.ok) {
           const errText = await res.text();
           emit(eventQueue, { type: "error", content: `API ${res.status}: ${errText.slice(0, 150)}` });
@@ -162,9 +166,9 @@ export const workRoutes = new Hono()
           }
         }
         emit(eventQueue, { type: "done" });
-      } catch (err) {
-        console.error("[work-chat] error:", String(err));
-        emit(eventQueue, { type: "error", content: String(err) });
+      } catch (err: any) {
+        const msg = err?.name === "AbortError" ? "请求超时" : String(err);
+        emit(eventQueue, { type: "error", content: msg });
         emit(eventQueue, { type: "done" });
       }
     })());
