@@ -120,7 +120,8 @@ export const workRoutes = new Hono()
     ctx.runInBackground((async () => {
       try {
         const reqBody: Record<string, unknown> = {
-          model: modelName, messages, temperature: 0.5, max_tokens: 4096, stream: true,
+          model: modelName, messages, tools: [], tool_choice: "auto",
+          temperature: 0.5, max_tokens: 4096, stream: true,
         };
         if (selectedModel === "deepseek") (reqBody as any).reasoning_effort = "high";
 
