@@ -121,8 +121,8 @@ export const workRoutes = new Hono()
       try {
         const reqBody: Record<string, unknown> = {
           model: modelName, messages, temperature: 0.5, max_tokens: 4096, stream: true,
-          reasoning_effort: "high",
         };
+        if (selectedModel === "deepseek") (reqBody as any).reasoning_effort = "high";
 
         const res = await fetch(`${baseURL}${apiPath}`, {
           method: "POST",
@@ -130,7 +130,9 @@ export const workRoutes = new Hono()
           body: JSON.stringify(reqBody),
         });
         if (!res.ok) {
-          emit(eventQueue, { type: "error", content: `API ${res.status}` });
+          const errText = await res.text();
+          console.error("Work chat API error:", res.status, errText.slice(0, 300));
+          emit(eventQueue, { type: "error", content: `API ${res.status}: ${errText.slice(0, 150)}` });
           emit(eventQueue, { type: "done" });
           return;
         }
