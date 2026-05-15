@@ -117,22 +117,21 @@ export const workRoutes = new Hono()
     const eventQueue: Array<Record<string, unknown>> = [];
     const stream = createSSEStream(eventQueue);
 
+    // Immediate test event
+    emit(eventQueue, { type: "text", content: "正在思考..." });
+
     ctx.runInBackground((async () => {
       let fullText = "";
       try {
         const reqBody: Record<string, unknown> = {
           model: modelName, messages, temperature: 0.5, max_tokens: 2048, stream: true,
         };
-        const controller = new AbortController();
-        const timeout = setTimeout(() => controller.abort(), 30000);
 
         const res = await fetch(`${baseURL}${apiPath}`, {
           method: "POST",
           headers: { "Content-Type": "application/json", Authorization: `Bearer ${apiKey}` },
           body: JSON.stringify(reqBody),
-          signal: controller.signal,
         });
-        clearTimeout(timeout);
         if (!res.ok) {
           const errText = await res.text();
           emit(eventQueue, { type: "error", content: `API ${res.status}: ${errText.slice(0, 150)}` });
@@ -167,8 +166,7 @@ export const workRoutes = new Hono()
         }
         emit(eventQueue, { type: "done" });
       } catch (err: any) {
-        const msg = err?.name === "AbortError" ? "请求超时" : String(err);
-        emit(eventQueue, { type: "error", content: msg });
+        emit(eventQueue, { type: "error", content: String(err) });
         emit(eventQueue, { type: "done" });
       }
     })());
