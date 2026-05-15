@@ -208,3 +208,14 @@ export const workAgents = sqliteTable("work_agents", {
   createdAt: text("created_at").default(sql`(datetime('now'))`),
   updatedAt: text("updated_at").default(sql`(datetime('now'))`),
 });
+
+// Work — 对话历史
+export const workConversations = sqliteTable("work_conversations", {
+  id: integer("id").primaryKey({ autoIncrement: true }),
+  userId: text("user_id").notNull(),
+  title: text("title").notNull().default("新对话"),
+  messagesJson: text("messages_json").notNull().default("[]"),
+  model: text("model").default("seed-pro"),
+  createdAt: text("created_at").default(sql`(datetime('now'))`),
+  updatedAt: text("updated_at").default(sql`(datetime('now'))`),
+});

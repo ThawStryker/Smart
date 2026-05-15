@@ -10,6 +10,13 @@ interface WorkAgent {
   skills: string;
 }
 
+interface WorkConv {
+  id: number;
+  title: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
 interface ChatMessage {
   id: string;
   role: "user" | "assistant";
@@ -26,28 +33,20 @@ const roleColors: Record<string, string> = {
   custom: "from-sky-400 to-blue-500",
 };
 
-const models = [
-  { key: "seed", label: "Seed Code" },
-  { key: "seed-pro", label: "Seed Pro" },
-  { key: "deepseek", label: "DeepSeek V4" },
-];
-
 export function WorkPage() {
   const [agents, setAgents] = useState<WorkAgent[]>([]);
+  const [convs, setConvs] = useState<WorkConv[]>([]);
+  const [activeConvId, setActiveConvId] = useState<number | null>(null);
   const [showCreate, setShowCreate] = useState(false);
+  const [showConvMenu, setShowConvMenu] = useState(false);
   const [form, setForm] = useState({ name: "", role: "custom", systemPrompt: "", tools: "read,write,edit,list,grep", skills: "" });
-  const [model, setModel] = useState("seed");
   const [isStreaming, setIsStreaming] = useState(false);
 
-  // Chat
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [input, setInput] = useState("");
   const endRef = useRef<HTMLDivElement>(null);
 
-  // Right panel tabs
   const [rightTab, setRightTab] = useState<"me" | "partners">("me");
-
-  // Workspace
   const [workspace, setWorkspace] = useState("# 工作区\n\n在此编辑文档、计划、设计稿...\n");
   const [wsTab, setWsTab] = useState<"edit" | "preview">("edit");
 
@@ -55,27 +54,68 @@ export function WorkPage() {
     const res = await client.api.fetch("/api/work/agents");
     setAgents(await res.json());
   };
-  useEffect(() => { fetchAgents(); }, []);
+  const fetchConvs = async () => {
+    const res = await client.api.fetch("/api/work/conversations");
+    setConvs(await res.json());
+  };
+
+  useEffect(() => { fetchAgents(); fetchConvs(); }, []);
   useEffect(() => { endRef.current?.scrollIntoView({ behavior: "smooth" }); }, [messages]);
 
-  const handleCreate = async () => {
+  const handleNewChat = async () => {
+    const res = await client.api.fetch("/api/work/conversations", { method: "POST" });
+    const conv = await res.json();
+    setConvs(prev => [conv, ...prev]);
+    setActiveConvId(conv.id);
+    setMessages([]);
+    setShowConvMenu(false);
+  };
+
+  const handleSelectConv = async (id: number) => {
+    setActiveConvId(id);
+    setShowConvMenu(false);
+    const res = await client.api.fetch(`/api/work/conversations/${id}`);
+    const conv = await res.json();
+    try {
+      setMessages(JSON.parse(conv.messagesJson || "[]"));
+    } catch { setMessages([]); }
+  };
+
+  const handleDeleteConv = async (id: number, e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (!confirm("确定删除？")) return;
+    await client.api.fetch(`/api/work/conversations/${id}`, { method: "DELETE" });
+    setConvs(prev => prev.filter(c => c.id !== id));
+    if (activeConvId === id) { setActiveConvId(null); setMessages([]); }
+  };
+
+  const saveMessages = async (convId: number, msgs: ChatMessage[]) => {
+    const json = JSON.stringify(msgs.slice(-50));
+    const title = msgs.find(m => m.role === "user")?.content.slice(0, 30) || "新对话";
+    client.api.fetch(`/api/work/conversations/${convId}`, {
+      method: "PATCH", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ title, messagesJson: json }),
+    }).catch(() => {});
+  };
+
+  const handleCreateAgent = async () => {
     if (!form.name.trim()) return;
     await client.api.fetch("/api/work/agents", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(form) });
     setShowCreate(false);
     setForm({ name: "", role: "custom", systemPrompt: "", tools: "read,write,edit,list,grep", skills: "" });
     fetchAgents();
   };
-  const handleDelete = async (id: number) => {
+  const handleDeleteAgent = async (id: number) => {
     if (!confirm("确定删除？")) return;
     await client.api.fetch(`/api/work/agents/${id}`, { method: "DELETE" });
     fetchAgents();
   };
 
-  const streamChat = async (message: string, systemPrompt: string, modelKey: string, abortController: AbortController) => {
+  const streamChat = async (message: string, systemPrompt: string, abortController: AbortController) => {
     const res = await fetch("/api/work/chat", {
       method: "POST", credentials: "include",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ message, model: modelKey, systemPrompt }),
+      body: JSON.stringify({ message, model: "seed-pro", systemPrompt }),
       signal: abortController.signal,
     });
     if (!res.ok || !res.body) throw new Error(`API ${res.status}`);
@@ -104,16 +144,33 @@ export function WorkPage() {
     if (!input.trim() || isStreaming) return;
     const content = input.trim();
     setInput("");
+
+    let convId = activeConvId;
+    if (!convId) {
+      const res = await client.api.fetch("/api/work/conversations", { method: "POST" });
+      const conv = await res.json();
+      convId = conv.id;
+      setConvs(prev => [conv, ...prev]);
+      setActiveConvId(convId);
+    }
+
     const uid = `u-${Date.now()}`;
     const aid = `a-${Date.now()}`;
-    setMessages(prev => [...prev, { id: uid, role: "user" as const, content }, { id: aid, role: "assistant" as const, content: "", isLoading: true }]);
+    const newMsgs: ChatMessage[] = [...messages, { id: uid, role: "user" as const, content }, { id: aid, role: "assistant" as const, content: "", isLoading: true }];
+    setMessages(newMsgs);
     setIsStreaming(true);
+
     try {
       const sysPrompt = "你是 Smart Work 中的主 Agent，帮助用户分析需求、布置任务、整理工作。当你需要输出文档或计划时，用 Markdown 格式。用简洁的语言回复。";
-      const fullText = await streamChat(content, sysPrompt, model, new AbortController());
-      setMessages(prev => prev.map(m => m.id === aid ? { id: aid, role: "assistant" as const, content: fullText || "无响应" } : m));
+      const fullText = await streamChat(content, sysPrompt, new AbortController());
+      const finalMsgs = newMsgs.map(m => m.id === aid ? { ...m, content: fullText || "无响应" } : m) as ChatMessage[];
+      setMessages(finalMsgs);
+      saveMessages(convId, finalMsgs);
     } catch (err: any) {
-      if (err.name !== "AbortError") setMessages(prev => prev.map(m => m.id === aid ? { ...m, content: `错误: ${err.message}`, isLoading: false } : m));
+      if (err.name !== "AbortError") {
+        const errMsgs = newMsgs.map(m => m.id === aid ? { ...m, content: `错误: ${err.message}`, isLoading: false } : m) as ChatMessage[];
+        setMessages(errMsgs);
+      }
     }
     setIsStreaming(false);
   };
@@ -141,21 +198,36 @@ export function WorkPage() {
     </div>
   );
 
+  const activeConv = convs.find(c => c.id === activeConvId);
+
   return (
     <div className="h-full flex bg-[#faf9f7]">
       {/* === LEFT: Chat === */}
       <div className="w-[380px] flex flex-col shrink-0 bg-white border-r border-[#edeae5]">
-        <div className="px-4 py-2.5 border-b border-[#edeae5] flex items-center gap-3 shrink-0">
-          <div className="w-8 h-8 rounded-xl bg-gradient-to-br from-amber-400 to-orange-500 flex items-center justify-center text-white text-xs font-bold shadow-sm">S</div>
-          <div>
-            <div className="font-semibold text-[13px] text-primary">Smart Work</div>
-            <div className="text-[10px] text-tertiary">AI 工作助手</div>
+        <div className="px-4 py-2.5 border-b border-[#edeae5] flex items-center gap-2 shrink-0">
+          <div className="w-7 h-7 rounded-lg bg-gradient-to-br from-amber-400 to-orange-500 flex items-center justify-center text-white text-[10px] font-bold shadow-sm shrink-0">S</div>
+          <div className="flex-1 min-w-0 relative">
+            <button onClick={() => setShowConvMenu(!showConvMenu)}
+              className="w-full text-left text-xs font-medium text-primary truncate hover:text-amber-600 transition-colors flex items-center gap-1">
+              {activeConv?.title || "新对话"}
+              <svg className="w-3 h-3 text-tertiary" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polyline points="6,9 12,15 18,9"/></svg>
+            </button>
+            {showConvMenu && (
+              <div className="absolute top-full left-0 right-0 mt-1 bg-white border border-[#edeae5] rounded-xl shadow-lg z-50 max-h-52 overflow-y-auto">
+                {convs.map(c => (
+                  <div key={c.id} onClick={() => handleSelectConv(c.id)}
+                    className={`px-3 py-2 text-xs cursor-pointer hover:bg-[#faf9f7] flex items-center justify-between ${c.id === activeConvId ? "bg-amber-50" : ""}`}>
+                    <span className="truncate flex-1">{c.title}</span>
+                    <button onClick={(e) => handleDeleteConv(c.id, e)}
+                      className="text-[10px] text-tertiary hover:text-red-500 ml-2 shrink-0">✕</button>
+                  </div>
+                ))}
+                {convs.length === 0 && <p className="text-[10px] text-tertiary p-3 text-center">暂无对话</p>}
+              </div>
+            )}
           </div>
-          <div className="flex-1" />
-          <select value={model} onChange={e => setModel(e.target.value)}
-            className="text-[10px] border border-[#edeae5] rounded-md px-2 py-1 bg-[#faf9f7] text-secondary outline-none cursor-pointer">
-            {models.map(m => <option key={m.key} value={m.key}>{m.label}</option>)}
-          </select>
+          <button onClick={handleNewChat}
+            className="text-[10px] text-amber-600 hover:bg-amber-50 px-2 py-1 rounded-md transition-colors font-medium shrink-0">+ 新对话</button>
         </div>
         <div className="flex-1 overflow-y-auto px-4 py-4 space-y-4">
           {messages.map(m => <ChatBubble key={m.id} m={m} />)}
@@ -170,22 +242,13 @@ export function WorkPage() {
         </div>
         <div className="p-3 border-t border-[#edeae5] shrink-0 bg-[#faf9f7]">
           <div className="relative">
-            <textarea
-              value={input}
-              onChange={e => setInput(e.target.value)}
-              onKeyDown={e => {
-                if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); handleSend(); }
-              }}
+            <textarea value={input} onChange={e => setInput(e.target.value)}
+              onKeyDown={e => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); handleSend(); } }}
               placeholder="输入需求或命令... (Enter 发送，Shift+Enter 换行)"
-              rows={2}
-              disabled={isStreaming}
-              className="w-full resize-none input-field pl-4 pr-12 py-3 text-[13px] leading-relaxed rounded-xl bg-white disabled:opacity-50"
-            />
-            <button
-              onClick={handleSend}
-              disabled={isStreaming || !input.trim()}
-              className="absolute right-2 bottom-2 w-8 h-8 rounded-lg bg-gradient-to-br from-amber-400 to-orange-500 text-white flex items-center justify-center shadow-sm hover:shadow-md hover:shadow-amber-100 transition-all disabled:opacity-30 disabled:cursor-not-allowed"
-            >
+              rows={2} disabled={isStreaming}
+              className="w-full resize-none input-field pl-4 pr-12 py-3 text-[13px] leading-relaxed rounded-xl bg-white disabled:opacity-50" />
+            <button onClick={handleSend} disabled={isStreaming || !input.trim()}
+              className="absolute right-2 bottom-2 w-8 h-8 rounded-lg bg-gradient-to-br from-amber-400 to-orange-500 text-white flex items-center justify-center shadow-sm hover:shadow-md hover:shadow-amber-100 transition-all disabled:opacity-30 disabled:cursor-not-allowed">
               <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><line x1="12" y1="19" x2="12" y2="5"/><polyline points="5,12 12,5 19,12"/></svg>
             </button>
           </div>
@@ -227,47 +290,25 @@ export function WorkPage() {
             </button>
           ))}
         </div>
-
         {rightTab === "me" ? (
           <div className="flex-1 overflow-y-auto">
-            {/* My Agent Info */}
             <div className="p-3 border-b border-[#edeae5]">
               <div className="flex items-center gap-2.5 mb-3">
                 <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-amber-400 to-orange-500 flex items-center justify-center text-white text-sm font-bold shadow-sm">我</div>
-                <div>
-                  <div className="text-sm font-semibold text-primary">我的 Agent</div>
-                  <div className="text-[11px] text-tertiary">主 Agent</div>
-                </div>
+                <div><div className="text-sm font-semibold text-primary">我的 Agent</div><div className="text-[11px] text-tertiary">主 Agent</div></div>
               </div>
             </div>
-            {/* Memory */}
             <div className="p-3 border-b border-[#edeae5]">
-              <p className="text-xs font-semibold text-secondary mb-2">Memory 记忆</p>
-              <div className="space-y-1.5">
-                {["偏好简洁回复", "常用 React + TypeScript", "喜欢渐进式开发"].map((m, i) => (
-                  <div key={i} className="text-[11px] text-tertiary bg-[#faf9f7] px-2 py-1 rounded">• {m}</div>
-                ))}
-              </div>
+              <p className="text-xs font-semibold text-secondary mb-2">Memory</p>
+              {["偏好简洁回复", "常用 React + TypeScript", "喜欢渐进式开发"].map((m, i) => (
+                <div key={i} className="text-[11px] text-tertiary bg-[#faf9f7] px-2 py-1 rounded mb-1">• {m}</div>
+              ))}
             </div>
-            {/* Skills */}
             <div className="p-3 border-b border-[#edeae5]">
-              <p className="text-xs font-semibold text-secondary mb-2">Skills 技能</p>
-              <div className="space-y-1.5">
-                {["需求分析", "方案设计", "代码审查"].map((s, i) => (
-                  <div key={i} className="text-[11px] text-tertiary bg-[#faf9f7] px-2 py-1 rounded flex items-center gap-1.5">
-                    <span className="w-1.5 h-1.5 rounded-full bg-amber-400" />{s}
-                  </div>
-                ))}
-              </div>
-            </div>
-            {/* Heartbeat */}
-            <div className="p-3">
-              <p className="text-xs font-semibold text-secondary mb-2">Heartbeat 心跳</p>
-              <div className="space-y-1.5">
-                <div className="text-[11px] text-tertiary bg-[#faf9f7] px-2 py-1 rounded flex items-center justify-between">
-                  <span>检查待办任务</span><span className="text-amber-500">每30min</span>
-                </div>
-              </div>
+              <p className="text-xs font-semibold text-secondary mb-2">Skills</p>
+              {["需求分析", "方案设计", "代码审查"].map((s, i) => (
+                <div key={i} className="text-[11px] text-tertiary bg-[#faf9f7] px-2 py-1 rounded mb-1 flex items-center gap-1.5"><span className="w-1.5 h-1.5 rounded-full bg-amber-400" />{s}</div>
+              ))}
             </div>
           </div>
         ) : (
@@ -278,45 +319,26 @@ export function WorkPage() {
             </div>
             {showCreate && (
               <div className="p-2 border-b border-[#edeae5] space-y-1.5 bg-[#faf9f7]">
-                <input value={form.name} onChange={e => setForm(p => ({ ...p, name: e.target.value }))}
-                  placeholder="角色名称" className="w-full input-field px-2 py-1 text-[11px]" />
-                <select value={form.role} onChange={e => setForm(p => ({ ...p, role: e.target.value }))}
-                  className="w-full input-field px-2 py-1 text-[11px]">
+                <input value={form.name} onChange={e => setForm(p => ({ ...p, name: e.target.value }))} placeholder="角色名称" className="w-full input-field px-2 py-1 text-[11px]" />
+                <select value={form.role} onChange={e => setForm(p => ({ ...p, role: e.target.value }))} className="w-full input-field px-2 py-1 text-[11px]">
                   {Object.entries(roleLabels).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
                 </select>
-                <textarea value={form.systemPrompt} onChange={e => setForm(p => ({ ...p, systemPrompt: e.target.value }))}
-                  placeholder="系统提示" rows={2} className="w-full input-field px-2 py-1 text-[11px]" />
-                <button onClick={handleCreate}
-                  className="w-full py-1 bg-amber-500 text-white rounded text-[11px] font-medium hover:bg-amber-600 transition-colors">创建</button>
+                <textarea value={form.systemPrompt} onChange={e => setForm(p => ({ ...p, systemPrompt: e.target.value }))} placeholder="系统提示" rows={2} className="w-full input-field px-2 py-1 text-[11px]" />
+                <button onClick={handleCreateAgent} className="w-full py-1 bg-amber-500 text-white rounded text-[11px] font-medium hover:bg-amber-600 transition-colors">创建</button>
               </div>
             )}
             <div className="flex-1 overflow-y-auto">
               {agents.map(a => (
                 <div key={a.id} className="px-3 py-2.5 border-b border-[#edeae5] hover:bg-[#faf9f7] transition-colors">
-                  <div className="flex items-center gap-2.5 mb-2">
-                    <div className={`w-7 h-7 rounded-lg bg-gradient-to-br ${roleColors[a.role] || roleColors.custom} flex items-center justify-center text-white text-[10px] font-bold shrink-0`}>
-                      {a.name.charAt(0).toUpperCase()}
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <div className="text-xs font-medium text-primary truncate">{a.name}</div>
-                      <div className="text-[10px] text-tertiary">{roleLabels[a.role] || a.role}</div>
-                    </div>
-                    <button onClick={() => handleDelete(a.id)}
-                      className="text-[10px] text-tertiary hover:text-red-500 shrink-0">删除</button>
+                  <div className="flex items-center gap-2.5 mb-1.5">
+                    <div className={`w-7 h-7 rounded-lg bg-gradient-to-br ${roleColors[a.role] || roleColors.custom} flex items-center justify-center text-white text-[10px] font-bold shrink-0`}>{a.name.charAt(0).toUpperCase()}</div>
+                    <div className="flex-1 min-w-0"><div className="text-xs font-medium text-primary truncate">{a.name}</div><div className="text-[10px] text-tertiary">{roleLabels[a.role] || a.role}</div></div>
+                    <button onClick={() => handleDeleteAgent(a.id)} className="text-[10px] text-tertiary hover:text-red-500 shrink-0">删除</button>
                   </div>
-                  <div className="space-y-1">
-                    <div className="text-[10px] text-tertiary line-clamp-2">{a.systemPrompt || "无系统提示"}</div>
-                    <div className="flex gap-1 flex-wrap">
-                      {a.tools.split(",").slice(0, 3).map((t, i) => (
-                        <span key={i} className="text-[9px] px-1.5 py-0.5 bg-[#edeae5] text-tertiary rounded">{t.trim()}</span>
-                      ))}
-                    </div>
-                  </div>
+                  <div className="text-[10px] text-tertiary line-clamp-2">{a.systemPrompt || "无系统提示"}</div>
+                  <div className="flex gap-1 flex-wrap mt-1">{a.tools.split(",").slice(0, 3).map((t, i) => (<span key={i} className="text-[9px] px-1.5 py-0.5 bg-[#edeae5] text-tertiary rounded">{t.trim()}</span>))}</div>
                 </div>
               ))}
-              {agents.length === 0 && !showCreate && (
-                <p className="text-[11px] text-tertiary text-center py-8">点击"创建"添加</p>
-              )}
             </div>
           </div>
         )}

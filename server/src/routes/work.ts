@@ -2,7 +2,7 @@ import { Hono } from "hono";
 import { db, secret, vars, ctx } from "edgespark";
 import { auth } from "edgespark/http";
 import { eq, and, desc } from "drizzle-orm";
-import { workAgents, userProfiles } from "@defs";
+import { workAgents, workConversations, userProfiles } from "@defs";
 import { SSE_HEADERS, emit, createSSEStream } from "../agent/stream";
 
 export const workRoutes = new Hono()
@@ -48,6 +48,38 @@ export const workRoutes = new Hono()
     const [existing] = await db.select().from(workAgents).where(and(eq(workAgents.id, id), eq(workAgents.userId, userId)));
     if (!existing) return c.json({ error: "Not found" }, 404);
     await db.delete(workAgents).where(eq(workAgents.id, id));
+    return c.json({ success: true });
+  })
+  .get("/api/work/conversations", async (c) => {
+    const userId = auth.user!.id;
+    const rows = await db.select().from(workConversations)
+      .where(eq(workConversations.userId, userId)).orderBy(desc(workConversations.updatedAt));
+    return c.json(rows.map(r => ({ id: r.id, title: r.title, createdAt: r.createdAt, updatedAt: r.updatedAt })));
+  })
+  .get("/api/work/conversations/:id", async (c) => {
+    const userId = auth.user!.id;
+    const id = parseInt(c.req.param("id"), 10);
+    const [row] = await db.select().from(workConversations).where(and(eq(workConversations.id, id), eq(workConversations.userId, userId)));
+    if (!row) return c.json({ error: "Not found" }, 404);
+    return c.json(row);
+  })
+  .post("/api/work/conversations", async (c) => {
+    const userId = auth.user!.id;
+    const [row] = await db.insert(workConversations).values({ userId, title: "新对话", messagesJson: "[]", model: "seed-pro" }).returning();
+    return c.json(row, 201);
+  })
+  .patch("/api/work/conversations/:id", async (c) => {
+    const userId = auth.user!.id;
+    const id = parseInt(c.req.param("id"), 10);
+    const body = await c.req.json<{ title?: string; messagesJson?: string }>();
+    await db.update(workConversations).set({ ...body, updatedAt: new Date().toISOString() })
+      .where(and(eq(workConversations.id, id), eq(workConversations.userId, userId)));
+    return c.json({ success: true });
+  })
+  .delete("/api/work/conversations/:id", async (c) => {
+    const userId = auth.user!.id;
+    const id = parseInt(c.req.param("id"), 10);
+    await db.delete(workConversations).where(and(eq(workConversations.id, id), eq(workConversations.userId, userId)));
     return c.json({ success: true });
   })
   .post("/api/work/chat", async (c) => {
