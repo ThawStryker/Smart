@@ -22,6 +22,7 @@
 
 // User tables
 export * from "./db_schema";
+export { workFiles } from "./db_schema";
 // User app relations
 export * from "./db_relations";
 

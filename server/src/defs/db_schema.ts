@@ -196,6 +196,19 @@ export const conversationStates = sqliteTable("conversation_states", {
   updatedAt: text("updated_at").default(sql`(datetime('now'))`),
 });
 
+// Work — 文件树持久化
+export const workFiles = sqliteTable("work_files", {
+  id: integer("id").primaryKey({ autoIncrement: true }),
+  userId: text("user_id").notNull(),
+  path: text("path").notNull(),          // e.g. "agents/designer/AGENTS.md"
+  content: text("content").notNull().default(""),
+  isFolder: integer("is_folder", { mode: "boolean" }).default(false),
+  createdAt: text("created_at").default(sql`(datetime('now'))`),
+  updatedAt: text("updated_at").default(sql`(datetime('now'))`),
+}, (table) => ({
+  userPathIdx: uniqueIndex("work_files_user_path_idx").on(table.userId, table.path),
+}));
+
 // Work — 多角色协同 Agent
 export const workAgents = sqliteTable("work_agents", {
   id: integer("id").primaryKey({ autoIncrement: true }),
