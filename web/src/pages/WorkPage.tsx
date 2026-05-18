@@ -1,5 +1,9 @@
 import { useState, useEffect, useRef } from "react";
 import { client } from "@/lib/edgespark";
+import { useWorkFiles } from "@/hooks/useWorkFiles";
+import { Crepe } from "@milkdown/crepe";
+import { Milkdown, MilkdownProvider, useEditor } from "@milkdown/react";
+import "@/milkdown.css";
 
 interface ChatMessage { id: string; role: "user" | "assistant"; content: string; isLoading?: boolean; }
 interface Conv { id: number; title: string; createdAt: string; }
@@ -12,6 +16,87 @@ const roleColors: Record<string, string> = {
   architect: "from-indigo-400 to-violet-500", developer: "from-amber-400 to-orange-500",
   reviewer: "from-emerald-400 to-teal-500", designer: "from-rose-400 to-pink-500", custom: "from-sky-400 to-blue-500",
 };
+
+function MilkdownEditor({ filePath, defaultValue, onChange }: {
+  filePath: string;
+  defaultValue: string;
+  onChange: (md: string) => void;
+}) {
+  const onChangeRef = useRef(onChange);
+  onChangeRef.current = onChange;
+  const crepeRef = useRef<Crepe | null>(null);
+
+  useEditor((root) => {
+    root.classList.add("milkdown");
+    const crepe = new Crepe({
+      root,
+      defaultValue: defaultValue || "# ",
+      features: {
+        [Crepe.Feature.TopBar]: false,
+        [Crepe.Feature.CodeMirror]: false,
+        [Crepe.Feature.Cursor]: false,
+        [Crepe.Feature.Latex]: false,
+        [Crepe.Feature.AI]: false,
+      },
+    });
+    crepeRef.current = crepe;
+    return crepe;
+  });
+
+  useEffect(() => {
+    return () => {
+      if (crepeRef.current) {
+        try {
+          const md = crepeRef.current.getMarkdown();
+          if (md && md.trim()) onChangeRef.current(md);
+        } catch {}
+      }
+      crepeRef.current = null;
+    };
+  }, [filePath]);
+
+  useEffect(() => {
+    if (!onChange) return;
+    const interval = setInterval(() => {
+      if (crepeRef.current) {
+        try {
+          const md = crepeRef.current.getMarkdown();
+          if (md) onChange(md);
+        } catch {}
+      }
+    }, 3000);
+    return () => clearInterval(interval);
+  }, [filePath]);
+
+  return <Milkdown />;
+}
+
+interface FileNode { name: string; type: "file" | "folder"; children?: FileNode[]; expanded?: boolean; }
+
+function buildTreeFromPaths(paths: string[]): FileNode[] {
+  const root: Record<string, any> = {};
+  for (const p of paths) {
+    const parts = p.split("/");
+    let node = root;
+    for (let i = 0; i < parts.length; i++) {
+      const part = parts[i];
+      if (i === parts.length - 1) {
+        node[part] = node[part] || { name: part, type: "file" as const };
+      } else {
+        node[part] = node[part] || { name: part, type: "folder" as const, children: {} };
+        node = node[part].children;
+      }
+    }
+  }
+  function toArray(obj: Record<string, any>): FileNode[] {
+    return Object.values(obj).map((n: any) => ({
+      ...n,
+      children: n.children ? toArray(n.children) : undefined,
+      expanded: n.type === "folder" ? true : undefined,
+    }));
+  }
+  return toArray(root);
+}
 
 export function WorkPage() {
   const [convs, setConvs] = useState<Conv[]>([]);
@@ -32,7 +117,6 @@ export function WorkPage() {
   const [form, setForm] = useState({ name: "", role: "custom", systemPrompt: "", tools: "read,write,edit,list,grep", skills: "" });
 
   // File tree state
-  interface FileNode { name: string; type: "file" | "folder"; children?: FileNode[]; expanded?: boolean; }
   const [fileTree, setFileTree] = useState<FileNode[]>([
     { name: "System", type: "folder", expanded: true, children: [
       { name: "heartbeat", type: "folder", expanded: false, children: [] },
@@ -42,35 +126,127 @@ export function WorkPage() {
     { name: "Context", type: "folder", expanded: false, children: [] },
     { name: "AGENTS.md", type: "file" },
   ]);
-  const [addingTo, setAddingTo] = useState<string | null>(null);
+  const [contextMenu, setContextMenu] = useState<{ path: number[]; x: number; y: number } | null>(null);
+  const [addingTo, setAddingTo] = useState<number[] | null>(null);
   const [newItemName, setNewItemName] = useState("");
   const [newItemType, setNewItemType] = useState<"file" | "folder">("file");
+  const [renaming, setRenaming] = useState<{ path: number[]; name: string } | null>(null);
+  const [selectedFile, setSelectedFile] = useState<{ displayPath: string; treePath?: number[] } | null>(null);
+  const [fileContents, setFileContents] = useState<Record<string, string>>({});
+
+  const { files: apiFiles, loading: filesLoading, fetchFiles, readFile, writeFile, deleteFile: deleteApiFile } = useWorkFiles();
+
+  // Build tree from flat file list
+  useEffect(() => {
+    const nonFolderFiles = apiFiles.filter(f => !f.isFolder);
+    if (nonFolderFiles.length === 0) return;
+    const tree = buildTreeFromPaths(nonFolderFiles.map(f => f.path));
+    setFileTree(tree);
+  }, [apiFiles]);
+
+  // Seed default file tree on first load
+  useEffect(() => {
+    if (!filesLoading && apiFiles.length === 0) {
+      const defaults = [
+        { path: "AGENTS.md", content: "# Work Agent\n\n你是 Smart Work 的主 Agent。", isFolder: false },
+        { path: "System/heartbeat", content: "", isFolder: true },
+        { path: "System/memory", content: "", isFolder: true },
+        { path: "System/skill", content: "", isFolder: true },
+        { path: "Context", content: "", isFolder: true },
+      ];
+      Promise.all(defaults.map(d => writeFile(d.path, d.content, d.isFolder)))
+        .then(() => fetchFiles());
+    }
+  }, [filesLoading, apiFiles.length]);
+
+  const getFilePath = (treePath: number[]): string => {
+    const parts: string[] = [];
+    let node: any = fileTree;
+    for (let i = 0; i < treePath.length; i++) {
+      const n = node[treePath[i]];
+      parts.push(n.name);
+      node = n.children;
+    }
+    return parts.join("/");
+  };
+
+  const openFile = async (displayPath: string, treePath?: number[]) => {
+    const content = await readFile(displayPath);
+    setFileContents(prev => ({ ...prev, [displayPath]: content || "" }));
+    setSelectedFile({ displayPath, treePath });
+  };
+
+  // Close context menu on any click outside
+  useEffect(() => {
+    if (!contextMenu) return;
+    const close = () => setContextMenu(null);
+    document.addEventListener("click", close);
+    return () => document.removeEventListener("click", close);
+  }, [contextMenu]);
+
+  const nodeAt = (path: number[]): FileNode => {
+    let node: any = fileTree;
+    for (let i = 0; i < path.length; i++) node = node[path[i]].children || node;
+    return node;
+  };
+
+  const updateTree = (fn: (tree: FileNode[]) => FileNode[]) => {
+    setFileTree(prev => fn(JSON.parse(JSON.stringify(prev))));
+  };
 
   const toggleFolder = (path: number[]) => {
-    setFileTree(prev => {
-      const next = [...prev];
-      let node: any = next;
+    updateTree(tree => {
+      let node: any = tree;
       for (let i = 0; i < path.length - 1; i++) node = node[path[i]].children;
-      const target = node[path[path.length - 1]];
-      target.expanded = !target.expanded;
-      return next;
+      node[path[path.length - 1]].expanded = !node[path[path.length - 1]].expanded;
+      return tree;
     });
   };
 
-  const addItem = (parentPath: number[]) => {
+  const menuAdd = (parentPath: number[], type: "file" | "folder") => {
+    setContextMenu(null);
+    setNewItemType(type);
+    setNewItemName("");
+    setAddingTo(parentPath);
+  };
+
+  const menuRename = (path: number[], name: string) => {
+    setContextMenu(null);
+    setRenaming({ path, name });
+  };
+
+  const menuDelete = async (path: number[]) => {
+    setContextMenu(null);
+    const node = nodeAt(path);
+    if (!confirm(`删除 ${node.type === "folder" ? "文件夹" : "文件"} "${node.name}"？`)) return;
+    const filePath = getFilePath(path);
+    await deleteApiFile(filePath);
+    await fetchFiles();
+  };
+
+  const addItem = async (parentPath: number[]) => {
     if (!newItemName.trim()) return;
-    setFileTree(prev => {
-      const next = JSON.parse(JSON.stringify(prev));
-      let node: any = next;
-      for (let i = 0; i < parentPath.length; i++) node = node[parentPath[i]].children;
-      const newItem: FileNode = newItemType === "folder"
-        ? { name: newItemName, type: "folder", expanded: false, children: [] }
-        : { name: newItemName + ".md", type: "file" };
-      node.push(newItem);
-      return next;
-    });
+    const name = newItemType === "folder"
+      ? newItemName
+      : (newItemName.endsWith(".md") ? newItemName : newItemName + ".md");
+
+    const parentDir = parentPath.length === 0 ? "" : getFilePath(parentPath) + "/";
+    const fullPath = parentDir + name;
+    await writeFile(fullPath, "", newItemType === "folder");
+    await fetchFiles();
     setAddingTo(null);
     setNewItemName("");
+  };
+
+  const commitRename = () => {
+    if (!renaming || !renaming.name.trim()) { setRenaming(null); return; }
+    updateTree(tree => {
+      let node: any = tree;
+      for (let i = 0; i < renaming.path.length - 1; i++) node = node[renaming.path[i]].children;
+      node[renaming.path[renaming.path.length - 1]].name = renaming.name.trim();
+      return tree;
+    });
+    setRenaming(null);
   };
 
   const fetchAgents = async () => {
@@ -79,28 +255,77 @@ export function WorkPage() {
   };
   useEffect(() => { fetchAgents(); }, []);
 
+  const menuBtn = (path: number[], e: React.MouseEvent) => {
+    e.stopPropagation();
+    const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
+    setContextMenu({ path, x: rect.right, y: rect.bottom + 2 });
+  };
+
   const renderFileTree = (nodes: FileNode[], parentPath: number[] = []): React.ReactNode => (
     <div className="space-y-0.5">
       {nodes.map((node, i) => {
         const path = [...parentPath, i];
-        const isAdding = addingTo === path.join("-");
+        const pathKey = path.join("-");
+        const isAdding = addingTo && addingTo.join("-") === pathKey;
+        const isRenaming = renaming && renaming.path.join("-") === pathKey;
+        const isMenuOpen = contextMenu && contextMenu.path.join("-") === pathKey;
         return (
-          <div key={path.join("-")}>
-            <div className="flex items-center gap-1 px-2 py-1 rounded-md hover:bg-white/60 transition-colors group">
-              {node.type === "folder" ? (
-                <button onClick={() => toggleFolder(path)} className="p-0.5 transition-transform" style={{ transform: node.expanded ? "rotate(90deg)" : "" }}>
-                  <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" style={{ color: "#b8a088" }}><polyline points="9,18 15,12 9,6"/></svg>
+          <div key={pathKey}>
+            {isRenaming ? (
+              <div className="flex items-center gap-1 px-2 py-1">
+                <span className="text-sm">{node.type === "folder" ? "📁" : "📄"}</span>
+                <input autoFocus value={renaming!.name} onChange={e => setRenaming({ path, name: e.target.value })}
+                  onKeyDown={e => { if (e.key === "Enter") commitRename(); if (e.key === "Escape") setRenaming(null); }}
+                  onBlur={commitRename}
+                  className="flex-1 text-[11px] px-2 py-0.5 rounded border outline-none bg-white font-medium"
+                  style={{ borderColor: "#d4a76a", color: "#4a3728" }} />
+              </div>
+            ) : (
+              <div className="flex items-center gap-1 px-2 py-1 rounded-md hover:bg-white/60 transition-colors group relative">
+                {node.type === "folder" ? (
+                  <button onClick={() => toggleFolder(path)} className="p-0.5 transition-transform" style={{ transform: node.expanded ? "rotate(90deg)" : "" }}>
+                    <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" style={{ color: "#b8a088" }}><polyline points="9,18 15,12 9,6"/></svg>
+                  </button>
+                ) : (
+                  <span className="w-4" />
+                )}
+                <span className="text-sm">{node.type === "folder" ? (node.expanded ? "📂" : "📁") : "📄"}</span>
+                <span className="text-[11px] font-medium flex-1 truncate cursor-pointer hover:text-[#c7853a] transition-colors"
+                  style={{ color: "#4a3728" }}
+                  onClick={() => { if (node.type === "file") openFile(getFilePath(path), path); else toggleFolder(path); }}>
+                  {node.name}{node.type === "folder" ? "/" : ""}
+                </span>
+                <button onClick={(e) => menuBtn(path, e)}
+                  className={`p-0.5 rounded transition-all hover:bg-amber-100/50 ${isMenuOpen ? "opacity-100 bg-amber-100/50" : "opacity-0 group-hover:opacity-100"}`}
+                  style={{ color: "#b8a088" }}>
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><circle cx="12" cy="5" r="2"/><circle cx="12" cy="12" r="2"/><circle cx="12" cy="19" r="2"/></svg>
                 </button>
-              ) : (
-                <span className="w-4" />
-              )}
-              <span className="text-sm">{node.type === "folder" ? (node.expanded ? "📂" : "📁") : "📄"}</span>
-              <span className="text-[11px] font-medium flex-1 truncate" style={{ color: "#4a3728" }}>{node.name}{node.type === "folder" ? "/" : ""}</span>
-              <button onClick={(e) => { e.stopPropagation(); setAddingTo(path.join("-")); setNewItemName(""); setNewItemType("file"); }}
-                className="opacity-0 group-hover:opacity-100 p-0.5 rounded transition-all hover:bg-amber-100/50" style={{ color: "#b8a088" }}>
-                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
-              </button>
-            </div>
+                {isMenuOpen && (
+                  <div className="absolute right-0 top-full mt-0.5 z-50 min-w-[120px] rounded-lg shadow-xl border py-1"
+                    style={{ background: "#fffdf7", borderColor: "#e0d9c8" }}
+                    onClick={e => e.stopPropagation()}>
+                    {node.type === "folder" && (
+                      <>
+                        <button onClick={() => menuAdd(path, "file")} className="w-full text-left px-3 py-1.5 text-[11px] hover:bg-amber-50/80 transition-colors flex items-center gap-2" style={{ color: "#4a3728" }}>
+                          <span className="text-xs">📄</span> 新建文件
+                        </button>
+                        <button onClick={() => menuAdd(path, "folder")} className="w-full text-left px-3 py-1.5 text-[11px] hover:bg-amber-50/80 transition-colors flex items-center gap-2" style={{ color: "#4a3728" }}>
+                          <span className="text-xs">📁</span> 新建文件夹
+                        </button>
+                        <div className="my-0.5 border-t" style={{ borderColor: "#e8e3d7" }} />
+                      </>
+                    )}
+                    <button onClick={() => menuRename(path, node.name)} className="w-full text-left px-3 py-1.5 text-[11px] hover:bg-amber-50/80 transition-colors flex items-center gap-2" style={{ color: "#4a3728" }}>
+                      <span className="text-xs">✏️</span> 重命名
+                    </button>
+                    <div className="my-0.5 border-t" style={{ borderColor: "#e8e3d7" }} />
+                    <button onClick={() => menuDelete(path)} className="w-full text-left px-3 py-1.5 text-[11px] hover:bg-red-50/80 transition-colors flex items-center gap-2" style={{ color: "#c0392b" }}>
+                      <span className="text-xs">🗑️</span> 删除
+                    </button>
+                  </div>
+                )}
+              </div>
+            )}
             {node.type === "folder" && node.expanded && node.children && (
               <div className="ml-4 border-l border-[#e8e3d7] pl-2">
                 {renderFileTree(node.children, path)}
@@ -108,18 +333,14 @@ export function WorkPage() {
             )}
             {isAdding && (
               <div className="ml-6 mt-1 flex items-center gap-1.5">
-                <select value={newItemType} onChange={e => setNewItemType(e.target.value as "file" | "folder")}
-                  className="text-[10px] px-1 py-0.5 rounded border bg-white" style={{ borderColor: "#e0d8c5", color: "#4a3728" }}>
-                  <option value="file">📄 文件</option>
-                  <option value="folder">📁 文件夹</option>
-                </select>
+                <span className="text-[10px] opacity-40">{newItemType === "folder" ? "📁" : "📄"}</span>
                 <input autoFocus value={newItemName} onChange={e => setNewItemName(e.target.value)}
-                  onKeyDown={e => { if (e.key === "Enter") addItem(path); if (e.key === "Escape") setAddingTo(null); }}
+                  onKeyDown={e => { if (e.key === "Enter") addItem(path); if (e.key === "Escape") { setAddingTo(null); setNewItemName(""); } }}
                   placeholder={newItemType === "folder" ? "文件夹名" : "文件名"}
                   className="flex-1 text-[10px] px-2 py-0.5 rounded border outline-none bg-white" style={{ borderColor: "#e0d8c5", color: "#4a3728" }} />
                 <button onClick={() => addItem(path)}
                   className="text-[10px] px-2 py-0.5 rounded text-white font-medium" style={{ background: "#c7853a" }}>确定</button>
-                <button onClick={() => setAddingTo(null)}
+                <button onClick={() => { setAddingTo(null); setNewItemName(""); }}
                   className="text-[10px] px-1.5 py-0.5 rounded" style={{ color: "#8b7355" }}>✕</button>
               </div>
             )}
@@ -389,10 +610,32 @@ export function WorkPage() {
         </div>
       </div>
 
-      {/* Center: Workspace */}
+      {/* Center: Milkdown WYSIWYG Editor */}
       <div className="flex-1 flex flex-col min-w-0 bg-white">
-        <div className="px-4 py-2.5 border-b border-[#edeae5] font-semibold text-sm text-primary shrink-0">工作区</div>
-        <textarea className="flex-1 p-6 text-sm leading-relaxed resize-none outline-none font-mono" placeholder="文档、计划、设计稿..." />
+        {selectedFile ? (
+          <MilkdownProvider>
+            <div className="px-4 py-2.5 border-b border-[#edeae5] flex items-center gap-2 text-[13px] shrink-0" style={{ color: "#4a3728" }}>
+              <span className="opacity-40">📄</span>
+              <span className="font-medium">{selectedFile.displayPath}</span>
+            </div>
+            <div className="milkdown-editor-wrapper">
+              <MilkdownEditor
+                key={selectedFile.displayPath}
+                filePath={selectedFile.displayPath}
+                defaultValue={fileContents[selectedFile.displayPath] || ""}
+                onChange={(md) => setFileContents(prev => ({ ...prev, [selectedFile.displayPath]: md }))}
+              />
+            </div>
+          </MilkdownProvider>
+        ) : (
+          <div className="flex-1 flex items-center justify-center">
+            <div className="text-center">
+              <div className="text-4xl mb-3 opacity-20">📂</div>
+              <p className="text-sm font-medium" style={{ color: "#4a3728" }}>选择一个文件</p>
+              <p className="text-xs mt-1 opacity-40">从右侧工作空间或助理中选择文件查看</p>
+            </div>
+          </div>
+        )}
       </div>
 
       {/* Right: Workspace + Roles */}
@@ -402,13 +645,10 @@ export function WorkPage() {
         <div className="h-1/2 flex flex-col border-b" style={{ borderColor: "#e8e3d7" }}>
           <div className="px-4 py-2.5 font-semibold text-[13px] shrink-0 flex items-center justify-between" style={{ color: "#4a3728" }}>
             <span>工作空间</span>
-            <div className="flex items-center gap-1">
-              <span className="text-[10px] font-normal opacity-40">3 文件</span>
-              <button onClick={() => setRightCollapsed(true)}
-                className="p-1.5 rounded-lg transition-colors hover:bg-black/5 ml-1" style={{ color: "#b8a088" }}>
-                <svg width="15" height="15" viewBox="0 0 24 24" fill="currentColor"><path d="M4 5v14h2V5H4zm7 0L8 8l4 4-4 4 3 3 7-7-7-7z"/></svg>
-              </button>
-            </div>
+            <button onClick={() => setRightCollapsed(true)}
+              className="p-1.5 rounded-lg transition-colors hover:bg-black/5" style={{ color: "#b8a088" }}>
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="currentColor"><path d="M4 5v14h2V5H4zm7 0L8 8l4 4-4 4 3 3 7-7-7-7z"/></svg>
+            </button>
           </div>
           <div className="flex-1 overflow-y-auto px-2 pb-2">
             {[
@@ -416,7 +656,8 @@ export function WorkPage() {
               { name: "API 设计.md", type: "md", date: "昨天" },
               { name: "设计系统.md", type: "md", date: "2天前" },
             ].map(f => (
-              <div key={f.name} className="flex items-center gap-2 px-3 py-2 rounded-lg cursor-pointer transition-colors hover:bg-white/60 text-xs group">
+              <div key={f.name} onClick={() => openFile(`工作空间/${f.name}`)}
+                className="flex items-center gap-2 px-3 py-2 rounded-lg cursor-pointer transition-colors hover:bg-white/60 text-xs group">
                 <span className="text-base shrink-0">📄</span>
                 <div className="flex-1 min-w-0">
                   <div className="truncate font-medium" style={{ color: "#4a3728" }}>{f.name}</div>
