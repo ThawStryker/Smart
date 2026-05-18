@@ -38,6 +38,7 @@ export function MarketPage() {
   const [listings, setListings] = useState<Listing[]>([]);
   const [loading, setLoading] = useState(true);
   const [filter, setFilter] = useState("");
+  const [marketTab, setMarketTab] = useState<"tools" | "talent">("tools");
 
   useEffect(() => {
     client.api.fetch("/api/public/market")
@@ -57,47 +58,75 @@ export function MarketPage() {
       <div className="max-w-5xl mx-auto">
           <h1 className="text-xl font-semibold text-neutral-900 mb-4">工具市场</h1>
 
-          {categories.length > 0 && (
-            <div className="flex gap-2 mb-4">
-              <button onClick={() => setFilter("")} className={`px-3 py-1 rounded-lg text-xs ${!filter ? "bg-amber-500 text-white" : "bg-neutral-100 text-neutral-600"}`}>全部</button>
-              {categories.map(c => (
-                <button key={c} onClick={() => setFilter(c)} className={`px-3 py-1 rounded-lg text-xs ${filter === c ? "bg-amber-500 text-white" : "bg-neutral-100 text-neutral-600"}`}>{c}</button>
-              ))}
-            </div>
-          )}
-
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-            {filtered.map(l => (
-              <a
-                key={l.id}
-                href={l.link || "#"}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="smart-card p-4 group"
-              >
-                <div className="flex items-center gap-3 mb-3">
-                  {l._hasIcon && l._projectId ? (
-                    <img src={`/api/public/smart/icon/${l._projectId}`} alt="" className="w-9 h-9 rounded-lg object-cover shadow-sm shrink-0 group-hover:scale-105 transition-transform duration-300" />
-                  ) : (
-                    <div className={`w-9 h-9 rounded-lg bg-gradient-to-br ${getGradient(l.title)} flex items-center justify-center text-white text-xs font-bold shadow-sm shrink-0 group-hover:scale-105 transition-transform duration-300`}>
-                      {getInitials(l.title)}
-                    </div>
-                  )}
-                  <div className="flex-1 min-w-0">
-                    <div className="font-semibold text-sm text-primary truncate">{l.title}</div>
-                    <div className="flex items-center gap-2 mt-0.5">
-                      {l.category && <span className="text-[10px] text-tertiary">{l.category}</span>}
-                      <span className="text-[10px] text-tertiary">{l.type === "url" ? "外部链接" : "Smart 工具"}</span>
-                    </div>
-                  </div>
-                </div>
-                <p className="text-xs text-secondary line-clamp-2">{l.description}</p>
-              </a>
+          <div className="flex border-b mb-4" style={{ borderColor: "#e8e3d7" }}>
+            {(["tools", "talent"] as const).map(t => (
+              <button key={t} onClick={() => setMarketTab(t)}
+                className={`flex-1 py-2 text-xs font-medium transition-colors relative ${
+                  marketTab === t ? "" : "opacity-40 hover:opacity-70"
+                }`}
+                style={{ color: "#5c4330" }}>
+                {{ tools: "工具", talent: "人才" }[t]}
+                {marketTab === t && (
+                  <div className="absolute bottom-0 left-1/2 -translate-x-1/2 w-8 h-0.5 rounded-full"
+                    style={{ background: "#c7853a" }} />
+                )}
+              </button>
             ))}
           </div>
 
-          {filtered.length === 0 && (
-            <p className="text-neutral-400 text-sm">暂无工具</p>
+          {marketTab === "tools" && (
+            <>
+              {categories.length > 0 && (
+                <div className="flex gap-2 mb-4">
+                  <button onClick={() => setFilter("")} className={`px-3 py-1 rounded-lg text-xs ${!filter ? "bg-amber-500 text-white" : "bg-neutral-100 text-neutral-600"}`}>全部</button>
+                  {categories.map(c => (
+                    <button key={c} onClick={() => setFilter(c)} className={`px-3 py-1 rounded-lg text-xs ${filter === c ? "bg-amber-500 text-white" : "bg-neutral-100 text-neutral-600"}`}>{c}</button>
+                  ))}
+                </div>
+              )}
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+                {filtered.map(l => (
+                  <a
+                    key={l.id}
+                    href={l.link || "#"}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="smart-card p-4 group"
+                  >
+                    <div className="flex items-center gap-3 mb-3">
+                      {l._hasIcon && l._projectId ? (
+                        <img src={`/api/public/smart/icon/${l._projectId}`} alt="" className="w-9 h-9 rounded-lg object-cover shadow-sm shrink-0 group-hover:scale-105 transition-transform duration-300" />
+                      ) : (
+                        <div className={`w-9 h-9 rounded-lg bg-gradient-to-br ${getGradient(l.title)} flex items-center justify-center text-white text-xs font-bold shadow-sm shrink-0 group-hover:scale-105 transition-transform duration-300`}>
+                          {getInitials(l.title)}
+                        </div>
+                      )}
+                      <div className="flex-1 min-w-0">
+                        <div className="font-semibold text-sm text-primary truncate">{l.title}</div>
+                        <div className="flex items-center gap-2 mt-0.5">
+                          {l.category && <span className="text-[10px] text-tertiary">{l.category}</span>}
+                          <span className="text-[10px] text-tertiary">{l.type === "url" ? "外部链接" : "Smart 工具"}</span>
+                        </div>
+                      </div>
+                    </div>
+                    <p className="text-xs text-secondary line-clamp-2">{l.description}</p>
+                  </a>
+                ))}
+              </div>
+
+              {filtered.length === 0 && (
+                <p className="text-neutral-400 text-sm">暂无工具</p>
+              )}
+            </>
+          )}
+
+          {marketTab === "talent" && (
+            <div className="text-center py-16">
+              <div className="text-4xl mb-3 opacity-20">🤖</div>
+              <p className="text-sm font-medium" style={{ color: "#4a3728" }}>Agent 人才市场</p>
+              <p className="text-xs mt-1 opacity-40">即将上线，敬请期待</p>
+            </div>
           )}
       </div>
     </div>
