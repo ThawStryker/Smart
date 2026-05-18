@@ -1,10 +1,58 @@
 import { Hono } from "hono";
 import { db, secret, vars, ctx } from "edgespark";
 import { auth } from "edgespark/http";
-import { eq, and, desc } from "drizzle-orm";
-import { workAgents, workConversations, userProfiles } from "@defs";
+import { eq, and, desc, like } from "drizzle-orm";
+import { workAgents, workConversations, userProfiles, workFiles } from "@defs";
 
 export const workRoutes = new Hono()
+  .get("/api/work/files/*", async (c) => {
+    const userId = auth.user!.id;
+    const filePath = c.req.path.replace("/api/work/files/", "");
+    const [row] = await db.select().from(workFiles)
+      .where(and(eq(workFiles.userId, userId), eq(workFiles.path, filePath)));
+    if (!row) return c.json({ error: "Not found" }, 404);
+    return c.json({ path: row.path, content: row.content, isFolder: row.isFolder, updatedAt: row.updatedAt });
+  })
+  .get("/api/work/files", async (c) => {
+    const userId = auth.user!.id;
+    const prefix = c.req.query("prefix") || "";
+    const rows = await db.select().from(workFiles)
+      .where(and(eq(workFiles.userId, userId), like(workFiles.path, prefix + "%")))
+      .orderBy(workFiles.path);
+    return c.json(rows.map(r => ({ path: r.path, content: r.content, isFolder: r.isFolder, updatedAt: r.updatedAt })));
+  })
+  .put("/api/work/files/*", async (c) => {
+    const userId = auth.user!.id;
+    const filePath = c.req.path.replace("/api/work/files/", "");
+    const { content, isFolder } = await c.req.json<{ content?: string; isFolder?: boolean }>();
+
+    const [existing] = await db.select().from(workFiles)
+      .where(and(eq(workFiles.userId, userId), eq(workFiles.path, filePath)));
+
+    if (existing) {
+      await db.update(workFiles).set({
+        ...(content !== undefined ? { content } : {}),
+        ...(isFolder !== undefined ? { isFolder } : {}),
+        updatedAt: new Date().toISOString(),
+      }).where(eq(workFiles.id, existing.id));
+    } else {
+      await db.insert(workFiles).values({
+        userId, path: filePath,
+        content: content || "",
+        isFolder: isFolder || false,
+      });
+    }
+    return c.json({ success: true });
+  })
+  .delete("/api/work/files/*", async (c) => {
+    const userId = auth.user!.id;
+    const filePath = c.req.path.replace("/api/work/files/", "");
+
+    // Delete file and any children (if folder)
+    await db.delete(workFiles)
+      .where(and(eq(workFiles.userId, userId), like(workFiles.path, filePath + "%")));
+    return c.json({ success: true });
+  })
   .get("/api/work/agents", async (c) => {
     const userId = auth.user!.id;
     const rows = await db.select().from(workAgents).where(eq(workAgents.userId, userId)).orderBy(desc(workAgents.createdAt));
