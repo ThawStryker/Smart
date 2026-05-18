@@ -1,7 +1,7 @@
 import { Hono } from "hono";
 import { db, secret, vars, ctx } from "edgespark";
 import { auth } from "edgespark/http";
-import { eq, and, desc, like } from "drizzle-orm";
+import { eq, and, or, desc, like } from "drizzle-orm";
 import { workAgents, workConversations, userProfiles, workFiles } from "@defs";
 
 export const workRoutes = new Hono()
@@ -24,7 +24,11 @@ export const workRoutes = new Hono()
   .put("/api/work/files/*", async (c) => {
     const userId = auth.user!.id;
     const filePath = c.req.path.replace("/api/work/files/", "");
+    if (!filePath) return c.json({ error: "Path required" }, 400);
     const { content, isFolder } = await c.req.json<{ content?: string; isFolder?: boolean }>();
+    if (content === undefined && isFolder === undefined) {
+      return c.json({ error: "content or isFolder required" }, 400);
+    }
 
     const [existing] = await db.select().from(workFiles)
       .where(and(eq(workFiles.userId, userId), eq(workFiles.path, filePath)));
@@ -47,10 +51,14 @@ export const workRoutes = new Hono()
   .delete("/api/work/files/*", async (c) => {
     const userId = auth.user!.id;
     const filePath = c.req.path.replace("/api/work/files/", "");
+    if (!filePath) return c.json({ error: "Path required" }, 400);
 
     // Delete file and any children (if folder)
     await db.delete(workFiles)
-      .where(and(eq(workFiles.userId, userId), like(workFiles.path, filePath + "%")));
+      .where(and(
+        eq(workFiles.userId, userId),
+        or(eq(workFiles.path, filePath), like(workFiles.path, filePath + "/%"))
+      ));
     return c.json({ success: true });
   })
   .get("/api/work/agents", async (c) => {
