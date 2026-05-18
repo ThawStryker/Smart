@@ -4,6 +4,7 @@ import { auth } from "edgespark/http";
 import { eq, and, or, desc, like } from "drizzle-orm";
 import { workAgents, workConversations, userProfiles, workFiles } from "@defs";
 import { callAgentToolDef, loadAgentFiles, writeAgentFile, writeHeartbeat, type CallAgentArgs } from "../agent/tools/call-agent";
+import { extractWorkMemories } from "../agent/memory/work-memory";
 
 export const workRoutes = new Hono()
   .get("/api/work/files/*", async (c) => {
@@ -286,8 +287,22 @@ ${contextPrompt || "（无）"}
 
             send({ type: "agent_done", name: args.name, files: [outputPath] });
             messages.push({ role: "tool", tool_call_id: tc.id, content: subOutput || "任务完成" });
+
+            // Extract sub-agent memories
+            ctx.runInBackground((async () => {
+              try {
+                await extractWorkMemories(userId, args.name, args.task, subOutput);
+              } catch {}
+            })());
           }
         }
+
+        // Extract memories for work-agent
+        ctx.runInBackground((async () => {
+          try {
+            await extractWorkMemories(userId, "", body.message, fullResponse);
+          } catch {}
+        })());
 
         send({ type: "done" });
       } catch (err: any) {
