@@ -3,6 +3,7 @@ import { db, secret, vars, ctx } from "edgespark";
 import { auth } from "edgespark/http";
 import { eq, and, or, desc, like } from "drizzle-orm";
 import { workAgents, workConversations, userProfiles, workFiles } from "@defs";
+import { callAgentToolDef, loadAgentFiles, writeAgentFile, writeHeartbeat, type CallAgentArgs } from "../agent/tools/call-agent";
 
 export const workRoutes = new Hono()
   .get("/api/work/files/*", async (c) => {
@@ -117,54 +118,177 @@ export const workRoutes = new Hono()
     return c.json({ success: true });
   })
   .post("/api/work/chat", async (c) => {
-    const body = await c.req.json<{ message: string; model?: string; systemPrompt?: string }>();
+    const body = await c.req.json<{ message: string; model?: string; conversationId?: number }>();
     if (!body.message?.trim()) return c.json({ error: "Message required" }, 400);
 
-    const selectedModel = body.model || "seed-pro";
+    const userId = auth.user!.id;
     const baseURL = vars.get("SEED_BASE_URL") || "https://ark.cn-beijing.volces.com/api/v3";
     const apiKey = secret.get("SEED_API_KEY");
-    const modelName = selectedModel === "deepseek" ? "deepseek-v4-pro" : selectedModel === "seed-pro" ? "doubao-seed-2-0-pro-260215" : "doubao-seed-2-0-code-preview-260215";
+    const modelName = "doubao-seed-2-0-pro-260215";
     if (!apiKey) return c.json({ error: "API key not configured" }, 500);
 
-    const messages = [
-      { role: "system", content: body.systemPrompt || "你是一个 AI 助手。" },
+    // Load work-agent config (root-level files)
+    const workAgentFiles = await loadAgentFiles(userId, "");
+    const systemPrompt = workAgentFiles.agentsMd || "你是 Smart Work 的主 Agent，帮助用户分析需求、布置任务。";
+    const contextPrompt = workAgentFiles.contextFiles
+      .map(f => `--- ${f.path} ---\n${f.content}`).join("\n\n");
+
+    // List available agents
+    const agentRows = await db.select().from(workFiles)
+      .where(and(eq(workFiles.userId, userId), like(workFiles.path, "agents/%/AGENTS.md")));
+    const availableAgents = agentRows.map(r => {
+      const name = r.path.split("/")[1];
+      const summary = r.content?.split("\n")[0]?.replace(/^#\s*/, "")?.slice(0, 80) || "";
+      return `- **${name}**: ${summary}`;
+    }).join("\n");
+
+    const fullSystem = `${systemPrompt}
+
+## 可用 Agent
+
+你可以使用 call_agent 工具调用以下 agent：
+${availableAgents}
+
+## 上下文资料
+${contextPrompt || "（无）"}
+
+## 规则
+- 当用户 @agent名称 时，使用 call_agent 工具调度该 agent
+- 先制定计划再执行，多个 agent 可并行调用
+- 完成后汇总结果告知用户`;
+
+    const messages: any[] = [
+      { role: "system", content: fullSystem },
       { role: "user", content: body.message },
     ];
 
     let ctrl: ReadableStreamDefaultController;
     const stream = new ReadableStream({ start(c) { ctrl = c; } });
     const encoder = new TextEncoder();
-    const send = (d: Record<string, unknown>) => { try { ctrl.enqueue(encoder.encode(`data: ${JSON.stringify(d)}\n\n`)); } catch {} };
+    const send = (d: Record<string, unknown>) => {
+      try { ctrl.enqueue(encoder.encode(`data: ${JSON.stringify(d)}\n\n`)); } catch {}
+    };
 
     ctx.runInBackground((async () => {
       try {
-        const res = await fetch(`${baseURL}/chat/completions`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json", Authorization: `Bearer ${apiKey}` },
-          body: JSON.stringify({ model: modelName, messages, temperature: 0.5, max_tokens: 4096, stream: true }),
-        });
-        if (!res.ok) { send({ type: "error", content: `API ${res.status}` }); send({ type: "done" }); return; }
+        let fullResponse = "";
+        let iterationCount = 0;
+        const maxIterations = 10;
 
-        const reader = res.body!.getReader();
-        const decoder = new TextDecoder();
-        let buf = "";
-        while (true) {
-          const { done, value } = await reader.read();
-          if (done) break;
-          buf += decoder.decode(value, { stream: true });
-          const lines = buf.split("\n");
-          buf = lines.pop() || "";
-          for (const line of lines) {
-            const d = line.trim();
-            if (!d.startsWith("data:")) continue;
-            const json = d.slice(5).trim();
-            if (json === "[DONE]") continue;
-            try {
-              const content = JSON.parse(json).choices?.[0]?.delta?.content;
-              if (content) send({ type: "text", content });
-            } catch {}
+        while (iterationCount < maxIterations) {
+          iterationCount++;
+          const res = await fetch(`${baseURL}/chat/completions`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json", Authorization: `Bearer ${apiKey}` },
+            body: JSON.stringify({
+              model: modelName, messages,
+              tools: iterationCount === 1 ? [callAgentToolDef] : undefined,
+              temperature: 0.5, max_tokens: 4096, stream: true,
+            }),
+          });
+
+          if (!res.ok) { send({ type: "error", content: `API ${res.status}` }); break; }
+
+          const reader = res.body!.getReader();
+          const decoder = new TextDecoder();
+          let buf = "";
+          let assistantMsg = "";
+          let currentToolCalls: any[] = [];
+
+          while (true) {
+            const { done, value } = await reader.read();
+            if (done) break;
+            buf += decoder.decode(value, { stream: true });
+            const lines = buf.split("\n");
+            buf = lines.pop() || "";
+            for (const line of lines) {
+              const d = line.trim();
+              if (!d.startsWith("data:")) continue;
+              const json = d.slice(5).trim();
+              if (json === "[DONE]") continue;
+              try {
+                const parsed = JSON.parse(json);
+                const delta = parsed.choices?.[0]?.delta;
+                if (delta?.content) {
+                  assistantMsg += delta.content;
+                  fullResponse += delta.content;
+                  send({ type: "text", content: delta.content });
+                }
+                if (delta?.tool_calls) {
+                  for (const tc of delta.tool_calls) {
+                    const idx = tc.index || 0;
+                    if (!currentToolCalls[idx]) currentToolCalls[idx] = { id: tc.id || "", name: "", args: "" };
+                    if (tc.id) currentToolCalls[idx].id = tc.id;
+                    if (tc.function?.name) currentToolCalls[idx].name = tc.function.name;
+                    if (tc.function?.arguments) currentToolCalls[idx].args += tc.function.arguments;
+                  }
+                }
+              } catch {}
+            }
+          }
+
+          const validCalls = currentToolCalls.filter(tc => tc.name === "call_agent");
+          if (validCalls.length === 0) break;
+
+          messages.push({ role: "assistant", content: assistantMsg || null, tool_calls: validCalls.map(tc => ({
+            id: tc.id, type: "function", function: { name: tc.name, arguments: tc.args },
+          })) });
+
+          for (const tc of validCalls) {
+            let args: CallAgentArgs;
+            try { args = JSON.parse(tc.args); } catch { continue; }
+
+            send({ type: "agent_start", name: args.name, task: args.task });
+
+            const subFiles = await loadAgentFiles(userId, args.name);
+            const subSystem = subFiles.agentsMd || `你是 ${args.name} agent。`;
+            const subContext = subFiles.contextFiles.map(f => f.content).join("\n\n");
+            const subSkills = subFiles.skillFiles.map(f => f.content).join("\n");
+
+            const subMessages: any[] = [
+              { role: "system", content: `${subSystem}\n\n## 上下文\n${subContext}\n\n## 技能\n${subSkills}\n\n## 任务\n${args.task}\n\n${args.context || ""}` },
+              { role: "user", content: args.task },
+            ];
+
+            const subRes = await fetch(`${baseURL}/chat/completions`, {
+              method: "POST",
+              headers: { "Content-Type": "application/json", Authorization: `Bearer ${apiKey}` },
+              body: JSON.stringify({ model: modelName, messages: subMessages, temperature: 0.5, max_tokens: 2048, stream: true }),
+            });
+
+            let subOutput = "";
+            if (subRes.ok) {
+              const subReader = subRes.body!.getReader();
+              const subDecoder = new TextDecoder();
+              let subBuf = "";
+              while (true) {
+                const { done, value } = await subReader.read();
+                if (done) break;
+                subBuf += subDecoder.decode(value, { stream: true });
+                const subLines = subBuf.split("\n");
+                subBuf = subLines.pop() || "";
+                for (const line of subLines) {
+                  const sd = line.trim();
+                  if (!sd.startsWith("data:")) continue;
+                  const sj = sd.slice(5).trim();
+                  if (sj === "[DONE]") continue;
+                  try {
+                    const c = JSON.parse(sj).choices?.[0]?.delta?.content;
+                    if (c) { subOutput += c; send({ type: "agent_progress", name: args.name, text: c }); }
+                  } catch {}
+                }
+              }
+            }
+
+            const outputPath = `Context/${args.task.slice(0, 20).replace(/[\/\s]/g, "_")}.md`;
+            await writeAgentFile(userId, args.name, outputPath, subOutput);
+            await writeHeartbeat(userId, args.name, `完成: ${args.task}`);
+
+            send({ type: "agent_done", name: args.name, files: [outputPath] });
+            messages.push({ role: "tool", tool_call_id: tc.id, content: subOutput || "任务完成" });
           }
         }
+
         send({ type: "done" });
       } catch (err: any) {
         send({ type: "error", content: String(err) });
@@ -172,5 +296,7 @@ export const workRoutes = new Hono()
       }
     })());
 
-    return new Response(stream, { headers: { "Content-Type": "text/event-stream", "Cache-Control": "no-cache", Connection: "keep-alive" } });
+    return new Response(stream, {
+      headers: { "Content-Type": "text/event-stream", "Cache-Control": "no-cache", Connection: "keep-alive" },
+    });
   });
