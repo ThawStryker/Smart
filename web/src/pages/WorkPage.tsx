@@ -3,6 +3,7 @@ import { client } from "@/lib/edgespark";
 import { useWorkFiles } from "@/hooks/useWorkFiles";
 import { Crepe } from "@milkdown/crepe";
 import { Milkdown, MilkdownProvider, useEditor } from "@milkdown/react";
+import { TaskCard, type TaskCardData } from "@/components/work/TaskCard";
 import "@/milkdown.css";
 
 interface ChatMessage { id: string; role: "user" | "assistant"; content: string; isLoading?: boolean; }
@@ -114,6 +115,7 @@ export function WorkPage() {
   const [rightTab, setRightTab] = useState<"assistant" | "team">("assistant");
   const [showCreate, setShowCreate] = useState(false);
   const [rightCollapsed, setRightCollapsed] = useState(false);
+  const [taskCards, setTaskCards] = useState<Map<string, TaskCardData>>(new Map());
   const [form, setForm] = useState({ name: "", role: "custom", systemPrompt: "", tools: "read,write,edit,list,grep", skills: "" });
 
   // File tree state
@@ -475,6 +477,33 @@ export function WorkPage() {
             } else if (data.type === "error") {
               full = `错误: ${data.content}`;
               setMessages(prev => prev.map(m => m.id === aid ? { ...m, content: full, isLoading: false } : m));
+            } else if (data.type === "agent_start") {
+              setTaskCards(prev => {
+                const next = new Map(prev);
+                next.set(data.name, {
+                  id: data.name + "_" + Date.now(),
+                  name: data.name,
+                  task: data.task,
+                  status: "running",
+                  output: "",
+                  files: [],
+                });
+                return next;
+              });
+            } else if (data.type === "agent_progress") {
+              setTaskCards(prev => {
+                const next = new Map(prev);
+                const existing = next.get(data.name);
+                if (existing) next.set(data.name, { ...existing, output: existing.output + (data.text || "") });
+                return next;
+              });
+            } else if (data.type === "agent_done") {
+              setTaskCards(prev => {
+                const next = new Map(prev);
+                const existing = next.get(data.name);
+                if (existing) next.set(data.name, { ...existing, status: "done", files: data.files || [] });
+                return next;
+              });
             }
           } catch {}
         }
@@ -574,6 +603,11 @@ export function WorkPage() {
                 )}
               </div>
             </div>
+          ))}
+          {/* Task cards */}
+          {Array.from(taskCards.values()).map(card => (
+            <TaskCard key={card.id} card={card}
+              onOpenFile={(path) => openFile(`agents/${card.name}/${path}`)} />
           ))}
           {messages.length === 0 && (
             <div className="text-center py-20">
