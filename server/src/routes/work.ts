@@ -64,7 +64,8 @@ workRoutes.get("/sessions/:id/files", async (c) => {
 
 workRoutes.get("/sessions/:id/files/*", async (c) => {
   const sessionId = parseInt(c.req.param("id"));
-  const filePath = c.req.param("*");
+  const rawPath = c.req.param("*");
+  const filePath = rawPath ? decodeURIComponent(rawPath) : null;
   if (!filePath) return c.json({ error: "File path required" }, 400);
   const rows = await db
     .select()
@@ -77,7 +78,8 @@ workRoutes.get("/sessions/:id/files/*", async (c) => {
 
 workRoutes.put("/sessions/:id/files/*", async (c) => {
   const sessionId = parseInt(c.req.param("id"));
-  const filePath = c.req.param("*");
+  const rawPath = c.req.param("*");
+  const filePath = rawPath ? decodeURIComponent(rawPath) : null;
   if (!filePath) return c.json({ error: "File path required" }, 400);
   const { content, isFolder } = await c.req.json<{ content?: string; isFolder?: boolean }>();
 
@@ -129,7 +131,8 @@ workRoutes.put("/sessions/:id/files/*", async (c) => {
 
 workRoutes.delete("/sessions/:id/files/*", async (c) => {
   const sessionId = parseInt(c.req.param("id"));
-  const filePath = c.req.param("*");
+  const rawPath = c.req.param("*");
+  const filePath = rawPath ? decodeURIComponent(rawPath) : null;
   if (!filePath) return c.json({ error: "File path required" }, 400);
 
   await db
