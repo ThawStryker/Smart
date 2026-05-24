@@ -196,39 +196,36 @@ export const conversationStates = sqliteTable("conversation_states", {
   updatedAt: text("updated_at").default(sql`(datetime('now'))`),
 });
 
-// Work — 文件树持久化
-export const workFiles = sqliteTable("work_files", {
+// 工作会话
+export const workSessions = sqliteTable("work_sessions", {
   id: integer("id").primaryKey({ autoIncrement: true }),
   userId: text("user_id").notNull(),
-  path: text("path").notNull(),          // e.g. "agents/designer/AGENTS.md"
-  content: text("content").notNull().default(""),
-  isFolder: integer("is_folder", { mode: "boolean" }).default(false),
+  title: text("title").notNull().default("New Work"),
+  summary: text("summary").default(""),
+  createdAt: text("created_at").default(sql`(datetime('now'))`),
+  updatedAt: text("updated_at").default(sql`(datetime('now'))`),
+});
+
+// 工作文件树（代理配置 + 工作区文档）
+export const workFiles = sqliteTable("work_files", {
+  id: integer("id").primaryKey({ autoIncrement: true }),
+  sessionId: integer("session_id").notNull(),
+  path: text("path").notNull(),
+  content: text("content").default(""),
+  isFolder: integer("is_folder").default(0),
   createdAt: text("created_at").default(sql`(datetime('now'))`),
   updatedAt: text("updated_at").default(sql`(datetime('now'))`),
 }, (table) => ({
-  userPathIdx: uniqueIndex("work_files_user_path_idx").on(table.userId, table.path),
+  sessionPathUnique: uniqueIndex("work_files_session_path_unique").on(table.sessionId, table.path),
 }));
 
-// Work — 多角色协同 Agent
-export const workAgents = sqliteTable("work_agents", {
+// 工作对话消息
+export const workMessages = sqliteTable("work_messages", {
   id: integer("id").primaryKey({ autoIncrement: true }),
-  userId: text("user_id").notNull(),
-  name: text("name").notNull(),
-  role: text("role").notNull().default("developer"), // architect|developer|reviewer|designer|custom
-  systemPrompt: text("system_prompt").notNull().default(""),
-  tools: text("tools").default("read,write,edit,list,grep"), // comma-separated
-  skills: text("skills").default(""), // comma-separated skill names
+  sessionId: integer("session_id").notNull(),
+  agentName: text("agent_name"),
+  role: text("role").notNull(),
+  content: text("content").default(""),
   createdAt: text("created_at").default(sql`(datetime('now'))`),
-  updatedAt: text("updated_at").default(sql`(datetime('now'))`),
 });
 
-// Work — 对话历史
-export const workConversations = sqliteTable("work_conversations", {
-  id: integer("id").primaryKey({ autoIncrement: true }),
-  userId: text("user_id").notNull(),
-  title: text("title").notNull().default("新对话"),
-  messagesJson: text("messages_json").notNull().default("[]"),
-  model: text("model").default("seed-pro"),
-  createdAt: text("created_at").default(sql`(datetime('now'))`),
-  updatedAt: text("updated_at").default(sql`(datetime('now'))`),
-});
