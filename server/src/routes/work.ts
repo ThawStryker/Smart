@@ -198,7 +198,7 @@ workRoutes.post("/chat", async (c) => {
   const apiKey = isAgent
     ? (secret.get("SEED_PRO_API_KEY") || "")
     : (secret.get("SEED_LITE_API_KEY") || "");
-  const modelName = isAgent ? "doubao-seed-2-0-pro" : "doubao-seed-2-0-lite";
+  const modelName = isAgent ? "doubao-seed-2-0-pro-260215" : "doubao-seed-2-0-lite-260428";
 
   const modelConfig = {
     baseURL,
