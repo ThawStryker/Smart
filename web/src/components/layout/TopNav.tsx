@@ -14,10 +14,10 @@ interface TopNavProps {
 }
 
 const navItems = [
-  { label: "Work", path: "/work" },
   { label: "Coding", path: "/dashboard" },
   { label: "Skill", path: "/skills" },
   { label: "MCP", path: "/mcps" },
+  { label: "Work", path: "/work" },
 ];
 
 export function TopNav({ user, isAdmin }: TopNavProps) {
