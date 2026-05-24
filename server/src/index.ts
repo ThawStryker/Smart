@@ -54,6 +54,6 @@ const app = new Hono()
   .route("/", mcpsRoutes)
   .route("/", marketRoutes)
   .route("/", adminRoutes)
-  .route("/", workRoutes);
+  .route("/api/work", workRoutes);
 
 export default app;
