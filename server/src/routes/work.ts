@@ -144,6 +144,17 @@ workRoutes.delete("/sessions/:id/files/*", async (c) => {
   return c.json({ ok: true });
 });
 
+// ── Messages ──
+
+workRoutes.get("/sessions/:id/messages", async (c) => {
+  const sessionId = parseInt(c.req.param("id"));
+  const messages = await db
+    .select()
+    .from(workMessages)
+    .where(eq(workMessages.sessionId, sessionId));
+  return c.json(messages);
+});
+
 // ── Chat (Hermes orchestration) ──
 
 workRoutes.post("/chat", async (c) => {
