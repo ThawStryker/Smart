@@ -14,10 +14,6 @@ interface AgentPanelProps {
   onAgentListChange: () => void;
 }
 
-interface TreeNode {
-  [key: string]: TreeNode | FileEntry;
-}
-
 export function AgentPanel({ sessionId, onFileSelect, selectedFile, onAgentListChange }: AgentPanelProps) {
   const [files, setFiles] = useState<FileEntry[]>([]);
   const [expanded, setExpanded] = useState<Set<string>>(new Set(["agents", "workspace"]));
@@ -92,7 +88,7 @@ export function AgentPanel({ sessionId, onFileSelect, selectedFile, onAgentListC
   };
 
   const tree = buildTree(files);
-  const agents = Object.keys(tree.agents || {});
+  const agents = Object.keys(tree.__kids?.agents?.__kids || {});
 
   return (
     <div className="flex flex-col h-full">
@@ -139,8 +135,6 @@ export function AgentPanel({ sessionId, onFileSelect, selectedFile, onAgentListC
                   toggleExpand,
                   onFileSelect,
                   selectedFile,
-                  loadFiles,
-                  sessionId,
                 )}
               </div>
             )}
@@ -173,8 +167,6 @@ export function AgentPanel({ sessionId, onFileSelect, selectedFile, onAgentListC
               toggleExpand,
               onFileSelect,
               selectedFile,
-              loadFiles,
-              sessionId,
             )}
           </div>
         )}
@@ -223,54 +215,68 @@ export function AgentPanel({ sessionId, onFileSelect, selectedFile, onAgentListC
 
 // ── Tree helpers ──
 
-function buildTree(files: FileEntry[]): TreeNode {
-  const root: TreeNode = {};
+// Build a clean tree: intermediate nodes are plain { __kids: {...} } objects.
+// FileEntries are stored directly as values in __kids.
+function buildTree(files: FileEntry[]): Record<string, any> {
+  const root: Record<string, any> = { __kids: {} };
+
+  // First pass: ensure all folder paths exist
+  const folderPaths = new Set<string>();
   for (const f of files) {
     const parts = f.path.split("/");
-    let current = root;
-    for (let i = 0; i < parts.length; i++) {
-      const part = parts[i];
-      if (i === parts.length - 1) {
-        current[part] = f;
-      } else {
-        if (!current[part]) current[part] = {};
-        current = current[part] as TreeNode;
-      }
+    for (let i = 1; i <= parts.length - 1; i++) {
+      folderPaths.add(parts.slice(0, i).join("/"));
     }
   }
-  return root;
-}
 
-function getNode(tree: TreeNode, path: string): TreeNode | FileEntry | null {
-  const parts = path.split("/");
-  let current: any = tree;
-  for (const part of parts) {
-    if (!current || typeof current !== "object") return null;
-    current = current[part];
+  for (const folderPath of folderPaths) {
+    const parts = folderPath.split("/");
+    let node = root;
+    for (const part of parts) {
+      if (!node.__kids) node.__kids = {};
+      if (!node.__kids[part]) node.__kids[part] = { __kids: {} };
+      node = node.__kids[part];
+    }
   }
-  return current;
+
+  // Second pass: place all files at their leaf positions
+  for (const f of files) {
+    const parts = f.path.split("/");
+    let node = root;
+    for (let i = 0; i < parts.length - 1; i++) {
+      node = node.__kids[parts[i]];
+    }
+    if (!node.__kids) node.__kids = {};
+    node.__kids[parts[parts.length - 1]] = f;
+  }
+
+  return root;
 }
 
 function renderFileChildren(
   prefix: string,
-  tree: TreeNode,
+  tree: Record<string, any>,
   expanded: Set<string>,
   toggleExpand: (path: string) => void,
   onFileSelect: (path: string, content: string) => void,
   selectedFile: string | null,
-  _loadFiles: () => void,
-  _sessionId: number,
 ): React.ReactNode[] {
-  const node = getNode(tree, prefix);
-  if (!node || typeof node !== "object") return [];
+  // Navigate to the node for this prefix
+  const parts = prefix.split("/");
+  let node = tree;
+  for (const part of parts) {
+    if (!node.__kids || !node.__kids[part]) return [];
+    node = node.__kids[part];
+  }
 
-  const entries = Object.entries(node as Record<string, TreeNode | FileEntry>);
+  if (!node.__kids) return [];
+  const entries = Object.entries(node.__kids) as Array<[string, any]>;
 
   return entries.map(([name, child]) => {
     const childPath = `${prefix}/${name}`;
+    const isFolder = child && typeof child === "object" && child.__kids !== undefined;
 
-    // Check if folder (TreeNode without id property)
-    if (child && typeof child === "object" && !("id" in child)) {
+    if (isFolder) {
       return (
         <div key={childPath}>
           <div
@@ -283,21 +289,11 @@ function renderFileChildren(
             <span className="text-gray-600">{name}</span>
           </div>
           {expanded.has(childPath) &&
-            renderFileChildren(
-              childPath,
-              tree,
-              expanded,
-              toggleExpand,
-              onFileSelect,
-              selectedFile,
-              _loadFiles,
-              _sessionId,
-            )}
+            renderFileChildren(childPath, tree, expanded, toggleExpand, onFileSelect, selectedFile)}
         </div>
       );
     }
 
-    // File entry
     const file = child as FileEntry;
     return (
       <div
@@ -307,7 +303,7 @@ function renderFileChildren(
         }`}
         onClick={() => onFileSelect(childPath, file.content || "")}
       >
-        <span className="text-gray-400 mr-1 shrink-0">~</span>
+        <span className="mr-1 shrink-0 text-xs">~</span>
         <span className="truncate">{name}</span>
       </div>
     );
