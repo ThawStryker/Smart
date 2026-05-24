@@ -1,8 +1,10 @@
 import { Hono } from "hono";
-import { db } from "edgespark";
+import { db, vars, secret, ctx } from "edgespark";
 import { auth } from "edgespark/http";
 import { eq, and, like } from "drizzle-orm";
 import { workSessions, workFiles, workMessages } from "@defs";
+import { createSSEStream, SSE_HEADERS } from "../agent/stream";
+import { hermesLoop } from "../agent/hermes/loop";
 
 export const workRoutes = new Hono();
 
@@ -140,4 +142,81 @@ workRoutes.delete("/sessions/:id/files/*", async (c) => {
     );
 
   return c.json({ ok: true });
+});
+
+// ── Chat (Hermes orchestration) ──
+
+workRoutes.post("/chat", async (c) => {
+  const userId = auth.user!.id;
+  const { sessionId, message } = await c.req.json<{ sessionId: number; message: string }>();
+
+  // Validate session exists
+  const sessions = await db.select().from(workSessions).where(eq(workSessions.id, sessionId));
+  const session = sessions[0];
+  if (!session) return c.json({ error: "Session not found" }, 404);
+
+  // Parse @mentions
+  const mentionRegex = /@(\S+)/g;
+  const mentions: string[] = [];
+  let match;
+  while ((match = mentionRegex.exec(message)) !== null) {
+    mentions.push(match[1]);
+  }
+  const cleanMessage = message.replace(mentionRegex, "").trim();
+  const targetAgent = mentions.length > 0 ? mentions[0] : null;
+
+  // Save user message
+  await db.insert(workMessages).values({
+    sessionId,
+    agentName: null,
+    role: "user",
+    content: message,
+  });
+
+  // Load all files for agent listing
+  const allFiles = await db
+    .select()
+    .from(workFiles)
+    .where(eq(workFiles.sessionId, sessionId));
+
+  // Model config: lite for Hermes, pro for sub-agents
+  const isAgent = !!targetAgent;
+  const baseURL = isAgent
+    ? (vars.get("SEED_PRO_BASE_URL") || "https://ark.cn-beijing.volces.com/api/v3")
+    : (vars.get("SEED_LITE_BASE_URL") || "https://ark.cn-beijing.volces.com/api/v3");
+  const apiKey = isAgent
+    ? (secret.get("SEED_PRO_API_KEY") || "")
+    : (secret.get("SEED_LITE_API_KEY") || "");
+  const modelName = isAgent ? "doubao-seed-2-0-pro" : "doubao-seed-2-0-lite";
+
+  const modelConfig = {
+    baseURL,
+    apiPath: "/chat/completions",
+    apiKey,
+    modelName,
+  };
+
+  // Create event queue and SSE stream
+  const eventQueue: Array<Record<string, unknown>> = [];
+  const stream = createSSEStream(eventQueue);
+
+  // Run Hermes loop in background
+  ctx.runInBackground((async () => {
+    try {
+      await hermesLoop({
+        sessionId,
+        userId,
+        userMessage: cleanMessage,
+        targetAgent,
+        modelConfig,
+        eventQueue,
+        allFiles: allFiles.map((f) => ({ path: f.path, content: f.content || "" })),
+      });
+    } catch (err: any) {
+      eventQueue.push({ type: "error", message: err.message });
+    }
+    eventQueue.push({ type: "done" });
+  })());
+
+  return new Response(stream, { headers: SSE_HEADERS });
 });
