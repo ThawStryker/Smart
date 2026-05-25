@@ -140,6 +140,27 @@ export function AgentPanel({ sessionId, onFileSelect, selectedFile, onAgentListC
     loadFiles();
   }, [sessionId, loadFiles]);
 
+  const renameFile = useCallback(async (filePath: string, newName: string) => {
+    if (!newName.trim()) return;
+    const parentPath = filePath.split("/").slice(0, -1).join("/");
+    const newPath = parentPath ? `${parentPath}/${newName.trim()}` : newName.trim();
+    if (newPath === filePath) return;
+    const existing = files.find((f) => f.path === filePath);
+    if (!existing) return;
+    await fetch(`/api/work/sessions/${sessionId}/files/${newPath}`, {
+      method: "PUT", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ content: existing.content, isFolder: false }),
+    });
+    await fetch(`/api/work/sessions/${sessionId}/files/${filePath}`, { method: "DELETE" });
+    loadFiles();
+  }, [sessionId, files, loadFiles]);
+
+  const deleteFile = useCallback(async (filePath: string) => {
+    if (!confirm(`Delete "${filePath}"?`)) return;
+    await fetch(`/api/work/sessions/${sessionId}/files/${filePath}`, { method: "DELETE" });
+    loadFiles();
+  }, [sessionId, loadFiles]);
+
   const tree = buildTree(files);
   const agents = Object.keys(tree.__kids?.agents?.__kids || {});
 
@@ -191,7 +212,7 @@ export function AgentPanel({ sessionId, onFileSelect, selectedFile, onAgentListC
               </div>
               {isExpanded && (
                 <div className="ml-7 border-l border-[var(--app-border)]">
-                  {renderFileChildren(`agents/${name}`, tree, expanded, toggleExpand, onFileSelect, selectedFile, 0, createFile, createFolder, renameFolder, deleteFolder)}
+                  {renderFileChildren(`agents/${name}`, tree, expanded, toggleExpand, onFileSelect, selectedFile, 0, createFile, createFolder, renameFolder, deleteFolder, renameFile, deleteFile)}
                 </div>
               )}
             </div>
@@ -220,7 +241,7 @@ export function AgentPanel({ sessionId, onFileSelect, selectedFile, onAgentListC
         </div>
         {expanded.has("workspace") && (
           <div className="ml-7 border-l border-[var(--app-border)]">
-            {renderFileChildren("workspace", tree, expanded, toggleExpand, onFileSelect, selectedFile, 0, createFile, createFolder, renameFolder, deleteFolder)}
+            {renderFileChildren("workspace", tree, expanded, toggleExpand, onFileSelect, selectedFile, 0, createFile, createFolder, renameFolder, deleteFolder, renameFile, deleteFile)}
           </div>
         )}
       </div>
@@ -285,6 +306,8 @@ function renderFileChildren(
   createFolder: (parentPath: string) => Promise<void>,
   renameFolder: (folderPath: string, newName: string) => void,
   deleteFolder: (folderPath: string) => void,
+  renameFile: (filePath: string, newName: string) => void,
+  deleteFile: (filePath: string) => void,
 ): React.ReactNode[] {
   const parts = prefix.split("/");
   let node = tree;
@@ -331,7 +354,7 @@ function renderFileChildren(
                 onDelete={() => deleteFolder(cp)} />
             </span>
           </div>
-          {isOpen && renderFileChildren(cp, tree, expanded, toggleExpand, onFileSelect, selectedFile, depth + 1, createFile, createFolder, renameFolder, deleteFolder)}
+          {isOpen && renderFileChildren(cp, tree, expanded, toggleExpand, onFileSelect, selectedFile, depth + 1, createFile, createFolder, renameFolder, deleteFolder, renameFile, deleteFile)}
         </div>
       );
     }
@@ -352,7 +375,12 @@ function renderFileChildren(
         {/* Spacer to align with folder icons that have a chevron */}
         <span className="flex-shrink-0" style={{ width: "18px" }} />
         <FileIcon active={isActive} />
-        <span className="text-xs truncate ml-1.5" style={{ color: isActive ? "var(--app-accent)" : "var(--app-text-secondary)" }}>{name}</span>
+        <span className="text-xs truncate ml-1.5 flex-1" style={{ color: isActive ? "var(--app-accent)" : "var(--app-text-secondary)" }}>{name}</span>
+        <span className="opacity-0 group-hover:opacity-100 transition-opacity ml-1">
+          <FileMenu fileName={name}
+            onRename={(n) => renameFile(cp, n)}
+            onDelete={() => deleteFile(cp)} />
+        </span>
       </div>
     );
   });
@@ -515,6 +543,38 @@ function DeleteIcon() {
     <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" className="flex-shrink-0">
       <polyline points="3 6 5 6 21 6" /><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" />
     </svg>
+  );
+}
+
+// ── File context menu ──
+
+function FileMenu({
+  fileName, onRename, onDelete,
+}: {
+  fileName: string;
+  onRename: (newName: string) => void;
+  onDelete: () => void;
+}) {
+  const [open, setOpen] = useState(false);
+
+  return (
+    <div className="relative" onClick={(e) => e.stopPropagation()}>
+      <button onClick={() => setOpen(!open)}
+        className="w-5 h-5 rounded flex items-center justify-center hover:bg-[var(--app-accent-bg)] transition-colors">
+        <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor" style={{ color: "var(--app-text-tertiary)" }}>
+          <circle cx="12" cy="5" r="2" /><circle cx="12" cy="12" r="2" /><circle cx="12" cy="19" r="2" />
+        </svg>
+      </button>
+      {open && (
+        <>
+          <div className="fixed inset-0 z-30" onClick={() => setOpen(false)} />
+          <div className="absolute right-0 top-full mt-1 z-40 w-36 rounded-xl bg-[var(--app-surface)] border border-[var(--app-border)] shadow-xl overflow-hidden py-1">
+            <MenuItem icon={<RenameIcon />} label="Rename" onClick={() => { setOpen(false); const n = prompt("Rename to:", fileName); if (n) onRename(n); }} />
+            <MenuItem icon={<DeleteIcon />} label="Delete" onClick={() => { onDelete(); setOpen(false); }} danger />
+          </div>
+        </>
+      )}
+    </div>
   );
 }
 
