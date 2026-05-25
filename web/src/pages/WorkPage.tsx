@@ -124,39 +124,73 @@ export function WorkPage() {
   }
 
   const currentTitle = sessions.find((s) => s.id === sessionId)?.title || "新对话";
+  const [showSessionList, setShowSessionList] = useState(false);
 
   return (
     <div className="flex h-full bg-[var(--app-bg)]">
       {/* Left Panel */}
       <div className="w-64 flex-shrink-0 flex flex-col overflow-hidden border-r border-[var(--app-border)]">
-        {/* Session selector */}
-        <div className="px-3 py-2">
-          <div className="flex items-center gap-2 px-3 h-8 rounded-xl bg-[var(--app-surface)] border border-[var(--app-border)] min-w-0">
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--app-text-secondary)" strokeWidth="2" strokeLinecap="round" className="shrink-0">
-              <path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20" /><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z" />
-            </svg>
-            {editingTitle !== null ? (
-              <input ref={titleInputRef} value={editingTitle}
-                onChange={(e) => setEditingTitle(e.target.value)}
-                onBlur={() => handleRename(sessionId)}
-                onKeyDown={(e) => { if (e.key === "Enter") handleRename(sessionId); if (e.key === "Escape") setEditingTitle(null); }}
-                className="bg-transparent text-sm font-medium outline-none text-[var(--app-text)] min-w-0 flex-1"
-                autoFocus />
-            ) : (
-              <span className="text-sm font-medium truncate text-[var(--app-text)] cursor-pointer hover:opacity-70"
-                onDoubleClick={() => { setEditingTitle(currentTitle); setTimeout(() => titleInputRef.current?.select(), 0); }}>
-                {currentTitle}
-              </span>
+        {/* Session selector — fixed at top */}
+        <div className="px-3 py-2 flex items-center gap-1.5">
+          {/* Session dropdown */}
+          <div className="relative flex-1 min-w-0">
+            <button onClick={() => setShowSessionList(!showSessionList)}
+              onDoubleClick={() => { setEditingTitle(currentTitle); setTimeout(() => titleInputRef.current?.select(), 0); }}
+              className="flex items-center gap-1.5 w-full h-8 px-3 rounded-xl bg-[var(--app-surface)] border border-[var(--app-border)] text-sm font-medium text-[var(--app-text)] truncate hover:border-[var(--app-border-hover)] transition-colors"
+              title="双击重命名">
+              <span className="truncate flex-1 text-left">{currentTitle}</span>
+              <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="var(--app-text-tertiary)" strokeWidth="2.5" strokeLinecap="round" className="shrink-0"
+                style={{ transform: showSessionList ? "rotate(180deg)" : "rotate(0deg)", transition: "transform 0.2s" }}>
+                <polyline points="6 9 12 15 18 9" />
+              </svg>
+            </button>
+            {showSessionList && (
+              <>
+                <div className="fixed inset-0 z-30" onClick={() => setShowSessionList(false)} />
+                <div className="absolute top-full mt-1 left-0 right-0 z-40 rounded-xl bg-[var(--app-surface)] border border-[var(--app-border)] shadow-xl overflow-hidden py-1"
+                  style={{ maxHeight: "200px", overflowY: "auto" }}>
+                  {sessions.map((s) => (
+                    <div key={s.id}
+                      className="px-3 py-2 text-sm cursor-pointer transition-colors hover:bg-[var(--app-accent-bg)] flex items-center justify-between group"
+                      style={{ color: s.id === sessionId ? "var(--app-accent)" : "var(--app-text)" }}
+                      onClick={() => { setSearchParams({ session: String(s.id) }); setShowSessionList(false); }}>
+                      <span className="truncate">{s.title}</span>
+                      <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-[var(--app-accent-bg)] text-[var(--app-accent)] opacity-0 group-hover:opacity-100 shrink-0 ml-2"
+                        onClick={(e) => { e.stopPropagation(); setEditingTitle(s.title); setShowSessionList(false); }}
+                        title="双击标题可重命名">
+                        {agents.length}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              </>
             )}
-            {agents.length > 0 && (
-              <span className="text-[10px] px-1.5 py-0.5 rounded-md font-bold bg-[var(--app-accent-bg)] text-[var(--app-accent)] shrink-0">
-                {agents.length}
-              </span>
-            )}
-            <span className="text-[var(--app-border)] shrink-0">|</span>
-            <button onClick={createSession} className="text-xs font-semibold transition-opacity hover:opacity-80 text-[var(--app-accent)] shrink-0">+</button>
           </div>
+
+          {/* + New button */}
+          <button onClick={createSession}
+            className="w-8 h-8 rounded-xl flex items-center justify-center text-base font-bold transition-all duration-200 hover:scale-105 shrink-0 bg-[var(--app-accent)] text-white shadow-sm"
+            title="New session">
+            +
+          </button>
+
+          {/* Inline rename overlay */}
+          {editingTitle !== null && (
+            <div className="fixed inset-0 z-50" onClick={() => handleRename(sessionId)} />
+          )}
         </div>
+
+        {/* Inline rename input — appears below session bar when editing */}
+        {editingTitle !== null && (
+          <div className="px-3 pb-2">
+            <input ref={titleInputRef} value={editingTitle}
+              onChange={(e) => setEditingTitle(e.target.value)}
+              onBlur={() => handleRename(sessionId)}
+              onKeyDown={(e) => { if (e.key === "Enter") handleRename(sessionId); if (e.key === "Escape") setEditingTitle(null); }}
+              className="w-full h-8 px-3 rounded-xl bg-[var(--app-surface)] border border-[var(--app-accent)] text-sm outline-none text-[var(--app-text)]"
+              autoFocus />
+          </div>
+        )}
         <AgentPanel sessionId={sessionId} onFileSelect={handleFileSelect} selectedFile={activeFile?.path || null} onAgentListChange={loadAgents} />
       </div>
 
