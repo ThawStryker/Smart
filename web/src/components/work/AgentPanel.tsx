@@ -110,9 +110,13 @@ export function AgentPanel({ sessionId, onFileSelect, selectedFile, onAgentListC
               <div className="flex items-center px-3 py-2 cursor-pointer group transition-colors"
                 style={{ background: isExpanded ? "rgba(255,255,255,0.02)" : "transparent" }}
                 onClick={() => toggleExpand(`agents/${name}`)}>
-                <span className="text-[10px] mr-2 transition-transform duration-200 text-[var(--app-text-tertiary)]"
-                  style={{ transform: isExpanded ? "rotate(90deg)" : "rotate(0deg)" }}>&#9654;</span>
-                <span className="w-2 h-2 rounded-full mr-2.5 flex-shrink-0" style={{ background: color }} />
+                <span className="mr-1.5 transition-transform duration-150 flex-shrink-0 opacity-60"
+                  style={{ transform: isExpanded ? "rotate(0deg)" : "rotate(-90deg)", width: "12px", textAlign: "center" }}>
+                  <svg width="8" height="8" viewBox="0 0 24 24" fill="none" stroke="var(--app-text-tertiary)" strokeWidth="3" strokeLinecap="round">
+                    <polyline points="6 9 12 15 18 9" />
+                  </svg>
+                </span>
+                <span className="w-2 h-2 rounded-full mr-2 flex-shrink-0" style={{ background: color }} />
                 {renaming === name ? (
                   <input value={renameValue}
                     onChange={(e) => setRenameValue(e.target.value)}
@@ -153,8 +157,12 @@ export function AgentPanel({ sessionId, onFileSelect, selectedFile, onAgentListC
 
       <div className="border-t border-[var(--app-border)]">
         <div className="flex items-center px-4 py-3 cursor-pointer group" onClick={() => toggleExpand("workspace")}>
-          <span className="text-[10px] mr-2 transition-transform duration-200 text-[var(--app-text-tertiary)]"
-            style={{ transform: expanded.has("workspace") ? "rotate(90deg)" : "rotate(0deg)" }}>&#9654;</span>
+          <span className="mr-1.5 transition-transform duration-150 flex-shrink-0 opacity-60"
+            style={{ transform: expanded.has("workspace") ? "rotate(0deg)" : "rotate(-90deg)", width: "12px", textAlign: "center" }}>
+            <svg width="8" height="8" viewBox="0 0 24 24" fill="none" stroke="var(--app-text-tertiary)" strokeWidth="3" strokeLinecap="round">
+              <polyline points="6 9 12 15 18 9" />
+            </svg>
+          </span>
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--app-text-secondary)" strokeWidth="2" strokeLinecap="round" className="mr-2.5">
             <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z" />
           </svg>
@@ -199,9 +207,19 @@ function buildTree(files: FileEntry[]): Record<string, any> {
   return root;
 }
 
+function getFileIcon(name: string) {
+  const base = name.split("/").pop() || name;
+  if (base === "AGENTS.md") return AgentIcon;
+  if (base === "heartbeat.md") return HeartbeatIcon;
+  if (base === "README.md") return ReadmeIcon;
+  if (base.endsWith(".md")) return DocIcon;
+  return GenericFileIcon;
+}
+
 function renderFileChildren(
   prefix: string, tree: Record<string, any>, expanded: Set<string>,
   toggleExpand: (p: string) => void, onFileSelect: (p: string, c: string) => void, selectedFile: string | null,
+  depth = 0,
 ): React.ReactNode[] {
   const parts = prefix.split("/");
   let node = tree;
@@ -210,32 +228,138 @@ function renderFileChildren(
     node = node.__kids[part];
   }
   if (!node.__kids) return [];
-  return (Object.entries(node.__kids) as Array<[string, any]>).map(([name, child]) => {
+  const entries = Object.entries(node.__kids) as Array<[string, any]>;
+  return entries.map(([name, child], i) => {
     const cp = `${prefix}/${name}`;
+    const isLast = i === entries.length - 1;
     const isFolder = child && typeof child === "object" && child.__kids !== undefined;
+    const isOpen = expanded.has(cp);
+    const padLeft = 12 + depth * 14;
+
     if (isFolder) {
       return (
         <div key={cp}>
-          <div className="flex items-center py-1.5 pr-3 cursor-pointer group" style={{ paddingLeft: "12px" }} onClick={() => toggleExpand(cp)}>
-            <span className="text-[10px] mr-2 transition-transform duration-200 flex-shrink-0 text-[var(--app-text-tertiary)]"
-              style={{ transform: expanded.has(cp) ? "rotate(90deg)" : "rotate(0deg)" }}>&#9654;</span>
-            <span className="text-xs truncate font-medium text-[var(--app-text-secondary)]">{name}</span>
+          <div
+            className="flex items-center py-1 pr-3 cursor-pointer group transition-colors hover:bg-[var(--app-accent-bg)]"
+            style={{ paddingLeft: `${padLeft}px` }}
+            onClick={() => toggleExpand(cp)}
+          >
+            {/* Hierarchy guide line */}
+            <div className="absolute left-0 w-4 flex items-center justify-center" style={{ left: `${padLeft - 14}px` }}>
+              {!isLast && <div className="w-px h-full absolute top-3 bottom-0" style={{ background: "var(--app-border)" }} />}
+            </div>
+            <span className="mr-1.5 transition-transform duration-150 flex-shrink-0 opacity-60"
+              style={{ transform: isOpen ? "rotate(0deg)" : "rotate(-90deg)", width: "12px", textAlign: "center" }}>
+              <svg width="8" height="8" viewBox="0 0 24 24" fill="none" stroke="var(--app-text-tertiary)" strokeWidth="3" strokeLinecap="round">
+                <polyline points="6 9 12 15 18 9" />
+              </svg>
+            </span>
+            {name === "memory" ? <MemoryFolderIcon /> : name === "skills" ? <SkillsFolderIcon /> : name === "context" ? <ContextFolderIcon /> : <DefaultFolderIcon open={isOpen} />}
+            <span className="text-xs truncate font-medium ml-1.5 text-[var(--app-text-secondary)]">{name}</span>
           </div>
-          {expanded.has(cp) && renderFileChildren(cp, tree, expanded, toggleExpand, onFileSelect, selectedFile)}
+          {isOpen && renderFileChildren(cp, tree, expanded, toggleExpand, onFileSelect, selectedFile, depth + 1)}
         </div>
       );
     }
+
     const file = child as FileEntry;
     const isActive = selectedFile === cp;
+    const FileIcon = getFileIcon(name);
     return (
-      <div key={cp} className="flex items-center py-1.5 pr-3 cursor-pointer group transition-colors"
-        style={{ paddingLeft: "12px", background: isActive ? "var(--app-accent-bg)" : "transparent", borderRight: isActive ? "2px solid var(--app-accent)" : "2px solid transparent" }}
-        onClick={() => onFileSelect(cp, file.content || "")}>
-        <span className="text-[10px] mr-2 flex-shrink-0 text-[var(--app-text-tertiary)]">--</span>
-        <span className="text-xs truncate" style={{ color: isActive ? "var(--app-accent)" : "var(--app-text-secondary)" }}>{name}</span>
+      <div key={cp}
+        className="flex items-center py-1 pr-3 cursor-pointer group transition-colors hover:bg-[var(--app-accent-bg)]"
+        style={{
+          paddingLeft: `${padLeft}px`,
+          background: isActive ? "var(--app-accent-bg)" : "transparent",
+          borderRight: isActive ? "2px solid var(--app-accent)" : "2px solid transparent",
+        }}
+        onClick={() => onFileSelect(cp, file.content || "")}
+      >
+        <FileIcon active={isActive} />
+        <span className="text-xs truncate ml-1.5" style={{ color: isActive ? "var(--app-accent)" : "var(--app-text-secondary)" }}>{name}</span>
       </div>
     );
   });
+}
+
+// ── File icons (12x12 SVG) ──
+
+function GenericFileIcon({ active }: { active?: boolean }) {
+  return (
+    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke={active ? "var(--app-accent)" : "var(--app-text-tertiary)"} strokeWidth="2" strokeLinecap="round" className="flex-shrink-0">
+      <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" /><polyline points="14 2 14 8 20 8" />
+    </svg>
+  );
+}
+
+function DocIcon({ active }: { active?: boolean }) {
+  return (
+    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke={active ? "var(--app-accent)" : "#60a5fa"} strokeWidth="2" strokeLinecap="round" className="flex-shrink-0">
+      <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" /><polyline points="14 2 14 8 20 8" /><line x1="16" y1="13" x2="8" y2="13" /><line x1="16" y1="17" x2="8" y2="17" />
+    </svg>
+  );
+}
+
+function AgentIcon({ active }: { active?: boolean }) {
+  return (
+    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke={active ? "var(--app-accent)" : "var(--app-accent)"} strokeWidth="2" strokeLinecap="round" className="flex-shrink-0">
+      <circle cx="12" cy="8" r="4" /><path d="M4 20c0-4 4-7 8-7s8 3 8 7" />
+    </svg>
+  );
+}
+
+function HeartbeatIcon({ active }: { active?: boolean }) {
+  return (
+    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke={active ? "var(--app-accent)" : "#f87171"} strokeWidth="2" strokeLinecap="round" className="flex-shrink-0">
+      <polyline points="22 12 18 12 15 21 9 3 6 12 2 12" />
+    </svg>
+  );
+}
+
+function ReadmeIcon({ active }: { active?: boolean }) {
+  return (
+    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke={active ? "var(--app-accent)" : "var(--app-text-tertiary)"} strokeWidth="2" strokeLinecap="round" className="flex-shrink-0">
+      <circle cx="12" cy="12" r="10" /><line x1="12" y1="16" x2="12" y2="12" /><line x1="12" y1="8" x2="12.01" y2="8" />
+    </svg>
+  );
+}
+
+// ── Folder icons ──
+
+function DefaultFolderIcon({ open }: { open: boolean }) {
+  return (
+    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--app-text-tertiary)" strokeWidth="2" strokeLinecap="round" className="flex-shrink-0">
+      {open ? (
+        <path d="M5 19a2 2 0 0 1-2-2V7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v1M5 19h14a2 2 0 0 0 2-2v-5a2 2 0 0 0-2-2H9a2 2 0 0 0-2 2v5a2 2 0 0 1-2 2z" />
+      ) : (
+        <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z" />
+      )}
+    </svg>
+  );
+}
+
+function MemoryFolderIcon() {
+  return (
+    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#fb923c" strokeWidth="2" strokeLinecap="round" className="flex-shrink-0">
+      <path d="M12 20h9" /><path d="M16.5 3.5a2.121 2.121 0 1 1 3 3L7 19l-4 1 1-4L16.5 3.5z" />
+    </svg>
+  );
+}
+
+function SkillsFolderIcon() {
+  return (
+    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#a78bfa" strokeWidth="2" strokeLinecap="round" className="flex-shrink-0">
+      <polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2" />
+    </svg>
+  );
+}
+
+function ContextFolderIcon() {
+  return (
+    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#4ade80" strokeWidth="2" strokeLinecap="round" className="flex-shrink-0">
+      <path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20" /><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z" />
+    </svg>
+  );
 }
 
 export default AgentPanel;
