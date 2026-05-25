@@ -98,41 +98,42 @@ export function WorkPage() {
   }
 
   return (
-    <div className="flex flex-col h-full bg-[var(--app-bg)]">
-      {/* Session bar */}
-      <div className="flex items-center gap-2 px-3 py-1.5">
-        <div className="flex items-center gap-2 px-3 h-8 rounded-xl bg-[var(--app-surface)] border border-[var(--app-border)] min-w-0">
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--app-text-secondary)" strokeWidth="2" strokeLinecap="round" className="shrink-0">
-            <path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20" /><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z" />
-          </svg>
-          <select value={sessionId} onChange={(e) => { if (e.target.value) setSearchParams({ session: e.target.value }); }}
-            className="bg-transparent text-sm font-medium cursor-pointer outline-none appearance-none pr-4 text-[var(--app-text)] min-w-0 truncate">
-            {sessions.map((s) => (
-              <option key={s.id} value={s.id} style={{ background: "var(--app-surface)", color: "var(--app-text)" } as any}>{s.title}</option>
-            ))}
-          </select>
-          {agents.length > 0 && (
-            <span className="text-[10px] px-1.5 py-0.5 rounded-md font-bold bg-[var(--app-accent-bg)] text-[var(--app-accent)] shrink-0">
-              {agents.length}
-            </span>
-          )}
-          <span className="text-[var(--app-border)] shrink-0">|</span>
-          <button onClick={() => setShowNewSession(true)} className="text-xs font-semibold transition-opacity hover:opacity-80 text-[var(--app-accent)] shrink-0">+ New</button>
+    <div className="flex h-full bg-[var(--app-bg)]">
+      {/* Left Panel */}
+      <div className="w-64 flex-shrink-0 flex flex-col overflow-hidden border-r border-[var(--app-border)]">
+        {/* Session selector */}
+        <div className="px-3 py-2">
+          <div className="flex items-center gap-2 px-3 h-8 rounded-xl bg-[var(--app-surface)] border border-[var(--app-border)] min-w-0">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--app-text-secondary)" strokeWidth="2" strokeLinecap="round" className="shrink-0">
+              <path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20" /><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z" />
+            </svg>
+            <select value={sessionId} onChange={(e) => { if (e.target.value) setSearchParams({ session: e.target.value }); }}
+              className="bg-transparent text-sm font-medium cursor-pointer outline-none appearance-none pr-4 text-[var(--app-text)] min-w-0 truncate">
+              {sessions.map((s) => (
+                <option key={s.id} value={s.id} style={{ background: "var(--app-surface)", color: "var(--app-text)" } as any}>{s.title}</option>
+              ))}
+            </select>
+            {agents.length > 0 && (
+              <span className="text-[10px] px-1.5 py-0.5 rounded-md font-bold bg-[var(--app-accent-bg)] text-[var(--app-accent)] shrink-0">
+                {agents.length}
+              </span>
+            )}
+            <span className="text-[var(--app-border)] shrink-0">|</span>
+            <button onClick={() => setShowNewSession(true)} className="text-xs font-semibold transition-opacity hover:opacity-80 text-[var(--app-accent)] shrink-0">+</button>
+          </div>
         </div>
+        <AgentPanel sessionId={sessionId} onFileSelect={handleFileSelect} selectedFile={activeFile?.path || null} onAgentListChange={loadAgents} />
       </div>
 
-      {/* Panels */}
-      <div className="flex flex-1 min-h-0">
-        <div className="w-64 flex-shrink-0 overflow-hidden border-r border-[var(--app-border)]">
-          <AgentPanel sessionId={sessionId} onFileSelect={handleFileSelect} selectedFile={activeFile?.path || null} onAgentListChange={loadAgents} />
-        </div>
-        <div className="flex-1 overflow-hidden">
-          <DocumentEditor content={activeFile?.content || ""} filePath={activeFile?.path || null} isStreaming={isStreaming} onSave={handleSave}
-            onContentChange={(content) => { if (activeFile) setActiveFile({ ...activeFile, content }); }} />
-        </div>
-        <div className="w-80 flex-shrink-0 overflow-hidden border-l border-[var(--app-border)]">
-          <ChatPanel sessionId={sessionId} agents={agents} />
-        </div>
+      {/* Center Panel */}
+      <div className="flex-1 overflow-hidden">
+        <DocumentEditor content={activeFile?.content || ""} filePath={activeFile?.path || null} isStreaming={isStreaming} onSave={handleSave}
+          onContentChange={(content) => { if (activeFile) setActiveFile({ ...activeFile, content }); }} />
+      </div>
+
+      {/* Right Panel */}
+      <div className="w-80 flex-shrink-0 overflow-hidden border-l border-[var(--app-border)]">
+        <ChatPanel sessionId={sessionId} agents={agents} />
       </div>
 
       {showNewSession && <SessionModal title={newSessionTitle} setTitle={setNewSessionTitle} onCreate={createSession} onClose={() => setShowNewSession(false)} />}
