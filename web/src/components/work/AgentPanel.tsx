@@ -330,6 +330,8 @@ function renderFileChildren(
         }}
         onClick={() => onFileSelect(cp, file.content || "")}
       >
+        {/* Spacer to align with folder icons that have a chevron */}
+        <span className="flex-shrink-0" style={{ width: "18px" }} />
         <FileIcon active={isActive} />
         <span className="text-xs truncate ml-1.5" style={{ color: isActive ? "var(--app-accent)" : "var(--app-text-secondary)" }}>{name}</span>
       </div>
