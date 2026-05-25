@@ -155,10 +155,27 @@ export function WorkPage() {
                       style={{ color: s.id === sessionId ? "var(--app-accent)" : "var(--app-text)" }}
                       onClick={() => { setSearchParams({ session: String(s.id) }); setShowSessionList(false); }}>
                       <span className="truncate">{s.title}</span>
-                      <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-[var(--app-accent-bg)] text-[var(--app-accent)] opacity-0 group-hover:opacity-100 shrink-0 ml-2"
-                        onClick={(e) => { e.stopPropagation(); setEditingTitle(s.title); setShowSessionList(false); }}
-                        title="双击标题可重命名">
-                        {agents.length}
+                      <span className="flex items-center gap-0.5 opacity-0 group-hover:opacity-100 shrink-0 ml-2">
+                        <button onClick={(e) => { e.stopPropagation(); setEditingTitle(s.title); setShowSessionList(false); }}
+                          className="w-5 h-5 rounded-md flex items-center justify-center hover:bg-[var(--app-accent-bg)] transition-colors"
+                          title="重命名">
+                          <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="var(--app-text-secondary)" strokeWidth="2" strokeLinecap="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" /><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z" /></svg>
+                        </button>
+                        <button onClick={async (e) => {
+                          e.stopPropagation();
+                          if (!confirm("Delete this session?")) return;
+                          await fetch(`/api/work/sessions/${s.id}`, { method: "DELETE" });
+                          loadSessions();
+                          if (s.id === sessionId) {
+                            const remaining = sessions.filter((x) => x.id !== s.id);
+                            if (remaining.length > 0) setSearchParams({ session: String(remaining[0].id) });
+                            else setSearchParams({});
+                          }
+                        }}
+                          className="w-5 h-5 rounded-md flex items-center justify-center hover:bg-[var(--app-red-bg)] transition-colors"
+                          title="删除">
+                          <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="var(--app-red)" strokeWidth="2" strokeLinecap="round"><polyline points="3 6 5 6 21 6" /><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" /></svg>
+                        </button>
                       </span>
                     </div>
                   ))}
