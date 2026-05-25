@@ -131,12 +131,12 @@ export function WorkPage() {
       {/* Left Panel */}
       <div className="w-64 flex-shrink-0 flex flex-col overflow-hidden border-r border-[var(--app-border)]">
         {/* Session selector — fixed at top */}
-        <div className="px-3 py-2 flex items-center gap-1.5">
+        <div className="px-3 py-2.5 flex items-center gap-2">
           {/* Session dropdown */}
           <div className="relative flex-1 min-w-0">
             <button onClick={() => setShowSessionList(!showSessionList)}
               onDoubleClick={() => { setEditingTitle(currentTitle); setTimeout(() => titleInputRef.current?.select(), 0); }}
-              className="flex items-center gap-1.5 w-full h-8 px-3 rounded-xl bg-[var(--app-surface)] border border-[var(--app-border)] text-sm font-medium text-[var(--app-text)] truncate hover:border-[var(--app-border-hover)] transition-colors"
+              className="flex items-center gap-1.5 w-full h-7 px-2.5 rounded-lg bg-[var(--app-surface)] border border-[var(--app-border)] text-sm font-medium text-[var(--app-text)] truncate hover:border-[var(--app-border-hover)] transition-colors"
               title="双击重命名">
               <span className="truncate flex-1 text-left">{currentTitle}</span>
               <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="var(--app-text-tertiary)" strokeWidth="2.5" strokeLinecap="round" className="shrink-0"
@@ -147,8 +147,8 @@ export function WorkPage() {
             {showSessionList && (
               <>
                 <div className="fixed inset-0 z-30" onClick={() => setShowSessionList(false)} />
-                <div className="absolute top-full mt-1 left-0 right-0 z-40 rounded-xl bg-[var(--app-surface)] border border-[var(--app-border)] shadow-xl overflow-hidden py-1"
-                  style={{ maxHeight: "200px", overflowY: "auto" }}>
+                <div className="absolute top-full mt-1 left-0 right-0 z-40 rounded-xl bg-[var(--app-surface)] border border-[var(--app-border)] shadow-xl overflow-hidden"
+                  style={{ maxHeight: "240px", overflowY: "auto" }}>
                   {sessions.map((s) => (
                     <div key={s.id}
                       className="px-3 py-2 text-sm cursor-pointer transition-colors hover:bg-[var(--app-accent-bg)] flex items-center justify-between group"
@@ -179,15 +179,20 @@ export function WorkPage() {
                       </span>
                     </div>
                   ))}
+                  <div className="border-t border-[var(--app-border)]" />
+                  <div onClick={() => { createSession(); setShowSessionList(false); }}
+                    className="px-3 py-2 text-sm cursor-pointer transition-colors hover:bg-[var(--app-accent-bg)] text-[var(--app-accent)] font-medium flex items-center gap-2">
+                    <span className="text-base leading-none">+</span> 新对话
+                  </div>
                 </div>
               </>
             )}
           </div>
 
-          {/* + New button */}
+          {/* + New session — subtle circle */}
           <button onClick={createSession}
-            className="w-8 h-8 rounded-xl flex items-center justify-center text-base font-bold transition-all duration-200 hover:scale-105 shrink-0 bg-[var(--app-accent)] text-white shadow-sm"
-            title="New session">
+            className="w-6 h-6 rounded-full flex items-center justify-center text-sm font-medium transition-all duration-200 hover:scale-110 shrink-0 border border-[var(--app-accent-border)] text-[var(--app-accent)] hover:bg-[var(--app-accent-bg)]"
+            title="新对话">
             +
           </button>
 
