@@ -100,7 +100,7 @@ export function WorkPage() {
   return (
     <div className="flex h-[calc(100vh-56px)] bg-[var(--app-bg)]">
       {/* Top bar */}
-      <div className="absolute top-[58px] left-3 right-3 z-20 flex items-center gap-3 h-10">
+      <div className="absolute top-[56px] left-3 right-3 z-20 flex items-center gap-3 h-10">
         <div className="flex items-center gap-3 px-3 h-full rounded-xl bg-[var(--app-surface)] border border-[var(--app-border)]">
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--app-text-secondary)" strokeWidth="2" strokeLinecap="round">
             <path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20" /><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z" />
@@ -121,7 +121,7 @@ export function WorkPage() {
         )}
       </div>
 
-      <div className="flex flex-1 pt-14">
+      <div className="flex flex-1 pt-12">
         <div className="w-64 flex-shrink-0 overflow-hidden border-r border-[var(--app-border)]">
           <AgentPanel sessionId={sessionId} onFileSelect={handleFileSelect} selectedFile={activeFile?.path || null} onAgentListChange={loadAgents} />
         </div>
