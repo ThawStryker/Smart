@@ -283,6 +283,14 @@ function renderFileChildren(
   }
   if (!node.__kids) return [];
   const entries = Object.entries(node.__kids) as Array<[string, any]>;
+  // Sort: folders first, then files
+  entries.sort(([, a], [, b]) => {
+    const aIsFolder = a && typeof a === "object" && a.__kids !== undefined;
+    const bIsFolder = b && typeof b === "object" && b.__kids !== undefined;
+    if (aIsFolder && !bIsFolder) return -1;
+    if (!aIsFolder && bIsFolder) return 1;
+    return 0;
+  });
   return entries.map(([name, child]) => {
     const cp = `${prefix}/${name}`;
     const isFolder = child && typeof child === "object" && child.__kids !== undefined;
