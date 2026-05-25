@@ -32,9 +32,8 @@ function getAgentColor(name: string): string {
 export function AgentPanel({ sessionId, onFileSelect, selectedFile, onAgentListChange }: AgentPanelProps) {
   const [files, setFiles] = useState<FileEntry[]>([]);
   const [expanded, setExpanded] = useState<Set<string>>(new Set(["agents", "workspace"]));
-  const [showCreateAgent, setShowCreateAgent] = useState(false);
-  const [newAgentName, setNewAgentName] = useState("");
-  const [newAgentPrompt, setNewAgentPrompt] = useState("");
+  const [renaming, setRenaming] = useState<string | null>(null);
+  const [renameValue, setRenameValue] = useState("");
 
   const loadFiles = useCallback(async () => {
     const res = await fetch(`/api/work/sessions/${sessionId}/files`);
@@ -52,8 +51,12 @@ export function AgentPanel({ sessionId, onFileSelect, selectedFile, onAgentListC
   };
 
   const createAgent = async () => {
-    if (!newAgentName.trim()) return;
-    const basePath = `agents/${newAgentName.trim()}`;
+    // Find a unique default name
+    const existingNames = Object.keys(tree.__kids?.agents?.__kids || {});
+    let idx = existingNames.length + 1;
+    let name = `新Agent ${idx}`;
+    while (existingNames.includes(name)) { idx++; name = `新Agent ${idx}`; }
+    const basePath = `agents/${name}`;
     for (const sub of ["", "/memory", "/skills", "/context"]) {
       await fetch(`/api/work/sessions/${sessionId}/files/${basePath}${sub}`, {
         method: "PUT", headers: { "Content-Type": "application/json" },
@@ -62,9 +65,24 @@ export function AgentPanel({ sessionId, onFileSelect, selectedFile, onAgentListC
     }
     await fetch(`/api/work/sessions/${sessionId}/files/${basePath}/AGENTS.md`, {
       method: "PUT", headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ content: newAgentPrompt || `# ${newAgentName}\n\nDescribe the role of this agent.` }),
+      body: JSON.stringify({ content: `# ${name}\n\nDescribe the role of this agent.` }),
     });
-    setNewAgentName(""); setNewAgentPrompt(""); setShowCreateAgent(false);
+    loadFiles(); onAgentListChange();
+  };
+
+  const renameAgent = async (oldName: string, newName: string) => {
+    if (!newName.trim() || newName.trim() === oldName) return;
+    // Get all files under the old agent path
+    const agentFiles = files.filter((f) => f.path.startsWith(`agents/${oldName}/`));
+    // Create new folders/files with new path, delete old
+    for (const f of agentFiles) {
+      const newPath = f.path.replace(`agents/${oldName}/`, `agents/${newName.trim()}/`);
+      await fetch(`/api/work/sessions/${sessionId}/files/${newPath}`, {
+        method: "PUT", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ content: f.content, isFolder: f.isFolder ? true : undefined }),
+      });
+    }
+    await fetch(`/api/work/sessions/${sessionId}/files/agents/${oldName}`, { method: "DELETE" });
     loadFiles(); onAgentListChange();
   };
 
@@ -80,7 +98,7 @@ export function AgentPanel({ sessionId, onFileSelect, selectedFile, onAgentListC
     <div className="flex flex-col h-full bg-[var(--app-bg)]">
       <div className="flex items-center justify-between px-4 py-3 border-b border-[var(--app-border)]">
         <span className="text-xs font-bold uppercase tracking-widest text-[var(--app-text-tertiary)]">Agents</span>
-        <button onClick={() => setShowCreateAgent(true)}
+        <button onClick={createAgent}
           className="w-6 h-6 rounded-lg flex items-center justify-center text-base font-medium transition-all duration-200 hover:scale-110 bg-[var(--app-accent-bg)] text-[var(--app-accent)]">+</button>
       </div>
 
@@ -96,7 +114,25 @@ export function AgentPanel({ sessionId, onFileSelect, selectedFile, onAgentListC
                 <span className="text-[10px] mr-2 transition-transform duration-200 text-[var(--app-text-tertiary)]"
                   style={{ transform: isExpanded ? "rotate(90deg)" : "rotate(0deg)" }}>&#9654;</span>
                 <span className="w-2 h-2 rounded-full mr-2.5 flex-shrink-0" style={{ background: color }} />
-                <span className="text-sm font-medium truncate text-[var(--app-text)]">@{name}</span>
+                {renaming === name ? (
+                  <input value={renameValue}
+                    onChange={(e) => setRenameValue(e.target.value)}
+                    onBlur={() => { renameAgent(name, renameValue); setRenaming(null); }}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter") { renameAgent(name, renameValue); setRenaming(null); }
+                      if (e.key === "Escape") setRenaming(null);
+                    }}
+                    className="flex-1 bg-[var(--app-surface)] border border-[var(--app-accent)] rounded px-2 py-0.5 text-sm outline-none text-[var(--app-text)] min-w-0"
+                    autoFocus
+                    onFocus={(e) => e.target.select()}
+                    onClick={(e) => e.stopPropagation()}
+                  />
+                ) : (
+                  <span className="text-sm font-medium truncate text-[var(--app-text)] cursor-pointer hover:opacity-70"
+                    onDoubleClick={(e) => { e.stopPropagation(); setRenaming(name); setRenameValue(name); }}>
+                    @{name}
+                  </span>
+                )}
                 <button onClick={(e) => { e.stopPropagation(); if (confirm(`Delete @${name}?`)) deleteAgent(name); }}
                   className="ml-auto text-xs opacity-0 group-hover:opacity-60 hover:opacity-100 transition-all px-1 text-[var(--app-red)]">&times;</button>
               </div>
@@ -111,7 +147,7 @@ export function AgentPanel({ sessionId, onFileSelect, selectedFile, onAgentListC
         {agents.length === 0 && (
           <div className="px-4 py-8 text-center text-xs leading-relaxed text-[var(--app-text-tertiary)]">
             No agents yet.<br />
-            <button onClick={() => setShowCreateAgent(true)} className="mt-2 font-medium hover:underline text-[var(--app-accent)]">Create your first agent</button>
+            <button onClick={createAgent} className="mt-2 font-medium hover:underline text-[var(--app-accent)]">Create your first agent</button>
           </div>
         )}
       </div>
@@ -132,31 +168,6 @@ export function AgentPanel({ sessionId, onFileSelect, selectedFile, onAgentListC
         )}
       </div>
 
-      {showCreateAgent && <CreateModal name={newAgentName} setName={setNewAgentName} prompt={newAgentPrompt} setPrompt={setNewAgentPrompt} onCreate={createAgent} onClose={() => setShowCreateAgent(false)} />}
-    </div>
-  );
-}
-
-function CreateModal({ name, setName, prompt, setPrompt, onCreate, onClose }: {
-  name: string; setName: (v: string) => void; prompt: string; setPrompt: (v: string) => void; onCreate: () => void; onClose: () => void;
-}) {
-  return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center" style={{ background: "var(--app-modal-backdrop)", backdropFilter: "blur(4px)" }}>
-      <div className="rounded-2xl p-6 w-[420px] shadow-2xl bg-[var(--app-surface)] border border-[var(--app-border)] animate-pageIn">
-        <h3 className="text-lg font-bold mb-5 tracking-tight text-[var(--app-text)]">Define an Agent</h3>
-        <label className="block text-xs font-semibold mb-1.5 uppercase tracking-wider text-[var(--app-text-secondary)]">Name</label>
-        <input className="w-full rounded-xl px-4 py-3 text-sm outline-none mb-4 transition-all duration-200 bg-[var(--app-bg)] border border-[var(--app-border)] text-[var(--app-text)]"
-          placeholder="e.g. architect, writer, reviewer" value={name} onChange={(e) => setName(e.target.value)} autoFocus />
-        <label className="block text-xs font-semibold mb-1.5 uppercase tracking-wider text-[var(--app-text-secondary)]">System Prompt</label>
-        <textarea className="w-full rounded-xl px-4 py-3 text-sm outline-none mb-5 resize-none h-28 transition-all duration-200 bg-[var(--app-bg)] border border-[var(--app-border)] text-[var(--app-text)]"
-          placeholder="Describe what this agent does, its expertise, writing style, and personality..."
-          value={prompt} onChange={(e) => setPrompt(e.target.value)} />
-        <div className="flex gap-2 justify-end">
-          <button onClick={onClose} className="px-5 py-2.5 text-sm font-medium rounded-xl transition-colors text-[var(--app-text-secondary)]">Cancel</button>
-          <button onClick={onCreate} className="px-5 py-2.5 text-sm font-bold rounded-xl transition-all duration-200 hover:-translate-y-0.5 active:translate-y-0 text-white"
-            style={{ background: "linear-gradient(135deg, var(--app-accent), var(--app-accent-deep))", boxShadow: "0 2px 16px rgba(245,158,11,0.2)" }}>Create Agent</button>
-        </div>
-      </div>
     </div>
   );
 }
