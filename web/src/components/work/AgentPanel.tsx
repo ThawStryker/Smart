@@ -55,20 +55,11 @@ export function AgentPanel({ sessionId, onFileSelect, selectedFile, onAgentListC
     let idx = existingNames.length + 1;
     let name = `新Agent ${idx}`;
     while (existingNames.includes(name)) { idx++; name = `新Agent ${idx}`; }
-    const basePath = `agents/${name}`;
-    // All requests in parallel
-    await Promise.all([
-      ...["", "/memory", "/skills", "/context"].map((sub) =>
-        fetch(`/api/work/sessions/${sessionId}/files/${basePath}${sub}`, {
-          method: "PUT", headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ isFolder: true }),
-        })
-      ),
-      fetch(`/api/work/sessions/${sessionId}/files/${basePath}/AGENTS.md`, {
-        method: "PUT", headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ content: `# ${name}\n\nDescribe the role of this agent.` }),
-      }),
-    ]);
+    // Single request: server auto-creates parent folders
+    await fetch(`/api/work/sessions/${sessionId}/files/agents/${name}/AGENTS.md`, {
+      method: "PUT", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ content: `# ${name}\n\nDescribe the role of this agent.` }),
+    });
     loadFiles(); onAgentListChange();
   };
 
