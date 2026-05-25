@@ -22,18 +22,50 @@ export function WorkPage() {
   const [isStreaming, setIsStreaming] = useState(false);
   const [agents, setAgents] = useState<string[]>([]);
   const [editingTitle, setEditingTitle] = useState<string | null>(null);
+  const [initializing, setInitializing] = useState(true);
   const titleInputRef = useRef<HTMLInputElement>(null);
+  const initRan = useRef(false);
 
   const loadSessions = useCallback(async () => {
     const res = await fetch("/api/work/sessions");
     if (res.ok) {
       const data = await res.json();
       setSessions(data);
-      if (!sessionId && data.length > 0) setSearchParams({ session: String(data[0].id) });
+      if (data.length > 0) {
+        const currentId = parseInt(searchParams.get("session") || "0");
+        const exists = data.some((s: WorkSession) => s.id === currentId);
+        if (currentId && exists) {
+          // Keep current session
+        } else {
+          setSearchParams({ session: String(data[0].id) });
+        }
+      }
+      return data;
     }
-  }, [sessionId, setSearchParams]);
+    return [];
+  }, [searchParams, setSearchParams]);
 
-  useEffect(() => { loadSessions(); }, [loadSessions]);
+  useEffect(() => {
+    if (initRan.current) return;
+    initRan.current = true;
+    (async () => {
+      let data = await loadSessions();
+      // If no sessions, auto-create one
+      if (data.length === 0) {
+        const res = await fetch("/api/work/sessions", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ title: "新对话" }),
+        });
+        if (res.ok) {
+          const s = await res.json();
+          setSearchParams({ session: String(s.id) });
+          data = await loadSessions();
+        }
+      }
+      setInitializing(false);
+    })();
+  }, []);
 
   const loadAgents = useCallback(async () => {
     if (!sessionId) return;
@@ -99,32 +131,19 @@ export function WorkPage() {
     });
   };
 
-  if (!sessionId) {
+  const currentTitle = sessions.find((s) => s.id === sessionId)?.title || "新对话";
+  const [showSessionList, setShowSessionList] = useState(false);
+
+  if (initializing || !sessionId) {
     return (
       <div className="flex items-center justify-center h-full bg-[var(--app-bg)]">
-        <div className="text-center animate-pageIn">
-          <div className="w-20 h-20 rounded-2xl mx-auto mb-6 flex items-center justify-center border border-[var(--app-accent-border)]"
-            style={{ background: "linear-gradient(135deg, var(--app-accent-bg), rgba(217,119,6,0.06))" }}>
-            <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="var(--app-accent)" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
-              <path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5" />
-            </svg>
-          </div>
-          <h2 className="text-2xl font-bold mb-3 tracking-tight text-[var(--app-text)]">Start a Work Session</h2>
-          <p className="mb-8 text-sm leading-relaxed max-w-sm text-[var(--app-text-tertiary)]">
-            Create a session, define your agents, and let them collaborate on documents.
-          </p>
-          <button onClick={createSession}
-            className="px-6 py-3 rounded-xl text-sm font-semibold transition-all duration-200 hover:-translate-y-0.5 active:translate-y-0 text-white"
-            style={{ background: "linear-gradient(135deg, var(--app-accent), var(--app-accent-deep))", boxShadow: "0 4px 24px rgba(245,158,11,0.25)" }}>
-            Create New Session
-          </button>
+        <div className="flex items-center gap-2 text-sm text-[var(--app-text-tertiary)] animate-pulse">
+          <span className="w-1.5 h-1.5 rounded-full bg-[var(--app-accent)]" />
+          Loading...
         </div>
       </div>
     );
   }
-
-  const currentTitle = sessions.find((s) => s.id === sessionId)?.title || "新对话";
-  const [showSessionList, setShowSessionList] = useState(false);
 
   return (
     <div className="flex h-full bg-[var(--app-bg)]">
