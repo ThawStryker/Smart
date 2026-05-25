@@ -252,7 +252,18 @@ function buildTree(files: FileEntry[]): Record<string, any> {
     let node = root;
     for (let i = 0; i < parts.length - 1; i++) node = node.__kids[parts[i]];
     if (!node.__kids) node.__kids = {};
-    node.__kids[parts[parts.length - 1]] = f;
+    const lastName = parts[parts.length - 1];
+    // Folders need __kids wrapper even when empty, so they render as folders
+    if (f.isFolder) {
+      const existing = node.__kids[lastName];
+      if (existing && existing.__kids) {
+        existing._entry = f;
+      } else {
+        node.__kids[lastName] = { __kids: {}, _entry: f };
+      }
+    } else {
+      node.__kids[lastName] = f;
+    }
   }
   return root;
 }
