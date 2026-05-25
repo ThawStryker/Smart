@@ -116,6 +116,30 @@ export function AgentPanel({ sessionId, onFileSelect, selectedFile, onAgentListC
     loadFiles();
   }, [sessionId, files, loadFiles]);
 
+  const renameFolder = useCallback(async (folderPath: string, newName: string) => {
+    if (!newName.trim()) return;
+    const parentPath = folderPath.split("/").slice(0, -1).join("/");
+    const newPath = parentPath ? `${parentPath}/${newName.trim()}` : newName.trim();
+    if (newPath === folderPath) return;
+    const children = files.filter((f) => f.path.startsWith(`${folderPath}/`) || f.path === folderPath);
+    // Copy all children to new paths, then delete old
+    await Promise.all(children.map((f) => {
+      const updated = f.path.replace(folderPath, newPath);
+      return fetch(`/api/work/sessions/${sessionId}/files/${updated}`, {
+        method: "PUT", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ content: f.content, isFolder: f.isFolder ? true : undefined }),
+      });
+    }));
+    await fetch(`/api/work/sessions/${sessionId}/files/${folderPath}`, { method: "DELETE" });
+    loadFiles();
+  }, [sessionId, files, loadFiles]);
+
+  const deleteFolder = useCallback(async (folderPath: string) => {
+    if (!confirm(`Delete "${folderPath}" and all its contents?`)) return;
+    await fetch(`/api/work/sessions/${sessionId}/files/${folderPath}`, { method: "DELETE" });
+    loadFiles();
+  }, [sessionId, loadFiles]);
+
   const tree = buildTree(files);
   const agents = Object.keys(tree.__kids?.agents?.__kids || {});
 
@@ -167,7 +191,7 @@ export function AgentPanel({ sessionId, onFileSelect, selectedFile, onAgentListC
               </div>
               {isExpanded && (
                 <div className="ml-7 border-l border-[var(--app-border)]">
-                  {renderFileChildren(`agents/${name}`, tree, expanded, toggleExpand, onFileSelect, selectedFile, 0, createFile, createFolder)}
+                  {renderFileChildren(`agents/${name}`, tree, expanded, toggleExpand, onFileSelect, selectedFile, 0, createFile, createFolder, renameFolder, deleteFolder)}
                 </div>
               )}
             </div>
@@ -196,7 +220,7 @@ export function AgentPanel({ sessionId, onFileSelect, selectedFile, onAgentListC
         </div>
         {expanded.has("workspace") && (
           <div className="ml-7 border-l border-[var(--app-border)]">
-            {renderFileChildren("workspace", tree, expanded, toggleExpand, onFileSelect, selectedFile, 0, createFile, createFolder)}
+            {renderFileChildren("workspace", tree, expanded, toggleExpand, onFileSelect, selectedFile, 0, createFile, createFolder, renameFolder, deleteFolder)}
           </div>
         )}
       </div>
@@ -248,6 +272,8 @@ function renderFileChildren(
   depth: number,
   createFile: (parentPath: string) => Promise<void>,
   createFolder: (parentPath: string) => Promise<void>,
+  renameFolder: (folderPath: string, newName: string) => void,
+  deleteFolder: (folderPath: string) => void,
 ): React.ReactNode[] {
   const parts = prefix.split("/");
   let node = tree;
@@ -279,21 +305,14 @@ function renderFileChildren(
             </span>
             {name === "memory" ? <MemoryFolderIcon /> : name === "skills" ? <SkillsFolderIcon /> : name === "context" ? <ContextFolderIcon /> : <DefaultFolderIcon open={isOpen} />}
             <span className="text-xs truncate font-medium ml-1.5 text-[var(--app-text-secondary)] flex-1">{name}</span>
-            {/* New file / folder buttons — visible on hover */}
-            <span className="flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity ml-1">
-              <button onClick={(e) => { e.stopPropagation(); createFile(cp); }}
-                className="w-5 h-5 rounded flex items-center justify-center hover:bg-[var(--app-accent-bg)] transition-colors"
-                title="新建文件">
-                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="var(--app-text-tertiary)" strokeWidth="2" strokeLinecap="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" /><polyline points="14 2 14 8 20 8" /><line x1="12" y1="18" x2="12" y2="12" /><line x1="9" y1="15" x2="15" y2="15" /></svg>
-              </button>
-              <button onClick={(e) => { e.stopPropagation(); createFolder(cp); }}
-                className="w-5 h-5 rounded flex items-center justify-center hover:bg-[var(--app-accent-bg)] transition-colors"
-                title="新建文件夹">
-                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="var(--app-text-tertiary)" strokeWidth="2" strokeLinecap="round"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z" /><line x1="12" y1="11" x2="12" y2="17" /><line x1="9" y1="14" x2="15" y2="14" /></svg>
-              </button>
+            <span className="opacity-0 group-hover:opacity-100 transition-opacity ml-1">
+              <FolderMenu folderPath={cp} folderName={name}
+                onCreateFile={createFile} onCreateFolder={createFolder}
+                onRename={(n) => renameFolder(cp, n)}
+                onDelete={() => deleteFolder(cp)} />
             </span>
           </div>
-          {isOpen && renderFileChildren(cp, tree, expanded, toggleExpand, onFileSelect, selectedFile, depth + 1, createFile, createFolder)}
+          {isOpen && renderFileChildren(cp, tree, expanded, toggleExpand, onFileSelect, selectedFile, depth + 1, createFile, createFolder, renameFolder, deleteFolder)}
         </div>
       );
     }
@@ -394,6 +413,86 @@ function ContextFolderIcon() {
   return (
     <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#4ade80" strokeWidth="2" strokeLinecap="round" className="flex-shrink-0">
       <path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20" /><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z" />
+    </svg>
+  );
+}
+
+// ── Folder context menu ──
+
+function FolderMenu({
+  folderPath, folderName, onCreateFile, onCreateFolder, onRename, onDelete,
+}: {
+  folderPath: string; folderName: string;
+  onCreateFile: (parentPath: string) => Promise<void>;
+  onCreateFolder: (parentPath: string) => Promise<void>;
+  onRename: (newName: string) => void;
+  onDelete: () => void;
+}) {
+  const [open, setOpen] = useState(false);
+
+  return (
+    <div className="relative" onClick={(e) => e.stopPropagation()}>
+      <button onClick={() => setOpen(!open)}
+        className="w-5 h-5 rounded flex items-center justify-center hover:bg-[var(--app-accent-bg)] transition-colors">
+        <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor" style={{ color: "var(--app-text-tertiary)" }}>
+          <circle cx="12" cy="5" r="2" /><circle cx="12" cy="12" r="2" /><circle cx="12" cy="19" r="2" />
+        </svg>
+      </button>
+      {open && (
+        <>
+          <div className="fixed inset-0 z-30" onClick={() => setOpen(false)} />
+          <div className="absolute right-0 top-full mt-1 z-40 w-40 rounded-xl bg-[var(--app-surface)] border border-[var(--app-border)] shadow-xl overflow-hidden py-1">
+            <MenuItem icon={<NewFileIcon />} label="New File" onClick={() => { onCreateFile(folderPath); setOpen(false); }} />
+            <MenuItem icon={<NewFolderIcon />} label="New Folder" onClick={() => { onCreateFolder(folderPath); setOpen(false); }} />
+            <div className="border-t border-[var(--app-border)] my-0.5" />
+            <MenuItem icon={<RenameIcon />} label="Rename" onClick={() => { setOpen(false); const n = prompt("Rename to:", folderName); if (n) onRename(n); }} />
+            <MenuItem icon={<DeleteIcon />} label="Delete" onClick={() => { onDelete(); setOpen(false); }} danger />
+          </div>
+        </>
+      )}
+    </div>
+  );
+}
+
+function MenuItem({ icon, label, onClick, danger }: { icon: React.ReactNode; label: string; onClick: () => void; danger?: boolean }) {
+  return (
+    <div onClick={onClick}
+      className="px-3 py-1.5 text-xs cursor-pointer transition-colors hover:bg-[var(--app-accent-bg)] flex items-center gap-2"
+      style={{ color: danger ? "var(--app-red)" : "var(--app-text)" }}>
+      {icon}
+      {label}
+    </div>
+  );
+}
+
+function NewFileIcon() {
+  return (
+    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" className="flex-shrink-0">
+      <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" /><polyline points="14 2 14 8 20 8" /><line x1="12" y1="18" x2="12" y2="12" /><line x1="9" y1="15" x2="15" y2="15" />
+    </svg>
+  );
+}
+
+function NewFolderIcon() {
+  return (
+    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" className="flex-shrink-0">
+      <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z" /><line x1="12" y1="11" x2="12" y2="17" /><line x1="9" y1="14" x2="15" y2="14" />
+    </svg>
+  );
+}
+
+function RenameIcon() {
+  return (
+    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" className="flex-shrink-0">
+      <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" /><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z" />
+    </svg>
+  );
+}
+
+function DeleteIcon() {
+  return (
+    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" className="flex-shrink-0">
+      <polyline points="3 6 5 6 21 6" /><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" />
     </svg>
   );
 }
