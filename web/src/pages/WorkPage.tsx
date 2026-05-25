@@ -100,25 +100,25 @@ export function WorkPage() {
   return (
     <div className="flex flex-col h-full bg-[var(--app-bg)]">
       {/* Session bar */}
-      <div className="flex items-center gap-3 px-3 py-2">
-        <div className="flex items-center gap-3 px-3 h-9 rounded-xl bg-[var(--app-surface)] border border-[var(--app-border)]">
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--app-text-secondary)" strokeWidth="2" strokeLinecap="round">
+      <div className="flex items-center gap-2 px-3 py-2">
+        <div className="flex items-center gap-2 px-3 h-9 rounded-xl bg-[var(--app-surface)] border border-[var(--app-border)] min-w-0">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--app-text-secondary)" strokeWidth="2" strokeLinecap="round" className="shrink-0">
             <path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20" /><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z" />
           </svg>
           <select value={sessionId} onChange={(e) => { if (e.target.value) setSearchParams({ session: e.target.value }); }}
-            className="bg-transparent text-sm font-medium cursor-pointer outline-none appearance-none pr-4 text-[var(--app-text)]">
+            className="bg-transparent text-sm font-medium cursor-pointer outline-none appearance-none pr-4 text-[var(--app-text)] min-w-0 truncate">
             {sessions.map((s) => (
               <option key={s.id} value={s.id} style={{ background: "var(--app-surface)", color: "var(--app-text)" } as any}>{s.title}</option>
             ))}
           </select>
-          <span className="text-[var(--app-border)]">|</span>
-          <button onClick={() => setShowNewSession(true)} className="text-xs font-semibold transition-opacity hover:opacity-80 text-[var(--app-accent)]">+ New</button>
+          {agents.length > 0 && (
+            <span className="text-[10px] px-1.5 py-0.5 rounded-md font-bold bg-[var(--app-accent-bg)] text-[var(--app-accent)] shrink-0">
+              {agents.length}
+            </span>
+          )}
+          <span className="text-[var(--app-border)] shrink-0">|</span>
+          <button onClick={() => setShowNewSession(true)} className="text-xs font-semibold transition-opacity hover:opacity-80 text-[var(--app-accent)] shrink-0">+ New</button>
         </div>
-        {agents.length > 0 && (
-          <span className="text-xs px-2.5 py-1 rounded-lg font-medium bg-[var(--app-accent-bg)] border border-[var(--app-accent-border)] text-[var(--app-accent)]">
-            {agents.length} agent{agents.length !== 1 ? "s" : ""}
-          </span>
-        )}
       </div>
 
       {/* Panels */}
