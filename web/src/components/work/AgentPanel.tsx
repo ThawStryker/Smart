@@ -90,6 +90,32 @@ export function AgentPanel({ sessionId, onFileSelect, selectedFile, onAgentListC
     loadFiles(); onAgentListChange();
   };
 
+  const createFile = useCallback(async (parentPath: string) => {
+    const prefix = parentPath.endsWith("/") ? parentPath : `${parentPath}/`;
+    const name = `新文件.md`;
+    let path = `${prefix}${name}`;
+    let idx = 1;
+    while (files.some((f) => f.path === path)) { idx++; path = `${prefix}新文件 ${idx}.md`; }
+    await fetch(`/api/work/sessions/${sessionId}/files/${path}`, {
+      method: "PUT", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ content: "" }),
+    });
+    loadFiles();
+  }, [sessionId, files, loadFiles]);
+
+  const createFolder = useCallback(async (parentPath: string) => {
+    const prefix = parentPath.endsWith("/") ? parentPath : `${parentPath}/`;
+    const name = "新文件夹";
+    let path = `${prefix}${name}`;
+    let idx = 1;
+    while (files.some((f) => f.path === path)) { idx++; path = `${prefix}新文件夹 ${idx}`; }
+    await fetch(`/api/work/sessions/${sessionId}/files/${path}`, {
+      method: "PUT", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ isFolder: true }),
+    });
+    loadFiles();
+  }, [sessionId, files, loadFiles]);
+
   const tree = buildTree(files);
   const agents = Object.keys(tree.__kids?.agents?.__kids || {});
 
@@ -141,7 +167,7 @@ export function AgentPanel({ sessionId, onFileSelect, selectedFile, onAgentListC
               </div>
               {isExpanded && (
                 <div className="ml-7 border-l border-[var(--app-border)]">
-                  {renderFileChildren(`agents/${name}`, tree, expanded, toggleExpand, onFileSelect, selectedFile)}
+                  {renderFileChildren(`agents/${name}`, tree, expanded, toggleExpand, onFileSelect, selectedFile, 0, createFile, createFolder)}
                 </div>
               )}
             </div>
@@ -170,7 +196,7 @@ export function AgentPanel({ sessionId, onFileSelect, selectedFile, onAgentListC
         </div>
         {expanded.has("workspace") && (
           <div className="ml-7 border-l border-[var(--app-border)]">
-            {renderFileChildren("workspace", tree, expanded, toggleExpand, onFileSelect, selectedFile)}
+            {renderFileChildren("workspace", tree, expanded, toggleExpand, onFileSelect, selectedFile, 0, createFile, createFolder)}
           </div>
         )}
       </div>
@@ -219,7 +245,9 @@ function getFileIcon(name: string) {
 function renderFileChildren(
   prefix: string, tree: Record<string, any>, expanded: Set<string>,
   toggleExpand: (p: string) => void, onFileSelect: (p: string, c: string) => void, selectedFile: string | null,
-  depth = 0,
+  depth: number,
+  createFile: (parentPath: string) => Promise<void>,
+  createFolder: (parentPath: string) => Promise<void>,
 ): React.ReactNode[] {
   const parts = prefix.split("/");
   let node = tree;
@@ -229,9 +257,8 @@ function renderFileChildren(
   }
   if (!node.__kids) return [];
   const entries = Object.entries(node.__kids) as Array<[string, any]>;
-  return entries.map(([name, child], i) => {
+  return entries.map(([name, child]) => {
     const cp = `${prefix}/${name}`;
-    const isLast = i === entries.length - 1;
     const isFolder = child && typeof child === "object" && child.__kids !== undefined;
     const isOpen = expanded.has(cp);
     const padLeft = 12 + depth * 14;
@@ -240,14 +267,10 @@ function renderFileChildren(
       return (
         <div key={cp}>
           <div
-            className="flex items-center py-1 pr-3 cursor-pointer group transition-colors hover:bg-[var(--app-accent-bg)]"
+            className="flex items-center py-1 pr-1 cursor-pointer group transition-colors hover:bg-[var(--app-accent-bg)]"
             style={{ paddingLeft: `${padLeft}px` }}
             onClick={() => toggleExpand(cp)}
           >
-            {/* Hierarchy guide line */}
-            <div className="absolute left-0 w-4 flex items-center justify-center" style={{ left: `${padLeft - 14}px` }}>
-              {!isLast && <div className="w-px h-full absolute top-3 bottom-0" style={{ background: "var(--app-border)" }} />}
-            </div>
             <span className="mr-1.5 transition-transform duration-150 flex-shrink-0 opacity-60"
               style={{ transform: isOpen ? "rotate(0deg)" : "rotate(-90deg)", width: "12px", textAlign: "center" }}>
               <svg width="8" height="8" viewBox="0 0 24 24" fill="none" stroke="var(--app-text-tertiary)" strokeWidth="3" strokeLinecap="round">
@@ -255,9 +278,22 @@ function renderFileChildren(
               </svg>
             </span>
             {name === "memory" ? <MemoryFolderIcon /> : name === "skills" ? <SkillsFolderIcon /> : name === "context" ? <ContextFolderIcon /> : <DefaultFolderIcon open={isOpen} />}
-            <span className="text-xs truncate font-medium ml-1.5 text-[var(--app-text-secondary)]">{name}</span>
+            <span className="text-xs truncate font-medium ml-1.5 text-[var(--app-text-secondary)] flex-1">{name}</span>
+            {/* New file / folder buttons — visible on hover */}
+            <span className="flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity ml-1">
+              <button onClick={(e) => { e.stopPropagation(); createFile(cp); }}
+                className="w-5 h-5 rounded flex items-center justify-center hover:bg-[var(--app-accent-bg)] transition-colors"
+                title="新建文件">
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="var(--app-text-tertiary)" strokeWidth="2" strokeLinecap="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" /><polyline points="14 2 14 8 20 8" /><line x1="12" y1="18" x2="12" y2="12" /><line x1="9" y1="15" x2="15" y2="15" /></svg>
+              </button>
+              <button onClick={(e) => { e.stopPropagation(); createFolder(cp); }}
+                className="w-5 h-5 rounded flex items-center justify-center hover:bg-[var(--app-accent-bg)] transition-colors"
+                title="新建文件夹">
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="var(--app-text-tertiary)" strokeWidth="2" strokeLinecap="round"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z" /><line x1="12" y1="11" x2="12" y2="17" /><line x1="9" y1="14" x2="15" y2="14" /></svg>
+              </button>
+            </span>
           </div>
-          {isOpen && renderFileChildren(cp, tree, expanded, toggleExpand, onFileSelect, selectedFile, depth + 1)}
+          {isOpen && renderFileChildren(cp, tree, expanded, toggleExpand, onFileSelect, selectedFile, depth + 1, createFile, createFolder)}
         </div>
       );
     }
