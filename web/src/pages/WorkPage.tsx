@@ -74,7 +74,7 @@ export function WorkPage() {
 
   if (!sessionId) {
     return (
-      <div className="flex items-center justify-center h-[calc(100vh-56px)] bg-[var(--app-bg)]">
+      <div className="flex items-center justify-center h-full bg-[var(--app-bg)]">
         <div className="text-center animate-pageIn">
           <div className="w-20 h-20 rounded-2xl mx-auto mb-6 flex items-center justify-center border border-[var(--app-accent-border)]"
             style={{ background: "linear-gradient(135deg, var(--app-accent-bg), rgba(217,119,6,0.06))" }}>
@@ -98,10 +98,10 @@ export function WorkPage() {
   }
 
   return (
-    <div className="flex h-[calc(100vh-56px)] bg-[var(--app-bg)]">
-      {/* Top bar */}
-      <div className="absolute top-[56px] left-3 right-3 z-20 flex items-center gap-3 h-10">
-        <div className="flex items-center gap-3 px-3 h-full rounded-xl bg-[var(--app-surface)] border border-[var(--app-border)]">
+    <div className="flex flex-col h-full bg-[var(--app-bg)]">
+      {/* Session bar */}
+      <div className="flex items-center gap-3 px-3 py-2">
+        <div className="flex items-center gap-3 px-3 h-9 rounded-xl bg-[var(--app-surface)] border border-[var(--app-border)]">
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--app-text-secondary)" strokeWidth="2" strokeLinecap="round">
             <path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20" /><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z" />
           </svg>
@@ -121,7 +121,8 @@ export function WorkPage() {
         )}
       </div>
 
-      <div className="flex flex-1 pt-12">
+      {/* Panels */}
+      <div className="flex flex-1 min-h-0">
         <div className="w-64 flex-shrink-0 overflow-hidden border-r border-[var(--app-border)]">
           <AgentPanel sessionId={sessionId} onFileSelect={handleFileSelect} selectedFile={activeFile?.path || null} onAgentListChange={loadAgents} />
         </div>
