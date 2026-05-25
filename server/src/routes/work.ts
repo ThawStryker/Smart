@@ -152,6 +152,39 @@ workRoutes.delete("/sessions/:id/files/*", async (c) => {
   return c.json({ ok: true });
 });
 
+// ── Batch file creation ──
+
+workRoutes.post("/sessions/:id/files/batch", async (c) => {
+  const sessionId = parseInt(c.req.param("id"));
+  const items = await c.req.json<Array<{ path: string; content?: string; isFolder?: boolean }>>();
+
+  // Auto-create parent folders
+  const folderSet = new Set<string>();
+  for (const item of items) {
+    const parts = item.path.split("/");
+    for (let i = 1; i < parts.length; i++) {
+      folderSet.add(parts.slice(0, i).join("/"));
+    }
+  }
+
+  const allOps = [
+    ...Array.from(folderSet).map((fp) =>
+      db.insert(workFiles).values({ sessionId, path: fp, content: "", isFolder: 1 })
+    ),
+    ...items.map((item) =>
+      db.insert(workFiles).values({
+        sessionId,
+        path: item.path,
+        content: item.content || "",
+        isFolder: item.isFolder ? 1 : 0,
+      })
+    ),
+  ];
+
+  if (allOps.length > 0) await db.batch(allOps as [typeof allOps[0], ...typeof allOps]);
+  return c.json({ ok: true });
+});
+
 // ── Messages ──
 
 workRoutes.get("/sessions/:id/messages", async (c) => {

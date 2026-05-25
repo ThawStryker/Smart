@@ -55,10 +55,17 @@ export function AgentPanel({ sessionId, onFileSelect, selectedFile, onAgentListC
     let idx = existingNames.length + 1;
     let name = `新Agent ${idx}`;
     while (existingNames.includes(name)) { idx++; name = `新Agent ${idx}`; }
-    // Single request: server auto-creates parent folders
-    await fetch(`/api/work/sessions/${sessionId}/files/agents/${name}/AGENTS.md`, {
-      method: "PUT", headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ content: `# ${name}\n\nDescribe the role of this agent.` }),
+    const base = `agents/${name}`;
+    // Single batch: all folders + AGENTS.md in one round trip
+    await fetch(`/api/work/sessions/${sessionId}/files/batch`, {
+      method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify([
+        { path: `${base}/AGENTS.md`, content: `# ${name}\n\nDescribe the role of this agent.` },
+        { path: `${base}/memory/README.md`, content: "# Memory\n\nAgent memories and learned knowledge." },
+        { path: `${base}/skills/README.md`, content: "# Skills\n\nAdd skill definitions here." },
+        { path: `${base}/context/README.md`, content: "# Context\n\nReference materials for the agent." },
+        { path: `${base}/heartbeat.md`, content: `## Status\n- Created: ${new Date().toISOString()}\n` },
+      ]),
     });
     loadFiles(); onAgentListChange();
   };
