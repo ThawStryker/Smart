@@ -17,9 +17,10 @@ interface StreamingState {
 interface ChatPanelProps {
   sessionId: number;
   agents: string[];
+  onFirstMessage?: (message: string) => void;
 }
 
-export function ChatPanel({ sessionId, agents }: ChatPanelProps) {
+export function ChatPanel({ sessionId, agents, onFirstMessage }: ChatPanelProps) {
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [input, setInput] = useState("");
   const [streaming, setStreaming] = useState<StreamingState>({
@@ -62,6 +63,12 @@ export function ChatPanel({ sessionId, agents }: ChatPanelProps) {
   const sendMessage = async () => {
     if (!input.trim() || streaming.isActive) return;
     const message = input.trim(); setInput("");
+
+    // Auto-title on first message
+    if (messages.length === 0 && onFirstMessage) {
+      onFirstMessage(message);
+    }
+
     setStreaming({ agentName: null, content: "", isActive: true });
     const controller = new AbortController(); abortRef.current = controller;
     try {

@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { useSearchParams } from "react-router-dom";
 import { AgentPanel } from "@/components/work/AgentPanel";
 import { DocumentEditor } from "@/components/work/DocumentEditor";
@@ -10,6 +10,10 @@ interface WorkSession {
   summary: string;
 }
 
+function truncateTitle(text: string, max = 30): string {
+  return text.length > max ? text.slice(0, max) + "..." : text;
+}
+
 export function WorkPage() {
   const [searchParams, setSearchParams] = useSearchParams();
   const sessionId = parseInt(searchParams.get("session") || "0");
@@ -17,8 +21,8 @@ export function WorkPage() {
   const [activeFile, setActiveFile] = useState<{ path: string; content: string } | null>(null);
   const [isStreaming, setIsStreaming] = useState(false);
   const [agents, setAgents] = useState<string[]>([]);
-  const [showNewSession, setShowNewSession] = useState(false);
-  const [newSessionTitle, setNewSessionTitle] = useState("");
+  const [editingTitle, setEditingTitle] = useState<string | null>(null);
+  const titleInputRef = useRef<HTMLInputElement>(null);
 
   const loadSessions = useCallback(async () => {
     const res = await fetch("/api/work/sessions");
@@ -48,17 +52,40 @@ export function WorkPage() {
   useEffect(() => { loadAgents(); }, [loadAgents]);
 
   const createSession = async () => {
-    if (!newSessionTitle.trim()) return;
     const res = await fetch("/api/work/sessions", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ title: newSessionTitle.trim() }),
+      body: JSON.stringify({ title: "新对话" }),
     });
     if (res.ok) {
       const s = await res.json();
-      setNewSessionTitle(""); setShowNewSession(false);
-      setSearchParams({ session: String(s.id) }); loadSessions();
+      setSearchParams({ session: String(s.id) });
+      loadSessions();
     }
+  };
+
+  const updateSessionTitle = async (id: number, title: string) => {
+    await fetch(`/api/work/sessions/${id}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ title }),
+    });
+    setSessions((prev) => prev.map((s) => (s.id === id ? { ...s, title } : s)));
+  };
+
+  const handleFirstMessage = useCallback(async (message: string) => {
+    if (!sessionId) return;
+    const current = sessions.find((s) => s.id === sessionId);
+    if (current?.title === "新对话") {
+      await updateSessionTitle(sessionId, truncateTitle(message));
+    }
+  }, [sessionId, sessions]);
+
+  const handleRename = async (id: number) => {
+    if (editingTitle !== null && editingTitle.trim()) {
+      await updateSessionTitle(id, editingTitle.trim());
+    }
+    setEditingTitle(null);
   };
 
   const handleFileSelect = (path: string, content: string) => {
@@ -86,16 +113,17 @@ export function WorkPage() {
           <p className="mb-8 text-sm leading-relaxed max-w-sm text-[var(--app-text-tertiary)]">
             Create a session, define your agents, and let them collaborate on documents.
           </p>
-          <button onClick={() => setShowNewSession(true)}
+          <button onClick={createSession}
             className="px-6 py-3 rounded-xl text-sm font-semibold transition-all duration-200 hover:-translate-y-0.5 active:translate-y-0 text-white"
             style={{ background: "linear-gradient(135deg, var(--app-accent), var(--app-accent-deep))", boxShadow: "0 4px 24px rgba(245,158,11,0.25)" }}>
             Create New Session
           </button>
-          {showNewSession && <SessionModal title={newSessionTitle} setTitle={setNewSessionTitle} onCreate={createSession} onClose={() => setShowNewSession(false)} />}
         </div>
       </div>
     );
   }
+
+  const currentTitle = sessions.find((s) => s.id === sessionId)?.title || "新对话";
 
   return (
     <div className="flex h-full bg-[var(--app-bg)]">
@@ -107,19 +135,26 @@ export function WorkPage() {
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--app-text-secondary)" strokeWidth="2" strokeLinecap="round" className="shrink-0">
               <path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20" /><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z" />
             </svg>
-            <select value={sessionId} onChange={(e) => { if (e.target.value) setSearchParams({ session: e.target.value }); }}
-              className="bg-transparent text-sm font-medium cursor-pointer outline-none appearance-none pr-4 text-[var(--app-text)] min-w-0 truncate">
-              {sessions.map((s) => (
-                <option key={s.id} value={s.id} style={{ background: "var(--app-surface)", color: "var(--app-text)" } as any}>{s.title}</option>
-              ))}
-            </select>
+            {editingTitle !== null ? (
+              <input ref={titleInputRef} value={editingTitle}
+                onChange={(e) => setEditingTitle(e.target.value)}
+                onBlur={() => handleRename(sessionId)}
+                onKeyDown={(e) => { if (e.key === "Enter") handleRename(sessionId); if (e.key === "Escape") setEditingTitle(null); }}
+                className="bg-transparent text-sm font-medium outline-none text-[var(--app-text)] min-w-0 flex-1"
+                autoFocus />
+            ) : (
+              <span className="text-sm font-medium truncate text-[var(--app-text)] cursor-pointer hover:opacity-70"
+                onDoubleClick={() => { setEditingTitle(currentTitle); setTimeout(() => titleInputRef.current?.select(), 0); }}>
+                {currentTitle}
+              </span>
+            )}
             {agents.length > 0 && (
               <span className="text-[10px] px-1.5 py-0.5 rounded-md font-bold bg-[var(--app-accent-bg)] text-[var(--app-accent)] shrink-0">
                 {agents.length}
               </span>
             )}
             <span className="text-[var(--app-border)] shrink-0">|</span>
-            <button onClick={() => setShowNewSession(true)} className="text-xs font-semibold transition-opacity hover:opacity-80 text-[var(--app-accent)] shrink-0">+</button>
+            <button onClick={createSession} className="text-xs font-semibold transition-opacity hover:opacity-80 text-[var(--app-accent)] shrink-0">+</button>
           </div>
         </div>
         <AgentPanel sessionId={sessionId} onFileSelect={handleFileSelect} selectedFile={activeFile?.path || null} onAgentListChange={loadAgents} />
@@ -133,33 +168,7 @@ export function WorkPage() {
 
       {/* Right Panel */}
       <div className="w-80 flex-shrink-0 overflow-hidden border-l border-[var(--app-border)]">
-        <ChatPanel sessionId={sessionId} agents={agents} />
-      </div>
-
-      {showNewSession && <SessionModal title={newSessionTitle} setTitle={setNewSessionTitle} onCreate={createSession} onClose={() => setShowNewSession(false)} />}
-    </div>
-  );
-}
-
-function SessionModal({ title, setTitle, onCreate, onClose }: {
-  title: string; setTitle: (v: string) => void; onCreate: () => void; onClose: () => void;
-}) {
-  return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center" style={{ background: "var(--app-modal-backdrop)", backdropFilter: "blur(4px)" }}>
-      <div className="rounded-2xl p-6 w-96 shadow-2xl bg-[var(--app-surface)] border border-[var(--app-border)] animate-pageIn">
-        <h3 className="text-lg font-bold mb-4 tracking-tight text-[var(--app-text)]">New Session</h3>
-        <input
-          className="w-full rounded-xl px-4 py-3 text-sm outline-none transition-all duration-200 bg-[var(--app-bg)] border border-[var(--app-border)] text-[var(--app-text)]"
-          placeholder="Session name..." value={title}
-          onChange={(e) => setTitle(e.target.value)} onKeyDown={(e) => e.key === "Enter" && onCreate()} autoFocus />
-        <div className="flex gap-2 justify-end mt-5">
-          <button onClick={onClose} className="px-5 py-2.5 text-sm font-medium rounded-xl transition-colors hover:opacity-80 text-[var(--app-text-secondary)]">Cancel</button>
-          <button onClick={onCreate}
-            className="px-5 py-2.5 text-sm font-bold rounded-xl transition-all duration-200 hover:-translate-y-0.5 active:translate-y-0 text-white"
-            style={{ background: "linear-gradient(135deg, var(--app-accent), var(--app-accent-deep))", boxShadow: "0 2px 16px rgba(245,158,11,0.2)" }}>
-            Create
-          </button>
-        </div>
+        <ChatPanel sessionId={sessionId} agents={agents} onFirstMessage={handleFirstMessage} />
       </div>
     </div>
   );
