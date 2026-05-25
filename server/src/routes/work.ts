@@ -158,30 +158,40 @@ workRoutes.post("/sessions/:id/files/batch", async (c) => {
   const sessionId = parseInt(c.req.param("id"));
   const items = await c.req.json<Array<{ path: string; content?: string; isFolder?: boolean }>>();
 
-  // Auto-create parent folders
-  const folderSet = new Set<string>();
+  // Collect all paths including parent folders
+  const allPaths = new Set<string>();
   for (const item of items) {
     const parts = item.path.split("/");
-    for (let i = 1; i < parts.length; i++) {
-      folderSet.add(parts.slice(0, i).join("/"));
+    for (let i = 1; i <= parts.length; i++) {
+      allPaths.add(parts.slice(0, i).join("/"));
     }
   }
 
-  const allOps = [
-    ...Array.from(folderSet).map((fp) =>
-      db.insert(workFiles).values({ sessionId, path: fp, content: "", isFolder: 1 })
-    ),
-    ...items.map((item) =>
-      db.insert(workFiles).values({
-        sessionId,
-        path: item.path,
-        content: item.content || "",
-        isFolder: item.isFolder ? 1 : 0,
-      })
-    ),
-  ];
+  // Check which paths already exist
+  const existing = await db
+    .select({ path: workFiles.path })
+    .from(workFiles)
+    .where(eq(workFiles.sessionId, sessionId));
+  const existingPaths = new Set(existing.map((e) => e.path));
 
-  if (allOps.length > 0) await db.batch(allOps as [typeof allOps[0], ...typeof allOps]);
+  // Filter to only new paths
+  const newPaths = Array.from(allPaths).filter((p) => !existingPaths.has(p));
+
+  // Build batch inserts
+  const ops = newPaths.map((fp) => {
+    const item = items.find((i) => i.path === fp);
+    return db.insert(workFiles).values({
+      sessionId,
+      path: fp,
+      content: item?.content || "",
+      isFolder: item?.isFolder || !item ? 1 : 0,
+    });
+  });
+
+  if (ops.length > 0) {
+    // Execute sequentially — batch has strict typing constraints
+    for (const op of ops) await op;
+  }
   return c.json({ ok: true });
 });
 
