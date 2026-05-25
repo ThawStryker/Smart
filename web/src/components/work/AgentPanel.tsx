@@ -51,37 +51,38 @@ export function AgentPanel({ sessionId, onFileSelect, selectedFile, onAgentListC
   };
 
   const createAgent = async () => {
-    // Find a unique default name
     const existingNames = Object.keys(tree.__kids?.agents?.__kids || {});
     let idx = existingNames.length + 1;
     let name = `新Agent ${idx}`;
     while (existingNames.includes(name)) { idx++; name = `新Agent ${idx}`; }
     const basePath = `agents/${name}`;
-    for (const sub of ["", "/memory", "/skills", "/context"]) {
-      await fetch(`/api/work/sessions/${sessionId}/files/${basePath}${sub}`, {
+    // All requests in parallel
+    await Promise.all([
+      ...["", "/memory", "/skills", "/context"].map((sub) =>
+        fetch(`/api/work/sessions/${sessionId}/files/${basePath}${sub}`, {
+          method: "PUT", headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ isFolder: true }),
+        })
+      ),
+      fetch(`/api/work/sessions/${sessionId}/files/${basePath}/AGENTS.md`, {
         method: "PUT", headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ isFolder: true }),
-      });
-    }
-    await fetch(`/api/work/sessions/${sessionId}/files/${basePath}/AGENTS.md`, {
-      method: "PUT", headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ content: `# ${name}\n\nDescribe the role of this agent.` }),
-    });
+        body: JSON.stringify({ content: `# ${name}\n\nDescribe the role of this agent.` }),
+      }),
+    ]);
     loadFiles(); onAgentListChange();
   };
 
   const renameAgent = async (oldName: string, newName: string) => {
     if (!newName.trim() || newName.trim() === oldName) return;
-    // Get all files under the old agent path
     const agentFiles = files.filter((f) => f.path.startsWith(`agents/${oldName}/`));
-    // Create new folders/files with new path, delete old
-    for (const f of agentFiles) {
+    // Copy all files in parallel, then delete old
+    await Promise.all(agentFiles.map((f) => {
       const newPath = f.path.replace(`agents/${oldName}/`, `agents/${newName.trim()}/`);
-      await fetch(`/api/work/sessions/${sessionId}/files/${newPath}`, {
+      return fetch(`/api/work/sessions/${sessionId}/files/${newPath}`, {
         method: "PUT", headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ content: f.content, isFolder: f.isFolder ? true : undefined }),
       });
-    }
+    }));
     await fetch(`/api/work/sessions/${sessionId}/files/agents/${oldName}`, { method: "DELETE" });
     loadFiles(); onAgentListChange();
   };
