@@ -100,8 +100,8 @@ export function WorkPage() {
   return (
     <div className="flex flex-col h-full bg-[var(--app-bg)]">
       {/* Session bar */}
-      <div className="flex items-center gap-2 px-3 py-2">
-        <div className="flex items-center gap-2 px-3 h-9 rounded-xl bg-[var(--app-surface)] border border-[var(--app-border)] min-w-0">
+      <div className="flex items-center gap-2 px-3 py-1.5">
+        <div className="flex items-center gap-2 px-3 h-8 rounded-xl bg-[var(--app-surface)] border border-[var(--app-border)] min-w-0">
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--app-text-secondary)" strokeWidth="2" strokeLinecap="round" className="shrink-0">
             <path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20" /><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z" />
           </svg>
