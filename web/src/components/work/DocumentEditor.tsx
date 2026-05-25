@@ -25,7 +25,14 @@ export function DocumentEditor({
   const filePathRef = useRef(filePath); filePathRef.current = filePath;
 
   useEffect(() => {
-    if (!containerRef.current || crepeRef.current) return;
+    if (!containerRef.current) return;
+
+    // Destroy previous editor if switching files
+    if (crepeRef.current) {
+      crepeRef.current.destroy();
+      crepeRef.current = null;
+    }
+
     const crepe = new Crepe({
       root: containerRef.current,
       defaultValue: content || "",
@@ -48,7 +55,7 @@ export function DocumentEditor({
       if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
       crepeRef.current?.destroy(); crepeRef.current = null;
     };
-  }, []);
+  }, [filePath]);
 
   useEffect(() => {
     if (isInternalChangeRef.current) { isInternalChangeRef.current = false; return; }
@@ -67,24 +74,6 @@ export function DocumentEditor({
 
   const displayName = filePath ? filePath.split("/").pop() || filePath : null;
 
-  if (!filePath) {
-    return (
-      <div className="flex items-center justify-center h-full bg-[var(--app-bg)]">
-        <div className="text-center animate-pageIn">
-          <div className="w-16 h-16 rounded-2xl mx-auto mb-4 flex items-center justify-center border border-[var(--app-border)]"
-            style={{ background: "rgba(255,255,255,0.02)" }}>
-            <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="var(--app-text-tertiary)" strokeWidth="1.2" strokeLinecap="round">
-              <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
-              <polyline points="14 2 14 8 20 8" /><line x1="16" y1="13" x2="8" y2="13" /><line x1="16" y1="17" x2="8" y2="17" />
-            </svg>
-          </div>
-          <p className="text-sm font-medium text-[var(--app-text-tertiary)]">Select a file to edit</p>
-          <p className="text-xs mt-1 text-[var(--app-border)]">Choose from the agent panel</p>
-        </div>
-      </div>
-    );
-  }
-
   return (
     <div className="flex flex-col h-full bg-[var(--app-bg)]">
       {/* File header */}
@@ -93,7 +82,7 @@ export function DocumentEditor({
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--app-accent)" strokeWidth="2" strokeLinecap="round">
             <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" /><polyline points="14 2 14 8 20 8" />
           </svg>
-          <span className="text-xs font-medium truncate text-[var(--app-text-secondary)]">{filePath}</span>
+          <span className="text-xs font-medium truncate text-[var(--app-text-secondary)]">{filePath || "No file selected"}</span>
         </div>
         {displayName && (
           <span className="text-[10px] font-bold uppercase tracking-widest px-2 py-0.5 rounded-md flex-shrink-0 ml-3 bg-[var(--app-accent-bg)] border border-[var(--app-accent-border)] text-[var(--app-accent)]">
@@ -114,11 +103,27 @@ export function DocumentEditor({
         </div>
       )}
 
-      {/* Editor area with paper-like surface */}
+      {/* Editor area — always mounted so ref is available */}
       <div className="flex-1 overflow-auto bg-[var(--app-bg)]">
-        <div className="max-w-3xl mx-auto my-6 rounded-xl shadow-2xl overflow-hidden bg-white" style={{ minHeight: "calc(100% - 3rem)" }}>
-          <div ref={containerRef} className="milkdown px-12 py-10 text-neutral-900" />
-        </div>
+        {!filePath ? (
+          <div className="flex items-center justify-center h-full">
+            <div className="text-center animate-pageIn">
+              <div className="w-16 h-16 rounded-2xl mx-auto mb-4 flex items-center justify-center border border-[var(--app-border)]"
+                style={{ background: "rgba(255,255,255,0.02)" }}>
+                <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="var(--app-text-tertiary)" strokeWidth="1.2" strokeLinecap="round">
+                  <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
+                  <polyline points="14 2 14 8 20 8" /><line x1="16" y1="13" x2="8" y2="13" /><line x1="16" y1="17" x2="8" y2="17" />
+                </svg>
+              </div>
+              <p className="text-sm font-medium text-[var(--app-text-tertiary)]">Select a file to edit</p>
+              <p className="text-xs mt-1 text-[var(--app-border)]">Choose from the agent panel</p>
+            </div>
+          </div>
+        ) : (
+          <div className="max-w-3xl mx-auto my-6 rounded-xl shadow-2xl overflow-hidden bg-white" style={{ minHeight: "calc(100% - 3rem)" }}>
+            <div ref={containerRef} className="milkdown px-12 py-10 text-neutral-900" />
+          </div>
+        )}
       </div>
     </div>
   );
