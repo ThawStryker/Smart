@@ -302,7 +302,7 @@ body {
 .milkdown .ProseMirror h4,
 .milkdown .ProseMirror h5,
 .milkdown .ProseMirror h6 {
-  font-family: Georgia, Cambria, 'Times New Roman', Times, serif;
+  font-family: Georgia, Cambria, 'Times New Roman', Times, serif !important;
   font-weight: 400;
   padding: 2px 0;
 }
@@ -419,5 +419,5 @@ body {
 }
 
 .milkdown .ProseMirror {
-  font-family: 'Open Sans', Arial, Helvetica, sans-serif;
+  font-family: 'Open Sans', Arial, Helvetica, sans-serif !important;
 }
