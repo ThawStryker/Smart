@@ -1,28 +1,15 @@
 import { emit } from "../stream";
+import { executeAgentTool, AGENT_TOOLS } from "./tools";
 import { db } from "edgespark";
 import { eq } from "drizzle-orm";
+import { loadAgentFiles, loadSessionMessages } from "./loader";
 import {
-  loadAgentFiles,
   buildAgentSystemPrompt,
   buildConversationSummary,
   listAgentNames,
 } from "./context";
 import { workFiles, workMessages } from "@defs";
-
-export interface HermesLoopParams {
-  sessionId: number;
-  userId: string;
-  userMessage: string;
-  targetAgent: string | null;
-  modelConfig: {
-    baseURL: string;
-    apiPath: string;
-    apiKey: string;
-    modelName: string;
-  };
-  eventQueue: Array<Record<string, unknown>>;
-  allFiles: Array<{ path: string; content: string }>;
-}
+import type { HermesLoopParams } from "./types";
 
 export async function hermesLoop(params: HermesLoopParams): Promise<string> {
   const { sessionId, userMessage, targetAgent, modelConfig, eventQueue, allFiles } = params;
@@ -34,7 +21,8 @@ export async function hermesLoop(params: HermesLoopParams): Promise<string> {
 
     const agentCtx = await loadAgentFiles(sessionId, targetAgent);
     const agentSystemPrompt = buildAgentSystemPrompt(agentCtx);
-    const summary = await buildConversationSummary(sessionId);
+    const msgs = await loadSessionMessages(sessionId);
+    const summary = buildConversationSummary(msgs);
 
     const messages: Array<Record<string, unknown>> = [
       { role: "system", content: agentSystemPrompt },
@@ -155,7 +143,7 @@ export async function hermesLoop(params: HermesLoopParams): Promise<string> {
         let result: string;
         try {
           const args = JSON.parse(tc.function.arguments);
-          result = await executeAgentTool(tc.function.name, args, sessionId, params, eventQueue);
+          result = await executeAgentTool(tc.function.name, args, sessionId, params, eventQueue, hermesLoop);
         } catch (err: unknown) {
           result = `Error: ${err instanceof Error ? err.message : String(err)}`;
         }
@@ -200,7 +188,8 @@ export async function hermesLoop(params: HermesLoopParams): Promise<string> {
     emit(eventQueue, { type: "agent_done", agentName: targetAgent });
   } else {
     // ── Direct Hermes chat (no agent) ──
-    const summary = await buildConversationSummary(sessionId);
+    const msgs = await loadSessionMessages(sessionId);
+    const summary = buildConversationSummary(msgs);
     const availableAgents = listAgentNames(allFiles);
 
     const messages: Array<Record<string, unknown>> = [
@@ -269,172 +258,3 @@ export async function hermesLoop(params: HermesLoopParams): Promise<string> {
 
   return fullResponse;
 }
-
-// ── Agent Tools ──
-
-async function executeAgentTool(
-  name: string,
-  args: Record<string, unknown>,
-  sessionId: number,
-  params: HermesLoopParams,
-  eventQueue: Array<Record<string, unknown>>,
-): Promise<string> {
-  switch (name) {
-    case "write_file": {
-      const path = args.path as string | undefined;
-      const content = args.content as string | undefined;
-      if (!path || content === undefined) return "Error: path and content required";
-
-      const allFiles = await db
-        .select()
-        .from(workFiles)
-        .where(eq(workFiles.sessionId, sessionId));
-      const existing = allFiles.find((f) => f.path === path);
-
-      if (existing) {
-        await db
-          .update(workFiles)
-          .set({ content, updatedAt: new Date().toISOString() })
-          .where(eq(workFiles.id, existing.id));
-      } else {
-        await db.insert(workFiles).values({ sessionId, path, content });
-      }
-      emit(eventQueue, { type: "doc", path, delta: content });
-      return `File written: ${path}`;
-    }
-
-    case "read_file": {
-      const path = args.path as string | undefined;
-      if (!path) return "Error: path required";
-      const allFiles = await db
-        .select()
-        .from(workFiles)
-        .where(eq(workFiles.sessionId, sessionId));
-      const file = allFiles.find((f) => f.path === path);
-      return file ? file.content || "" : `File not found: ${path}`;
-    }
-
-    case "web_search": {
-      const query = args.query as string | undefined;
-      if (!query) return "Error: query required";
-      try {
-        const res = await fetch(
-          `https://api.duckduckgo.com/?q=${encodeURIComponent(query)}&format=json&no_html=1`,
-        );
-        const data = (await res.json()) as Record<string, unknown>;
-        return String(
-          data.AbstractText || data.Abstract || JSON.stringify(data).slice(0, 1000),
-        );
-      } catch (err: unknown) {
-        return `Search error: ${err instanceof Error ? err.message : String(err)}`;
-      }
-    }
-
-    case "call_agent": {
-      const agentName = args.name as string | undefined;
-      const task = args.task as string | undefined;
-      if (!agentName || !task) return "Error: name and task required";
-      emit(eventQueue, { type: "agent_start", agentName });
-      const result = await hermesLoop({
-        ...params,
-        userMessage: task,
-        targetAgent: agentName,
-      });
-      emit(eventQueue, { type: "agent_done", agentName });
-      return result;
-    }
-
-    case "list_files": {
-      const prefix = args.prefix as string | undefined;
-      const allFiles = await db
-        .select()
-        .from(workFiles)
-        .where(eq(workFiles.sessionId, sessionId));
-      const filtered = prefix
-        ? allFiles.filter((f) => f.path.startsWith(prefix))
-        : allFiles;
-      return filtered
-        .map((f) => `${f.isFolder ? "[dir]" : "[file]"} ${f.path}`)
-        .join("\n");
-    }
-
-    default:
-      return `Unknown tool: ${name}`;
-  }
-}
-
-// Tool definitions for function calling
-const AGENT_TOOLS = [
-  {
-    type: "function" as const,
-    function: {
-      name: "call_agent",
-      description: "Delegate a subtask to another agent",
-      parameters: {
-        type: "object" as const,
-        properties: {
-          name: { type: "string" as const, description: "Agent name" },
-          task: { type: "string" as const, description: "Task description" },
-        },
-        required: ["name", "task"],
-      },
-    },
-  },
-  {
-    type: "function" as const,
-    function: {
-      name: "write_file",
-      description: "Write content to a workspace file",
-      parameters: {
-        type: "object" as const,
-        properties: {
-          path: { type: "string" as const, description: "File path" },
-          content: { type: "string" as const, description: "File content (markdown)" },
-        },
-        required: ["path", "content"],
-      },
-    },
-  },
-  {
-    type: "function" as const,
-    function: {
-      name: "read_file",
-      description: "Read a workspace file",
-      parameters: {
-        type: "object" as const,
-        properties: {
-          path: { type: "string" as const, description: "File path" },
-        },
-        required: ["path"],
-      },
-    },
-  },
-  {
-    type: "function" as const,
-    function: {
-      name: "list_files",
-      description: "List workspace files",
-      parameters: {
-        type: "object" as const,
-        properties: {
-          prefix: { type: "string" as const, description: "Path prefix filter" },
-        },
-        required: [],
-      },
-    },
-  },
-  {
-    type: "function" as const,
-    function: {
-      name: "web_search",
-      description: "Search the web",
-      parameters: {
-        type: "object" as const,
-        properties: {
-          query: { type: "string" as const, description: "Search query" },
-        },
-        required: ["query"],
-      },
-    },
-  },
-];
