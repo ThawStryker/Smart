@@ -19,16 +19,37 @@ export function DocumentEditor({
   const crepeRef = useRef<Crepe | null>(null);
   const saveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const isInternalChangeRef = useRef(false);
+  const lastSavedMd = useRef("");
 
   const onSaveRef = useRef(onSave); onSaveRef.current = onSave;
   const onContentChangeRef = useRef(onContentChange); onContentChangeRef.current = onContentChange;
   const filePathRef = useRef(filePath); filePathRef.current = filePath;
 
+  // Save immediately — called from beforeunload and timer
+  const doSave = () => {
+    const fp = filePathRef.current;
+    const editor = crepeRef.current;
+    if (!fp || !editor) return;
+    const md = editor.getMarkdown();
+    if (md !== lastSavedMd.current) {
+      lastSavedMd.current = md;
+      onSaveRef.current(fp, md);
+    }
+  };
+
+  // Auto-save on page close
+  useEffect(() => {
+    const handler = () => doSave();
+    window.addEventListener("beforeunload", handler);
+    return () => window.removeEventListener("beforeunload", handler);
+  }, []);
+
+  // Init editor when filePath changes
   useEffect(() => {
     if (!containerRef.current) return;
 
-    // Destroy previous editor if switching files
     if (crepeRef.current) {
+      doSave(); // save current before switching
       crepeRef.current.destroy();
       crepeRef.current = null;
     }
@@ -37,34 +58,50 @@ export function DocumentEditor({
       root: containerRef.current,
       defaultValue: content || "",
     });
+
     crepe.create().then(() => {
       crepeRef.current = crepe;
+      lastSavedMd.current = crepe.getMarkdown();
+
+      // Listen for changes via Milkdown event
       crepe.on((listener) => {
         listener.markdownUpdated((_ctx, md) => {
           isInternalChangeRef.current = true;
           onContentChangeRef.current(md);
+
           const fp = filePathRef.current;
           if (fp && md) {
+            lastSavedMd.current = md;
             if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
-            saveTimerRef.current = setTimeout(() => onSaveRef.current(fp, md), 2000);
+            saveTimerRef.current = setTimeout(() => {
+              onSaveRef.current(fp, md);
+            }, 1000);
           }
         });
       });
     });
+
     return () => {
+      doSave(); // save on unmount
       if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
-      crepeRef.current?.destroy(); crepeRef.current = null;
+      crepeRef.current?.destroy();
+      crepeRef.current = null;
     };
   }, [filePath]);
 
+  // Sync external content changes
   useEffect(() => {
     if (isInternalChangeRef.current) { isInternalChangeRef.current = false; return; }
     if (!crepeRef.current) return;
     const currentMd = crepeRef.current.getMarkdown();
-    if (content !== currentMd) crepeRef.current.editor.action(replaceAll(content));
+    if (content !== currentMd) {
+      lastSavedMd.current = content;
+      crepeRef.current.editor.action(replaceAll(content));
+    }
     if (isStreaming && filePath && content) {
+      lastSavedMd.current = content;
       if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
-      saveTimerRef.current = setTimeout(() => onSave(filePath, content), 2000);
+      saveTimerRef.current = setTimeout(() => onSave(filePath, content), 1000);
     }
   }, [content, filePath, isStreaming, onSave]);
 
@@ -76,7 +113,6 @@ export function DocumentEditor({
 
   return (
     <div className="flex flex-col h-full bg-[var(--app-bg)]">
-      {/* File header */}
       <div className="flex items-center justify-between px-5 py-2.5 border-b border-[var(--app-border)] bg-[var(--app-surface)]">
         <div className="flex items-center gap-2.5 min-w-0">
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--app-accent)" strokeWidth="2" strokeLinecap="round">
@@ -91,7 +127,6 @@ export function DocumentEditor({
         )}
       </div>
 
-      {/* Streaming indicator */}
       {isStreaming && (
         <div className="flex items-center gap-2.5 px-5 py-2 text-xs font-medium bg-[var(--app-accent-bg)] border-b border-[var(--app-accent-border)] text-[var(--app-accent)]">
           <span className="flex gap-1">
@@ -103,7 +138,6 @@ export function DocumentEditor({
         </div>
       )}
 
-      {/* Editor area — always mounted so ref is available */}
       <div className="flex-1 overflow-auto bg-[var(--app-bg)]">
         {!filePath ? (
           <div className="flex items-center justify-center h-full">
