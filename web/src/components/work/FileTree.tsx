@@ -34,11 +34,15 @@ export function buildTree(files: FileEntry[]): Record<string, any> {
     }
   }
 
-  // Place non-folder files
+  // Place non-folder files, ensuring parent nodes exist
   for (const f of nonFolders) {
     const parts = f.path.split("/");
     let node = root;
-    for (let i = 0; i < parts.length - 1; i++) node = node.__kids[parts[i]];
+    for (let i = 0; i < parts.length - 1; i++) {
+      if (!node.__kids) node.__kids = {};
+      if (!node.__kids[parts[i]]) node.__kids[parts[i]] = { __kids: {} };
+      node = node.__kids[parts[i]];
+    }
     if (!node.__kids) node.__kids = {};
     node.__kids[parts[parts.length - 1]] = f;
   }
