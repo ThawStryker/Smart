@@ -13,7 +13,7 @@ interface AgentPanelProps {
 
 export function AgentPanel({ sessionId, onFileSelect, selectedFile, onAgentListChange }: AgentPanelProps) {
   const [files, setFiles] = useState<FileEntry[]>([]);
-  const [expanded, setExpanded] = useState<Set<string>>(new Set(["agents", "workspace"]));
+  const [expanded, setExpanded] = useState<Set<string>>(new Set(["agents"]));
   const [renaming, setRenaming] = useState<string | null>(null);
   const [renameValue, setRenameValue] = useState("");
 
