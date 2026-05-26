@@ -527,3 +527,8 @@ body {
   --crepe-color-secondary: rgba(255,255,255,0.08);
   --crepe-color-hover: rgba(255,255,255,0.06);
 }
+
+[data-theme="dark"] .caption-input {
+  color: var(--app-text-secondary) !important;
+  background: transparent !important;
+}
