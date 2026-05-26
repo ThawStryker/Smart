@@ -14,19 +14,12 @@ interface AgentPanelProps {
   onAgentListChange: () => void;
 }
 
-const agentColors = [
-  "var(--app-accent)",
-  "#4ade80",
-  "#a78bfa",
-  "#60a5fa",
-  "#fb923c",
-  "#f472b6",
-];
+const agentAvatars = ["🐱","🐶","🦊","🐼","🐨","🐯","🦁","🐸","🐵","🐰","🐻","🦄","🐙","🦋","🐞","🐣","🦉","🐳","🦀","🐲"];
 
-function getAgentColor(name: string): string {
+function getAgentAvatar(name: string): string {
   let hash = 0;
   for (let i = 0; i < name.length; i++) hash = ((hash << 5) - hash + name.charCodeAt(i)) | 0;
-  return agentColors[Math.abs(hash) % agentColors.length];
+  return agentAvatars[Math.abs(hash) % agentAvatars.length];
 }
 
 export function AgentPanel({ sessionId, onFileSelect, selectedFile, onAgentListChange }: AgentPanelProps) {
@@ -175,7 +168,7 @@ export function AgentPanel({ sessionId, onFileSelect, selectedFile, onAgentListC
       <div className="flex-1 overflow-auto py-1">
         {agents.map((name) => {
           const isExpanded = expanded.has(`agents/${name}`);
-          const color = getAgentColor(name);
+          const avatar = getAgentAvatar(name);
           return (
             <div key={name} className="mb-0.5">
               <div className="flex items-center px-3 py-2 cursor-pointer group transition-colors"
@@ -187,7 +180,7 @@ export function AgentPanel({ sessionId, onFileSelect, selectedFile, onAgentListC
                     <polyline points="6 9 12 15 18 9" />
                   </svg>
                 </span>
-                <span className="w-2 h-2 rounded-full mr-2 flex-shrink-0" style={{ background: color }} />
+                <span className="text-sm mr-2 flex-shrink-0 leading-none">{avatar}</span>
                 {renaming === name ? (
                   <input value={renameValue}
                     onChange={(e) => setRenameValue(e.target.value)}
@@ -204,10 +197,10 @@ export function AgentPanel({ sessionId, onFileSelect, selectedFile, onAgentListC
                 ) : (
                   <span className="text-sm font-medium truncate text-[var(--app-text)] cursor-pointer hover:opacity-70"
                     onDoubleClick={(e) => { e.stopPropagation(); setRenaming(name); setRenameValue(name); }}>
-                    @{name}
+                    {name}
                   </span>
                 )}
-                <button onClick={(e) => { e.stopPropagation(); if (confirm(`Delete @${name}?`)) deleteAgent(name); }}
+                <button onClick={(e) => { e.stopPropagation(); if (confirm(`Delete ${name}?`)) deleteAgent(name); }}
                   className="ml-auto text-xs opacity-0 group-hover:opacity-60 hover:opacity-100 transition-all px-1 text-[var(--app-red)]">&times;</button>
               </div>
               {isExpanded && (
