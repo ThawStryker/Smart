@@ -85,7 +85,24 @@ export function ChatPanel({
 
   const loadMessages = useCallback(async () => {
     const res = await fetch(`/api/work/sessions/${sessionId}/messages`);
-    if (res.ok) setMessages(await res.json());
+    if (res.ok) {
+      const msgs = await res.json();
+      setMessages(msgs);
+      // Restore persisted steps from last session (only if no new stream is active)
+      try {
+        const key = `steps-${sessionId}`;
+        const saved = sessionStorage.getItem(key);
+        if (saved) {
+          const data = JSON.parse(saved);
+          if (data.rich && data.steps && data.steps.length > 0) {
+            setStreamSteps(data.steps);
+            setStreamText(data.text || "");
+            setStreamAgent(data.agent || null);
+            setHasRichSteps(true);
+          }
+        }
+      } catch {}
+    }
   }, [sessionId]);
 
   useEffect(() => { if (sessionId) loadMessages(); }, [sessionId, loadMessages]);
@@ -121,6 +138,7 @@ export function ChatPanel({
     setStreamAgent(null);
     setHasRichSteps(false);
     setThinkingOpen(new Set());
+    try { sessionStorage.removeItem(`steps-${sessionId}`); } catch {}
 
     const controller = new AbortController(); abortRef.current = controller;
     try {
@@ -150,6 +168,13 @@ export function ChatPanel({
         setStreamSteps((p) => [...p, { key: `err-${Date.now()}`, type: "text", content: `Error: ${err.message}` }]);
       }
     }
+    // Save steps to sessionStorage for persistence across refresh
+    try {
+      const key = `steps-${sessionId}`;
+      if (hasRichSteps && streamSteps.length > 0) {
+        sessionStorage.setItem(key, JSON.stringify({ steps: streamSteps, text: streamText, agent: streamAgent, rich: hasRichSteps }));
+      }
+    } catch {}
     setStreamActive(false); abortRef.current = null; loadMessages();
   };
 
