@@ -118,6 +118,9 @@ export function WorkPage() {
           onRenameSession={renameSession}
           onDeleteSession={deleteSession}
           onOpenFile={(path) => { setActiveFile({ path, content: "" }); setIsStreaming(true); }}
+          onDocDelta={(path, delta) => {
+            setActiveFile((prev) => prev && prev.path === path ? { ...prev, content: (prev.content || "") + delta } : prev);
+          }}
         />
       </div>
     </div>

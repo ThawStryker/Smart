@@ -12,6 +12,7 @@ interface ChatPanelProps {
   onRenameSession: (id: number, title: string) => void;
   onDeleteSession: (id: number) => void;
   onOpenFile?: (path: string) => void;
+  onDocDelta?: (path: string, delta: string) => void;
 }
 
 // ── Agent avatar (same hash as AgentPanel) ──
@@ -65,7 +66,7 @@ interface StreamStep {
 export function ChatPanel({
   sessionId, agents, sessions,
   onFirstMessage, onCreateSession, onSelectSession, onRenameSession, onDeleteSession,
-  onOpenFile,
+  onOpenFile, onDocDelta,
 }: ChatPanelProps) {
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [input, setInput] = useState("");
@@ -187,7 +188,7 @@ export function ChatPanel({
         if (event.agentName) setStreamAgent(event.agentName);
       }
     } else if (t === "doc") {
-      // streaming doc content — handled by onOpenFile above
+      if (onDocDelta) onDocDelta(event.path, event.delta);
     }
   };
 
@@ -237,7 +238,19 @@ export function ChatPanel({
           </div>
         ))}
 
-        {/* Streaming: simple text (no agent) or rich steps */}
+        {/* Streaming: simple text (no agent) or rich steps — persist after completion */}
+        {!streamActive && !hasRichSteps && streamText && (
+          <div className="animate-pageIn">
+            {streamAgent && (
+              <div className="flex items-center gap-2 mb-1">
+                <span className="w-1.5 h-1.5 rounded-full" style={{ background: "var(--app-text-secondary)" }} />
+                <span className="text-xs font-bold uppercase tracking-wider text-[var(--app-text-secondary)]">{streamAgent}</span>
+              </div>
+            )}
+            <div className="text-sm leading-relaxed whitespace-pre-wrap text-[var(--app-text)]">{streamText}</div>
+          </div>
+        )}
+
         {streamActive && !hasRichSteps && (
           <div className="animate-pageIn">
             {streamAgent && (
@@ -252,7 +265,7 @@ export function ChatPanel({
           </div>
         )}
 
-        {streamActive && hasRichSteps && streamSteps.map((step, i) => {
+        {(streamActive || streamSteps.length > 0) && hasRichSteps && streamSteps.map((step, i) => {
           if (step.type === "thinking") {
             const open = thinkingOpen.has(i);
             return (

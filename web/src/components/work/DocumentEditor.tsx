@@ -101,18 +101,13 @@ export function DocumentEditor({
             {displayName.endsWith(".md") ? "Markdown" : displayName.split(".").pop()?.toUpperCase() || "File"}
           </span>
         )}
-      </div>
-
-      {isStreaming && (
-        <div className="flex items-center gap-2.5 px-5 py-2 text-xs font-medium bg-[var(--app-accent-bg)] border-b border-[var(--app-accent-border)] text-[var(--app-accent)]">
-          <span className="flex gap-1">
-            <span className="w-1 h-1 rounded-full animate-bounce bg-[var(--app-accent)]" style={{ animationDelay: "0ms" }} />
-            <span className="w-1 h-1 rounded-full animate-bounce bg-[var(--app-accent)]" style={{ animationDelay: "150ms" }} />
-            <span className="w-1 h-1 rounded-full animate-bounce bg-[var(--app-accent)]" style={{ animationDelay: "300ms" }} />
+        {isStreaming && (
+          <span className="flex items-center gap-1 ml-2 text-xs text-[var(--app-accent)]">
+            <span className="w-1 h-1 rounded-full bg-[var(--app-accent)] animate-pulse" />
+            writing
           </span>
-          Agent is writing...
-        </div>
-      )}
+        )}
+      </div>
 
       <div className="flex-1 overflow-auto bg-[var(--app-bg)]">
         {!filePath ? (
