@@ -532,3 +532,10 @@ body {
   color: var(--app-text-secondary) !important;
   background: transparent !important;
 }
+
+[data-theme="dark"] .ProseMirror,
+[data-theme="dark"] .cm-editor,
+[data-theme="dark"] .cm-content,
+[data-theme="dark"] textarea {
+  caret-color: #e8e4dd !important;
+}
