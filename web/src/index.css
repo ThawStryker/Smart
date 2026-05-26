@@ -481,3 +481,10 @@ body {
 [data-theme="dark"] .milkdown .ProseMirror th {
   border-color: var(--app-border);
 }
+
+[data-theme="dark"] .milkdown {
+  background: var(--app-surface) !important;
+}
+[data-theme="dark"] .milkdown .ProseMirror {
+  background: var(--app-surface) !important;
+}
