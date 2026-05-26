@@ -59,9 +59,8 @@ export function AgentPanel({ sessionId, onFileSelect, selectedFile, onAgentListC
   const loadUserAgents = useCallback(async () => {
     const res = await fetch("/api/agents");
     if (res.ok) {
-      const data = await res.json();
-      setAgentNames(data.map((a: { name: string }) => a.name));
-      onAgentListChange();
+      const data: Array<{ name: string }> = await res.json();
+      setAgentNames(data.map((a) => a.name));
     }
   }, [onAgentListChange]);
 

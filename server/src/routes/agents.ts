@@ -74,7 +74,18 @@ userAgentRoutes.patch("/:name", async (c) => {
   if (body.agentsMd !== undefined) update.agentsMd = body.agentsMd;
   if (body.userMd !== undefined) update.userMd = body.userMd;
   if (body.memoryMd !== undefined) update.memoryMd = body.memoryMd;
+  const newName = update.name;
   await db.update(userAgents).set(update).where(and(eq(userAgents.userId, userId), eq(userAgents.name, name)));
+
+  // Also update file paths if name changed
+  if (newName && newName !== name) {
+    const files = await db.select().from(workFiles).where(like(workFiles.path, `agents/${name}/%`));
+    for (const f of files) {
+      const newPath = f.path.replace(`agents/${name}/`, `agents/${newName}/`);
+      await db.update(workFiles).set({ path: newPath }).where(eq(workFiles.id, f.id));
+    }
+  }
+
   return c.json({ ok: true });
 });
 
