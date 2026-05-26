@@ -137,11 +137,11 @@ export function DocumentEditor({
 
       {/* Source view */}
       <div className="flex-1 overflow-auto" style={{ display: sourceView ? "block" : "none", background: "var(--app-bg)" }}>
-        <div className="max-w-3xl mx-auto my-6 rounded-xl shadow-2xl overflow-hidden" style={{ minHeight: "calc(100% - 3rem)", background: "#1e1e1e" }}>
+        <div className="max-w-3xl mx-auto my-6 rounded-xl shadow-2xl overflow-hidden" style={{ background: "#1e1e1e", height: "calc(100% - 3rem)" }}>
           <textarea ref={sourceRef} defaultValue={lastSavedRef.current || content}
             onChange={handleSourceEdit}
-            className="w-full p-5 text-sm font-mono leading-relaxed outline-none resize-none border-0 bg-transparent"
-            style={{ color: "#d4d4d4", tabSize: 2, fontFamily: "'JetBrains Mono', 'Fira Code', 'Cascadia Code', 'SF Mono', Menlo, monospace", minHeight: "calc(100% - 3rem)" }}
+            className="w-full h-full p-5 text-sm font-mono leading-relaxed outline-none resize-none border-0 bg-transparent"
+            style={{ color: "#d4d4d4", tabSize: 2, fontFamily: "'JetBrains Mono', 'Fira Code', 'Cascadia Code', 'SF Mono', Menlo, monospace" }}
             spellCheck={false} placeholder="Markdown source..." />
         </div>
       </div>
