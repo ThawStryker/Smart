@@ -96,10 +96,16 @@ export function DocumentEditor({
     if (!sourceView) {
       const md = crepeRef.current?.editor ? crepeRef.current.editor.action(getMarkdown()) : "";
       sourceTextRef.current = md || content || "";
+      setSourceView(true);
     } else {
-      if (crepeRef.current) crepeRef.current.editor.action(replaceAll(sourceTextRef.current));
+      if (crepeRef.current) {
+        crepeRef.current.editor.action(replaceAll(sourceTextRef.current));
+        onContentChange(sourceTextRef.current);
+        lastSavedRef.current = sourceTextRef.current;
+        if (filePath) onSave(filePath, sourceTextRef.current);
+      }
+      setSourceView(false);
     }
-    setSourceView(!sourceView);
   };
 
   return (
@@ -153,13 +159,16 @@ export function DocumentEditor({
               <p className="text-xs mt-1 text-[var(--app-border)]">Choose from the agent panel</p>
             </div>
           </div>
-        ) : sourceView ? (
-          <textarea defaultValue={sourceTextRef.current} onChange={(e) => { sourceTextRef.current = e.target.value; }}
-            className="w-full p-6 text-sm font-mono outline-none resize-none bg-[var(--app-bg)] text-[var(--app-text)] overflow-auto" style={{ minHeight: "100%" }} />
         ) : (
-          <div className="max-w-3xl mx-auto my-6 rounded-xl shadow-2xl overflow-hidden bg-white" style={{ minHeight: "calc(100% - 3rem)" }}>
-            <div ref={containerRef} className="milkdown px-12 py-10 text-neutral-900" />
-          </div>
+          <>
+            <textarea defaultValue={sourceTextRef.current} onChange={(e) => { sourceTextRef.current = e.target.value; }}
+              className="w-full p-6 text-sm font-mono outline-none resize-none bg-[var(--app-bg)] text-[var(--app-text)] overflow-auto"
+              style={{ minHeight: "100%", display: sourceView ? "block" : "none" }} />
+            <div className="max-w-3xl mx-auto my-6 rounded-xl shadow-2xl overflow-hidden bg-white"
+              style={{ minHeight: "calc(100% - 3rem)", display: sourceView ? "none" : "block" }}>
+              <div ref={containerRef} className="milkdown px-12 py-10 text-neutral-900" />
+            </div>
+          </>
         )}
       </div>
     </div>
