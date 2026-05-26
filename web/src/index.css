@@ -451,3 +451,33 @@ body {
   background: transparent !important;
   color: inherit !important;
 }
+
+/* Dark mode milkdown overrides */
+[data-theme="dark"] .milkdown .ProseMirror {
+  color: var(--app-text);
+}
+[data-theme="dark"] .milkdown .ProseMirror h1,
+[data-theme="dark"] .milkdown .ProseMirror h2,
+[data-theme="dark"] .milkdown .ProseMirror h3 {
+  color: var(--app-text);
+}
+[data-theme="dark"] .milkdown .ProseMirror code {
+  background: rgba(255,255,255,0.08);
+  color: #f87171;
+}
+[data-theme="dark"] .milkdown .ProseMirror pre {
+  background: rgba(255,255,255,0.06);
+}
+[data-theme="dark"] .milkdown .ProseMirror blockquote {
+  color: var(--app-text-secondary);
+}
+[data-theme="dark"] .milkdown .ProseMirror blockquote::before {
+  background: var(--app-border);
+}
+[data-theme="dark"] .milkdown .ProseMirror th {
+  background: rgba(255,255,255,0.04);
+}
+[data-theme="dark"] .milkdown .ProseMirror td,
+[data-theme="dark"] .milkdown .ProseMirror th {
+  border-color: var(--app-border);
+}

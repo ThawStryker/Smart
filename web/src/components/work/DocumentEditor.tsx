@@ -148,8 +148,8 @@ export function DocumentEditor({
 
       {/* Preview view */}
       <div className="flex-1 overflow-auto" style={{ display: sourceView ? "none" : "block" }}>
-        <div className="max-w-3xl mx-auto my-6 rounded-xl shadow-2xl overflow-hidden bg-white" style={{ minHeight: "calc(100% - 3rem)", width: "100%" }}>
-          <div ref={containerRef} className="milkdown px-12 py-10" style={{ color: "var(--app-text)" }} />
+        <div className="max-w-3xl mx-auto my-6 rounded-xl shadow-2xl overflow-hidden" style={{ minHeight: "calc(100% - 3rem)", width: "100%", background: "var(--app-surface)", color: "var(--app-text)" }}>
+          <div ref={containerRef} className="milkdown px-12 py-10" />
         </div>
       </div>
     </div>
