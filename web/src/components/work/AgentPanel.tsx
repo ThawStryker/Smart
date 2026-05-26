@@ -165,7 +165,7 @@ export function AgentPanel({ sessionId, onFileSelect, selectedFile, onAgentListC
           className="w-6 h-6 rounded-lg flex items-center justify-center text-base font-medium transition-all duration-200 hover:scale-110 bg-[var(--app-accent-bg)] text-[var(--app-accent)]">+</button>
       </div>
 
-      <div className="flex-1 overflow-auto py-1">
+      <div className="flex-1 overflow-auto py-1" style={{ minHeight: 0 }}>
         {agents.map((name) => {
           const isExpanded = expanded.has(`agents/${name}`);
           const avatar = getAgentAvatar(name);
@@ -219,22 +219,36 @@ export function AgentPanel({ sessionId, onFileSelect, selectedFile, onAgentListC
         )}
       </div>
 
-      <div className="border-t border-[var(--app-border)]">
-        <div className="flex items-center px-4 py-3 cursor-pointer group" onClick={() => toggleExpand("workspace")}>
-          <span className="mr-1.5 transition-transform duration-150 flex-shrink-0 opacity-60"
-            style={{ transform: expanded.has("workspace") ? "rotate(0deg)" : "rotate(-90deg)", width: "12px", textAlign: "center" }}>
-            <svg width="8" height="8" viewBox="0 0 24 24" fill="none" stroke="var(--app-text-tertiary)" strokeWidth="3" strokeLinecap="round">
-              <polyline points="6 9 12 15 18 9" />
+      {/* Workspace section — fixed area at bottom of left panel */}
+      <div className="border-t border-[var(--app-border)] flex flex-col" style={{ maxHeight: "40%" }}>
+        <div className="flex items-center justify-between px-4 py-2.5 cursor-pointer group" onClick={() => toggleExpand("workspace")}>
+          <div className="flex items-center gap-2">
+            <span className="mr-0.5 transition-transform duration-150 flex-shrink-0 opacity-60"
+              style={{ transform: expanded.has("workspace") ? "rotate(0deg)" : "rotate(-90deg)", width: "12px", textAlign: "center" }}>
+              <svg width="8" height="8" viewBox="0 0 24 24" fill="none" stroke="var(--app-text-tertiary)" strokeWidth="3" strokeLinecap="round">
+                <polyline points="6 9 12 15 18 9" />
+              </svg>
+            </span>
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--app-text-secondary)" strokeWidth="2" strokeLinecap="round" className="flex-shrink-0">
+              <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z" />
             </svg>
-          </span>
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--app-text-secondary)" strokeWidth="2" strokeLinecap="round" className="mr-2.5">
-            <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z" />
-          </svg>
-          <span className="text-xs font-bold uppercase tracking-widest text-[var(--app-text-tertiary)]">Workspace</span>
+            <span className="text-xs font-bold uppercase tracking-widest text-[var(--app-text-tertiary)]">Workspace</span>
+          </div>
+          <WorkspaceActions onCreateFile={() => createFile("workspace")} onCreateFolder={() => createFolder("workspace")} />
         </div>
         {expanded.has("workspace") && (
-          <div className="ml-7 border-l border-[var(--app-border)]">
-            {renderFileChildren("workspace", tree, expanded, toggleExpand, onFileSelect, selectedFile, 0, createFile, createFolder, renameFolder, deleteFolder, renameFile, deleteFile)}
+          <div className="flex-1 overflow-auto border-t border-[var(--app-border)]">
+            {(() => {
+              const children = renderFileChildren("workspace", tree, expanded, toggleExpand, onFileSelect, selectedFile, 0, createFile, createFolder, renameFolder, deleteFolder, renameFile, deleteFile);
+              if (children.length === 0) {
+                return (
+                  <div className="px-4 py-6 text-center text-[10px] text-[var(--app-text-tertiary)] leading-relaxed">
+                    Workspace is empty.<br />Click <span className="text-[var(--app-accent)]">+</span> to add files or folders.
+                  </div>
+                );
+              }
+              return children;
+            })()}
           </div>
         )}
       </div>
@@ -556,6 +570,28 @@ function FileMenu({
           <div className="absolute right-0 top-full mt-1 z-40 w-36 rounded-xl bg-[var(--app-surface)] border border-[var(--app-border)] shadow-xl overflow-hidden py-1">
             <MenuItem icon={<RenameIcon />} label="Rename" onClick={() => { setOpen(false); const n = prompt("Rename to:", fileName); if (n) onRename(n); }} />
             <MenuItem icon={<DeleteIcon />} label="Delete" onClick={() => { onDelete(); setOpen(false); }} danger />
+          </div>
+        </>
+      )}
+    </div>
+  );
+}
+
+// ── Workspace header actions ──
+
+function WorkspaceActions({ onCreateFile, onCreateFolder }: { onCreateFile: () => void; onCreateFolder: () => void }) {
+  const [open, setOpen] = useState(false);
+
+  return (
+    <div className="relative opacity-0 group-hover:opacity-100 transition-opacity" onClick={(e) => e.stopPropagation()}>
+      <button onClick={() => setOpen(!open)}
+        className="w-6 h-6 rounded-lg flex items-center justify-center text-sm font-medium transition-all duration-200 hover:scale-110 bg-[var(--app-accent-bg)] text-[var(--app-accent)]">+</button>
+      {open && (
+        <>
+          <div className="fixed inset-0 z-30" onClick={() => setOpen(false)} />
+          <div className="absolute right-0 top-full mt-1 z-40 w-36 rounded-xl bg-[var(--app-surface)] border border-[var(--app-border)] shadow-xl overflow-hidden py-1">
+            <MenuItem icon={<NewFileIcon />} label="New File" onClick={() => { onCreateFile(); setOpen(false); }} />
+            <MenuItem icon={<NewFolderIcon />} label="New Folder" onClick={() => { onCreateFolder(); setOpen(false); }} />
           </div>
         </>
       )}
