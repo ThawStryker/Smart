@@ -90,8 +90,10 @@ export function WorkPage() {
     });
   };
 
-  // Active sessions: exclude empty "新对话" sessions unless they are the current one
-  const activeSessions = sessions.filter((s) => s.title !== "新对话" || s.id === sessionId);
+  // Only show sessions with real content in the dropdown
+  const activeSessions = sessions.filter((s) => s.title !== "新对话");
+  // But if there would be nothing to show, keep the current one
+  const visibleSessions = activeSessions.length > 0 ? activeSessions : sessions.filter((s) => s.id === sessionId);
 
   if (loading || !sessionId) {
     return (
@@ -117,7 +119,7 @@ export function WorkPage() {
         <ChatPanel
           sessionId={sessionId}
           agents={agents}
-          sessions={activeSessions}
+          sessions={visibleSessions}
           onFirstMessage={handleFirstMessage}
           onCreateSession={handleCreateSession}
           onSelectSession={(id) => setSearchParams({ session: String(id) })}
