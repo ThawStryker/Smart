@@ -92,7 +92,7 @@ export function AgentPanel({ sessionId, onFileSelect, selectedFile, onAgentListC
       method: "PATCH", headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ name: newName.trim() }),
     });
-    loadUserAgents();
+    loadFiles(); loadUserAgents();
   };
 
   const deleteAgent = async (name: string) => {
