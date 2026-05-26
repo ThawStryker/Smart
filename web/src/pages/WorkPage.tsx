@@ -1,14 +1,10 @@
-import { useState, useEffect, useCallback, useRef } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { useSearchParams } from "react-router-dom";
+import { useWorkSession } from "@/hooks/useWorkSession";
+import type { WorkSession } from "@/types/work";
 import { AgentPanel } from "@/components/work/AgentPanel";
 import { DocumentEditor } from "@/components/work/DocumentEditor";
 import { ChatPanel } from "@/components/work/ChatPanel";
-
-interface WorkSession {
-  id: number;
-  title: string;
-  summary: string;
-}
 
 function truncateTitle(text: string, max = 30): string {
   return text.length > max ? text.slice(0, max) + "..." : text;
@@ -17,50 +13,25 @@ function truncateTitle(text: string, max = 30): string {
 export function WorkPage() {
   const [searchParams, setSearchParams] = useSearchParams();
   const sessionId = parseInt(searchParams.get("session") || "0");
-  const [sessions, setSessions] = useState<WorkSession[]>([]);
+  const { sessions, loading, createSession, renameSession, deleteSession: hookDeleteSession } = useWorkSession();
   const [activeFile, setActiveFile] = useState<{ path: string; content: string } | null>(null);
   const [isStreaming, setIsStreaming] = useState(false);
   const [agents, setAgents] = useState<string[]>([]);
-  const [initializing, setInitializing] = useState(true);
-  const initRan = useRef(false);
 
-  const loadSessions = useCallback(async () => {
-    const res = await fetch("/api/work/sessions");
-    if (res.ok) {
-      const data = await res.json();
-      setSessions(data);
-      if (data.length > 0) {
-        const currentId = parseInt(searchParams.get("session") || "0");
-        const exists = data.some((s: WorkSession) => s.id === currentId);
-        if (!currentId || !exists) {
-          setSearchParams({ session: String(data[0].id) });
-        }
-      }
-      return data;
-    }
-    return [];
-  }, [searchParams, setSearchParams]);
-
+  // Auto-initialize: if no sessions exist, create one; if sessionId is invalid, redirect to first
   useEffect(() => {
-    if (initRan.current) return;
-    initRan.current = true;
-    (async () => {
-      let data = await loadSessions();
-      if (data.length === 0) {
-        const res = await fetch("/api/work/sessions", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ title: "新对话" }),
-        });
-        if (res.ok) {
-          const s = await res.json();
-          setSearchParams({ session: String(s.id) });
-          data = await loadSessions();
-        }
-      }
-      setInitializing(false);
-    })();
-  }, []);
+    if (loading) return;
+    if (sessions.length === 0) {
+      createSession().then((s) => {
+        if (s) setSearchParams({ session: String(s.id) });
+      });
+      return;
+    }
+    const exists = sessions.some((s: WorkSession) => s.id === sessionId);
+    if (!sessionId || !exists) {
+      setSearchParams({ session: String(sessions[0].id) });
+    }
+  }, [loading, sessions, sessionId, createSession, setSearchParams]);
 
   const loadAgents = useCallback(async () => {
     if (!sessionId) return;
@@ -78,31 +49,8 @@ export function WorkPage() {
 
   useEffect(() => { loadAgents(); }, [loadAgents]);
 
-  const createSession = async () => {
-    const res = await fetch("/api/work/sessions", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ title: "新对话" }),
-    });
-    if (res.ok) {
-      const s = await res.json();
-      setSearchParams({ session: String(s.id) });
-      loadSessions();
-    }
-  };
-
-  const updateSessionTitle = async (id: number, title: string) => {
-    await fetch(`/api/work/sessions/${id}`, {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ title }),
-    });
-    setSessions((prev) => prev.map((s) => (s.id === id ? { ...s, title } : s)));
-  };
-
   const deleteSession = async (id: number) => {
-    await fetch(`/api/work/sessions/${id}`, { method: "DELETE" });
-    loadSessions();
+    await hookDeleteSession(id);
     if (id === sessionId) {
       const remaining = sessions.filter((x) => x.id !== id);
       if (remaining.length > 0) setSearchParams({ session: String(remaining[0].id) });
@@ -114,9 +62,9 @@ export function WorkPage() {
     if (!sessionId) return;
     const current = sessions.find((s) => s.id === sessionId);
     if (current?.title === "新对话") {
-      await updateSessionTitle(sessionId, truncateTitle(message));
+      await renameSession(sessionId, truncateTitle(message));
     }
-  }, [sessionId, sessions]);
+  }, [sessionId, sessions, renameSession]);
 
   const handleFileSelect = (path: string, content: string) => {
     setActiveFile({ path, content }); setIsStreaming(false);
@@ -129,7 +77,7 @@ export function WorkPage() {
     });
   };
 
-  if (initializing || !sessionId) {
+  if (loading || !sessionId) {
     return (
       <div className="flex items-center justify-center h-full bg-[var(--app-bg)]">
         <div className="flex items-center gap-2 text-sm text-[var(--app-text-tertiary)] animate-pulse">
@@ -162,7 +110,7 @@ export function WorkPage() {
           onFirstMessage={handleFirstMessage}
           onCreateSession={createSession}
           onSelectSession={(id) => setSearchParams({ session: String(id) })}
-          onRenameSession={updateSessionTitle}
+          onRenameSession={renameSession}
           onDeleteSession={deleteSession}
         />
       </div>

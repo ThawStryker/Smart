@@ -1,6 +1,7 @@
 import { useEffect, useRef } from "react";
 import { Crepe } from "@milkdown/crepe";
 import { replaceAll } from "@milkdown/utils";
+import { useAutoSave } from "@/hooks/useAutoSave";
 import "@milkdown/crepe/theme/common/style.css";
 import "@milkdown/crepe/theme/nord.css";
 
@@ -18,30 +19,16 @@ export function DocumentEditor({
   const containerRef = useRef<HTMLDivElement>(null);
   const crepeRef = useRef<Crepe | null>(null);
   const isInternalChangeRef = useRef(false);
-  const lastSavedMd = useRef("");
 
   const onSaveRef = useRef(onSave); onSaveRef.current = onSave;
   const onContentChangeRef = useRef(onContentChange); onContentChangeRef.current = onContentChange;
   const filePathRef = useRef(filePath); filePathRef.current = filePath;
 
-  // Save immediately — called from beforeunload and timer
-  const doSave = () => {
-    const fp = filePathRef.current;
-    const editor = crepeRef.current;
-    if (!fp || !editor) return;
-    const md = editor.getMarkdown();
-    if (md !== lastSavedMd.current) {
-      lastSavedMd.current = md;
-      onSaveRef.current(fp, md);
-    }
-  };
-
-  // Auto-save on page close
-  useEffect(() => {
-    const handler = () => doSave();
-    window.addEventListener("beforeunload", handler);
-    return () => window.removeEventListener("beforeunload", handler);
-  }, []);
+  const { doSave, lastSavedRef } = useAutoSave({
+    getContent: () => crepeRef.current?.getMarkdown() || "",
+    getFilePath: () => filePathRef.current,
+    onSave,
+  });
 
   // Init editor when filePath changes
   useEffect(() => {
@@ -60,7 +47,7 @@ export function DocumentEditor({
 
     crepe.create().then(() => {
       crepeRef.current = crepe;
-      lastSavedMd.current = crepe.getMarkdown();
+      lastSavedRef.current = crepe.getMarkdown();
 
       // Milkdown's native change listener — save on every edit
       crepe.on((listener) => {
@@ -69,7 +56,7 @@ export function DocumentEditor({
           onContentChangeRef.current(md);
           const fp = filePathRef.current;
           if (fp && md) {
-            lastSavedMd.current = md;
+            lastSavedRef.current = md;
             onSaveRef.current(fp, md);
           }
         });
@@ -89,11 +76,11 @@ export function DocumentEditor({
     if (!crepeRef.current) return;
     const currentMd = crepeRef.current.getMarkdown();
     if (content !== currentMd) {
-      lastSavedMd.current = content;
+      lastSavedRef.current = content;
       crepeRef.current.editor.action(replaceAll(content));
     }
     if (isStreaming && filePath && content) {
-      lastSavedMd.current = content;
+      lastSavedRef.current = content;
       onSave(filePath, content);
     }
   }, [content, filePath, isStreaming, onSave]);
