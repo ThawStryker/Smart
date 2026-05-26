@@ -182,7 +182,7 @@ export function ChatPanel({
             <textarea ref={inputRef} value={input}
               onChange={(e) => handleInput(e.target.value)} onKeyDown={handleKeyDown}
               placeholder="Message Hermes or @mention an agent..."
-              className="w-full rounded-xl px-4 py-3 pr-12 text-sm resize-none outline-none transition-all duration-200 bg-[var(--app-surface)] border border-[var(--app-border)] text-[var(--app-text)] overflow-auto"
+              className="w-full rounded-xl px-4 py-3 pr-12 text-sm resize-none outline-none transition-all duration-200 bg-[var(--app-surface)] border border-[var(--app-border)] text-[var(--app-text)] overflow-y-auto [scrollbar-gutter:stable]"
               style={{ height: "80px" }}
               rows={3} disabled={streaming.isActive} />
             <button onClick={streaming.isActive ? stopStreaming : sendMessage}
