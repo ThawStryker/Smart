@@ -47,7 +47,7 @@ export function AgentPanel({ sessionId, onFileSelect, selectedFile, onAgentListC
         { path: `${base}/memory/MEMORY.md`, content: "# Agent Memory\n\nSelf-learned experience from past tasks. The agent appends insights here automatically.\n" },
         { path: `${base}/skills`, isFolder: true },
         { path: `${base}/context`, isFolder: true },
-        { path: `${base}/heartbeat.md`, content: `## Status\n- Created: ${new Date().toISOString()}\n` },
+        { path: `${base}/heartbeat/HEARTBEAT.md`, content: "# Heartbeat Configuration\n\nDefine scheduled tasks below. The system checks this file on every heartbeat cycle.\n\n## Schedule Format\n\nEach task has a cron time trigger and a description:\n\n- time: \"0 9 * * *\"\n  task: \"Check for new user feedback and summarize it\"\n\n- time: \"*/30 * * * *\"\n  task: \"Monitor error logs and alert if new errors appear\"\n\n- time: \"0 9 * * 1\"\n  task: \"Generate weekly progress report\"\n\n- time: \"0 9 * * *\"\n  task: \"详见 context/日报模板.md\"\n\nTime uses standard 5-field cron: minute hour day month weekday\n" },
       ]),
     });
     loadFiles(); onAgentListChange();

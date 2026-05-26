@@ -164,27 +164,6 @@ export async function hermesLoop(params: HermesLoopParams): Promise<string> {
       content: fullResponse,
     });
 
-    // Update heartbeat
-    const heartbeatPath = `agents/${targetAgent}/heartbeat.md`;
-    const allHb = await db
-      .select()
-      .from(workFiles)
-      .where(eq(workFiles.sessionId, sessionId));
-    const existingHb = allHb.find((f) => f.path === heartbeatPath);
-    const hbContent = `## Last Run\n- Time: ${new Date().toISOString()}\n- Status: completed\n`;
-    if (existingHb) {
-      await db
-        .update(workFiles)
-        .set({ content: hbContent, updatedAt: new Date().toISOString() })
-        .where(eq(workFiles.id, existingHb.id));
-    } else {
-      await db.insert(workFiles).values({
-        sessionId,
-        path: heartbeatPath,
-        content: hbContent,
-      });
-    }
-
     emit(eventQueue, { type: "agent_done", agentName: targetAgent });
   } else {
     // ── Direct Hermes chat (no agent) ──
