@@ -43,9 +43,10 @@ export function AgentPanel({ sessionId, onFileSelect, selectedFile, onAgentListC
       method: "POST", headers: { "Content-Type": "application/json" },
       body: JSON.stringify([
         { path: `${base}/AGENTS.md`, content: `# ${name}\n\nDescribe the role of this agent.` },
-        { path: `${base}/memory/README.md`, content: "# Memory\n\nAgent memories and learned knowledge." },
+        { path: `${base}/memory/USER.md`, content: "# User Memory\n\nPermanent preferences and document references. Write document paths and summaries below — the agent will load them on demand.\n\nExample:\n- `context/教学大纲.md` — 初中物理教学大纲\n- `context/评分标准.md` — 作业评分标准\n" },
+        { path: `${base}/memory/MEMORY.md`, content: "# Agent Memory\n\nSelf-learned experience from past tasks. The agent appends insights here automatically.\n" },
         { path: `${base}/skills/README.md`, content: "# Skills\n\nAdd skill definitions here." },
-        { path: `${base}/context/README.md`, content: "# Context\n\nReference materials for the agent." },
+        { path: `${base}/context/README.md`, content: "# Context\n\nBackground knowledge that the agent should always be aware of." },
         { path: `${base}/heartbeat.md`, content: `## Status\n- Created: ${new Date().toISOString()}\n` },
       ]),
     });

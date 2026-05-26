@@ -39,8 +39,13 @@ function DeleteIcon() {
 export function MenuItem({ icon, label, onClick, danger }: { icon: React.ReactNode; label: string; onClick: () => void; danger?: boolean }) {
   return (
     <div onClick={onClick}
-      className="px-3 py-1.5 text-xs cursor-pointer transition-colors hover:bg-[var(--app-accent-bg)] flex items-center gap-2"
-      style={{ color: danger ? "var(--app-red)" : "var(--app-text)" }}>
+      className="px-3 py-1.5 text-xs flex items-center gap-2"
+      style={{
+        color: danger ? "var(--app-red)" : danger === false ? "var(--app-text-tertiary)" : "var(--app-text)",
+        cursor: danger === false ? "not-allowed" : "pointer",
+        opacity: danger === false ? 0.4 : 1,
+      }}
+      onMouseEnter={(e) => { if (danger === false) e.currentTarget.style.background = "transparent"; }}>
       {icon}
       {label}
     </div>
@@ -104,11 +109,12 @@ export function FolderMenu({
 // ── File context menu ──
 
 export function FileMenu({
-  fileName, onRename, onDelete,
+  fileName, onRename, onDelete, canDelete = true,
 }: {
   fileName: string;
   onRename: (newName: string) => void;
   onDelete: () => void;
+  canDelete?: boolean;
 }) {
   const [open, setOpen] = useState(false);
   const { ref, flip } = useFlip(open);
@@ -127,7 +133,7 @@ export function FileMenu({
           <div ref={ref}
             className={`absolute right-0 z-40 w-36 rounded-xl bg-[var(--app-surface)] border border-[var(--app-border)] shadow-xl overflow-hidden py-1 ${flip ? "bottom-full mb-1" : "top-full mt-1"}`}>
             <MenuItem icon={<RenameIcon />} label="Rename" onClick={() => { setOpen(false); const n = prompt("Rename to:", fileName); if (n) onRename(n); }} />
-            <MenuItem icon={<DeleteIcon />} label="Delete" onClick={() => { onDelete(); setOpen(false); }} danger />
+            <MenuItem icon={<DeleteIcon />} label="Delete" onClick={canDelete ? () => { onDelete(); setOpen(false); } : () => {}} danger={canDelete} />
           </div>
         </>
       )}

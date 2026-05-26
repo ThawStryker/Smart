@@ -20,9 +20,10 @@ export interface FileSummary {
 
 export interface AgentFileContext {
   agentsMd: string;
-  memories: FileSummary[];
+  userMd: string;
+  memoryMd: string;
   skills: Array<{ name: string; summary: string; entry: string }>;
-  contexts: FileSummary[];
+  contexts: string[];
 }
 
 export type SSEEvent =

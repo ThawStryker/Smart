@@ -21,50 +21,47 @@ export function listAgentNames(files: Array<{ path: string }>): string[] {
 export function buildAgentSystemPrompt(agentCtx: AgentFileContext): string {
   const parts: string[] = [];
 
+  // AGENTS.md — role definition + constraints
   if (agentCtx.agentsMd) {
-    parts.push(`## Role Definition\n\n${agentCtx.agentsMd}`);
+    parts.push(`## Role & Rules\n\n${agentCtx.agentsMd}`);
   }
 
-  // Memory: summaries only — use read_file to load full content when relevant
-  if (agentCtx.memories.length > 0) {
-    const lines = agentCtx.memories.map(
-      (m) => `- \`${m.path}\` — ${m.summary}`,
-    );
+  // Context — full load, always-present background knowledge
+  if (agentCtx.contexts.length > 0) {
+    parts.push(`## Background Context\n\n${agentCtx.contexts.join("\n\n---\n\n")}`);
+  }
+
+  // USER.md — user's fixed memory with document references for on-demand loading
+  if (agentCtx.userMd) {
     parts.push(
-      `## Past Experience (Memory)\n\nUse \`read_file\` to load full content when relevant to the task:\n${lines.join("\n")}`,
+      `## User Memory\n\n${agentCtx.userMd}\n\n(These are the user's permanent preferences. Use \`read_file\` to load referenced documents on demand.)`,
     );
   }
 
-  // Skills: summaries — use read_file to load full SKILL.md when triggered
+  // MEMORY.md — agent's self-learned growth memory
+  if (agentCtx.memoryMd) {
+    parts.push(
+      `## Agent Memory\n\n${agentCtx.memoryMd}\n\n(Your accumulated learnings from past tasks. Learn from them.)`,
+    );
+  }
+
+  // Skills — summaries, on-demand full loading
   if (agentCtx.skills.length > 0) {
     const lines = agentCtx.skills.map(
       (s) => `- **${s.name}** — ${s.summary}`,
     );
     parts.push(
-      `## Available Skills\n\nScan these. When a task matches a skill's trigger condition, use \`read_file\` to load the full skill definition at \`skills/<name>/SKILL.md\`:\n${lines.join("\n")}`,
-    );
-  }
-
-  // Context: summaries only — use read_file to load full content when relevant
-  if (agentCtx.contexts.length > 0) {
-    const lines = agentCtx.contexts.map(
-      (c) => `- \`${c.path}\` — ${c.summary}`,
-    );
-    parts.push(
-      `## Reference Context\n\nAvailable documents. Use \`read_file\` to load full content when relevant to the task:\n${lines.join("\n")}`,
+      `## Available Skills\n\nScan summaries. When a task matches a skill, use \`read_file\` to load \`skills/<name>/SKILL.md\`:\n${lines.join("\n")}`,
     );
   }
 
   // Workflow guide
   parts.push(`## Workflow
 
-Follow this process for every task:
-
-1. **Recall** — Check memory summaries above. If any look relevant, \`read_file\` to load them.
-2. **Research** — Check context summaries above. If any look relevant, \`read_file\` to load them. Use \`list_files\` if you need to discover files not listed.
-3. **Plan** — Scan skill summaries above. If a task matches a skill's trigger condition, \`read_file\` the full SKILL.md.
-4. **Execute** — Write the output document using \`write_file\`. Explain your approach and reasoning.
-5. **Grow** — At the end, reflect: "Did I learn something worth remembering for future tasks?" If yes, \`write_file\` a new entry to \`memory/<date>-<topic>.md\` with a brief note about what you learned (the user's preference, a useful pattern, a mistake to avoid). Keep it concise — one or two sentences.`);
+1. **Read** — Review Background Context and User Memory above (already loaded). Load referenced documents with \`read_file\` if needed.
+2. **Plan** — Scan skill summaries. Load full SKILL.md for matching ones.
+3. **Execute** — Write output with \`write_file\`. Explain your approach.
+4. **Grow** — After the task: did you learn something? If yes, append a brief note to \`memory/MEMORY.md\`. Keep each entry to 1-2 sentences. Do NOT overwrite — append.`);
 
   return parts.join("\n\n");
 }

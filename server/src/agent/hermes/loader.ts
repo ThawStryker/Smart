@@ -1,7 +1,7 @@
 import { db } from "edgespark";
 import { eq, and, like } from "drizzle-orm";
 import { workFiles, workMessages } from "@defs";
-import type { AgentFileContext, FileSummary } from "./types";
+import type { AgentFileContext } from "./types";
 
 function extractSummary(content: string): string {
   const firstLine = content.trim().split("\n")[0]?.replace(/^#+\s*/, "") || "";
@@ -29,16 +29,10 @@ export async function loadAgentFiles(
   }
 
   const agentsMd = fileMap.get(`${prefix}AGENTS.md`) || "";
+  const userMd = fileMap.get(`${prefix}memory/USER.md`) || "";
+  const memoryMd = fileMap.get(`${prefix}memory/MEMORY.md`) || "";
 
-  // Memory: summaries only (path + first line)
-  const memories: FileSummary[] = [];
-  for (const [path, content] of fileMap.entries()) {
-    if (path.startsWith(`${prefix}memory/`) && path.endsWith(".md")) {
-      memories.push({ path: path.replace(`${prefix}`, ""), summary: extractSummary(content) });
-    }
-  }
-
-  // Skills: summary + full entry for SKILL.md
+  // Skills: summaries + full SKILL.md entry
   const skills: Array<{ name: string; summary: string; entry: string }> = [];
   for (const [path, content] of fileMap.entries()) {
     const match = path.match(new RegExp(`^${prefix}skills/([^/]+)/SKILL\\.md$`));
@@ -47,15 +41,15 @@ export async function loadAgentFiles(
     }
   }
 
-  // Context: summaries only (path + first line)
-  const contexts: FileSummary[] = [];
+  // Context: full content, always loaded
+  const contexts: string[] = [];
   for (const [path, content] of fileMap.entries()) {
     if (path.startsWith(`${prefix}context/`) && path.endsWith(".md")) {
-      contexts.push({ path: path.replace(`${prefix}`, ""), summary: extractSummary(content) });
+      contexts.push(content);
     }
   }
 
-  return { agentsMd, memories, skills, contexts };
+  return { agentsMd, userMd, memoryMd, skills, contexts };
 }
 
 export async function loadSessionMessages(

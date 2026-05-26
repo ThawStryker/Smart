@@ -123,7 +123,8 @@ export function renderFileChildren(
         <span className="opacity-0 group-hover:opacity-100 transition-opacity ml-1">
           <FileMenu fileName={name}
             onRename={(n) => renameFile(cp, n)}
-            onDelete={() => deleteFile(cp)} />
+            onDelete={() => deleteFile(cp)}
+            canDelete={name !== "USER.md" && name !== "MEMORY.md"} />
         </span>
       </div>
     );
