@@ -432,3 +432,15 @@ body {
 .milkdown .milkdown-block-handle .operation-item:hover {
   background: var(--app-accent-bg);
 }
+
+/* Completely neutralize block handle dark backgrounds */
+.milkdown-block-handle,
+.milkdown-block-handle .operation-item,
+.milkdown-block-handle .operation-item.active,
+.milkdown-block-handle .operation-item:hover {
+  background: transparent !important;
+  color: var(--app-text-tertiary) !important;
+}
+.milkdown-block-handle .operation-item svg {
+  fill: var(--app-text-tertiary) !important;
+}
