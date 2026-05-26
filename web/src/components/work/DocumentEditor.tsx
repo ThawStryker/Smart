@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { Crepe } from "@milkdown/crepe";
 import { replaceAll, getMarkdown } from "@milkdown/utils";
 import "@milkdown/crepe/theme/common/style.css";
-import "@milkdown/crepe/theme/nord.css";
+import "@milkdown/crepe/theme/crepe/style.css";
 
 export interface DocumentEditorProps {
   content: string;
