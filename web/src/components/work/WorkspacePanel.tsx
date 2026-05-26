@@ -21,7 +21,7 @@ export function WorkspacePanel({
 }: WorkspacePanelProps) {
   return (
     <div className="border-t border-[var(--app-border)] flex flex-col" style={{ flex: "0 0 50%", minHeight: 0 }}>
-      <div className="flex items-center justify-between px-4 py-2.5">
+      <div className="flex items-center justify-between px-4 py-2.5 group">
         <div className="flex items-center gap-2">
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--app-text-secondary)" strokeWidth="2" strokeLinecap="round" className="flex-shrink-0">
             <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z" />
