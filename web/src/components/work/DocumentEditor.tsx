@@ -1,4 +1,4 @@
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Crepe } from "@milkdown/crepe";
 import { replaceAll } from "@milkdown/utils";
 import { useAutoSave } from "@/hooks/useAutoSave";
@@ -11,10 +11,11 @@ export interface DocumentEditorProps {
   isStreaming: boolean;
   onSave: (path: string, content: string) => void;
   onContentChange: (content: string) => void;
+  onClose?: () => void;
 }
 
 export function DocumentEditor({
-  content, filePath, isStreaming, onSave, onContentChange,
+  content, filePath, isStreaming, onSave, onContentChange, onClose,
 }: DocumentEditorProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const crepeRef = useRef<Crepe | null>(null);
@@ -85,27 +86,51 @@ export function DocumentEditor({
     }
   }, [content, filePath, isStreaming, onSave]);
 
-  const displayName = filePath ? filePath.split("/").pop() || filePath : null;
+  const [sourceView, setSourceView] = useState(false);
+  const [sourceText, setSourceText] = useState("");
+
+  const toggleSource = () => {
+    if (!sourceView) {
+      setSourceText(crepeRef.current?.getMarkdown() || content);
+    } else {
+      if (crepeRef.current) crepeRef.current.editor.action(replaceAll(sourceText));
+    }
+    setSourceView(!sourceView);
+  };
 
   return (
     <div className="flex flex-col h-full bg-[var(--app-bg)]">
-      <div className="flex items-center justify-between px-5 py-2.5 border-b border-[var(--app-border)] bg-[var(--app-surface)]">
-        <div className="flex items-center gap-2.5 min-w-0">
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--app-accent)" strokeWidth="2" strokeLinecap="round">
-            <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" /><polyline points="14 2 14 8 20 8" />
-          </svg>
-          <span className="text-xs font-medium truncate text-[var(--app-text-secondary)]">{filePath || "No file selected"}</span>
-        </div>
-        {displayName && (
-          <span className="text-[10px] font-bold uppercase tracking-widest px-2 py-0.5 rounded-md flex-shrink-0 ml-3 bg-[var(--app-accent-bg)] border border-[var(--app-accent-border)] text-[var(--app-accent)]">
-            {displayName.endsWith(".md") ? "Markdown" : displayName.split(".").pop()?.toUpperCase() || "File"}
-          </span>
-        )}
-        {isStreaming && (
-          <span className="flex items-center gap-1 ml-2 text-xs text-[var(--app-accent)]">
+      <div className="flex items-center gap-2 px-5 py-2 border-b border-[var(--app-border)] bg-[var(--app-surface)] min-w-0">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--app-accent)" strokeWidth="2" strokeLinecap="round" className="shrink-0">
+          <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" /><polyline points="14 2 14 8 20 8" />
+        </svg>
+        <span className="text-xs font-medium truncate text-[var(--app-text-secondary)]">{filePath || "No file selected"}</span>
+        {filePath && isStreaming && (
+          <span className="flex items-center gap-1 text-[10px] text-[var(--app-accent)] shrink-0">
             <span className="w-1 h-1 rounded-full bg-[var(--app-accent)] animate-pulse" />
             writing
           </span>
+        )}
+        <div className="flex-1" />
+        {filePath && (
+          <div className="flex items-center gap-1 shrink-0">
+            <button onClick={toggleSource}
+              className="w-5 h-5 rounded flex items-center justify-center hover:bg-[var(--app-accent-bg)] transition-colors"
+              title={sourceView ? "Preview" : "Edit source"}>
+              {sourceView ? (
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="var(--app-text-secondary)" strokeWidth="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z" /><circle cx="12" cy="12" r="3" /></svg>
+              ) : (
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="var(--app-text-secondary)" strokeWidth="2"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" /><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z" /></svg>
+              )}
+            </button>
+            {onClose && (
+              <button onClick={onClose}
+                className="w-5 h-5 rounded flex items-center justify-center hover:bg-[var(--app-red-bg)] transition-colors"
+                title="Close">
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="var(--app-red)" strokeWidth="2"><line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" /></svg>
+              </button>
+            )}
+          </div>
         )}
       </div>
 
@@ -123,6 +148,11 @@ export function DocumentEditor({
               <p className="text-sm font-medium text-[var(--app-text-tertiary)]">Select a file to edit</p>
               <p className="text-xs mt-1 text-[var(--app-border)]">Choose from the agent panel</p>
             </div>
+          </div>
+        ) : sourceView ? (
+          <div className="flex-1 overflow-auto bg-[var(--app-bg)]">
+            <textarea value={sourceText} onChange={(e) => setSourceText(e.target.value)}
+              className="w-full h-full p-6 text-sm font-mono outline-none resize-none bg-[var(--app-bg)] text-[var(--app-text)]" />
           </div>
         ) : (
           <div className="max-w-3xl mx-auto my-6 rounded-xl shadow-2xl overflow-hidden bg-white" style={{ minHeight: "calc(100% - 3rem)" }}>

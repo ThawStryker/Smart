@@ -105,7 +105,8 @@ export function WorkPage() {
       </div>
       <div className="flex-1 overflow-hidden">
         <DocumentEditor content={activeFile?.content || ""} filePath={activeFile?.path || null} isStreaming={isStreaming} onSave={handleSave}
-          onContentChange={(content) => { if (activeFile) setActiveFile({ ...activeFile, content }); }} />
+          onContentChange={(content) => { if (activeFile) setActiveFile({ ...activeFile, content }); }}
+          onClose={() => { setActiveFile(null); setIsStreaming(false); }} />
       </div>
       <div className="w-80 flex-shrink-0 overflow-hidden border-l border-[var(--app-border)]">
         <ChatPanel
@@ -121,6 +122,7 @@ export function WorkPage() {
           onDocDelta={(path, delta) => {
             setActiveFile((prev) => prev && prev.path === path ? { ...prev, content: (prev.content || "") + delta } : prev);
           }}
+          onStreamEnd={() => setIsStreaming(false)}
         />
       </div>
     </div>

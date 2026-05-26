@@ -13,6 +13,7 @@ interface ChatPanelProps {
   onDeleteSession: (id: number) => void;
   onOpenFile?: (path: string) => void;
   onDocDelta?: (path: string, delta: string) => void;
+  onStreamEnd?: () => void;
 }
 
 // ── Agent avatar (same hash as AgentPanel) ──
@@ -66,7 +67,7 @@ interface StreamStep {
 export function ChatPanel({
   sessionId, agents, sessions,
   onFirstMessage, onCreateSession, onSelectSession, onRenameSession, onDeleteSession,
-  onOpenFile, onDocDelta,
+  onOpenFile, onDocDelta, onStreamEnd,
 }: ChatPanelProps) {
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [input, setInput] = useState("");
@@ -175,6 +176,7 @@ export function ChatPanel({
         sessionStorage.setItem(key, JSON.stringify({ steps: streamSteps, text: streamText, agent: streamAgent, rich: hasRichSteps }));
       }
     } catch {}
+    if (onStreamEnd) onStreamEnd();
     setStreamActive(false); abortRef.current = null; loadMessages();
   };
 
