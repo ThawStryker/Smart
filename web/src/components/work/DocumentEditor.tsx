@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { Crepe } from "@milkdown/crepe";
-import { replaceAll } from "@milkdown/utils";
+import { replaceAll, getMarkdown } from "@milkdown/utils";
 import { useAutoSave } from "@/hooks/useAutoSave";
 import "@milkdown/crepe/theme/common/style.css";
 import "@milkdown/crepe/theme/nord.css";
@@ -26,7 +26,10 @@ export function DocumentEditor({
   const filePathRef = useRef(filePath); filePathRef.current = filePath;
 
   const { doSave, lastSavedRef } = useAutoSave({
-    getContent: () => crepeRef.current?.getMarkdown() || "",
+    getContent: () => {
+      if (!crepeRef.current?.editor) return "";
+      return crepeRef.current.editor.action(getMarkdown());
+    },
     getFilePath: () => filePathRef.current,
     onSave,
   });
@@ -48,7 +51,7 @@ export function DocumentEditor({
 
     crepe.create().then(() => {
       crepeRef.current = crepe;
-      lastSavedRef.current = crepe.getMarkdown();
+      lastSavedRef.current = crepe.editor.action(getMarkdown());
 
       // Milkdown's native change listener — save on every edit
       crepe.on((listener) => {
@@ -75,7 +78,7 @@ export function DocumentEditor({
   useEffect(() => {
     if (isInternalChangeRef.current) { isInternalChangeRef.current = false; return; }
     if (!crepeRef.current) return;
-    const currentMd = crepeRef.current.getMarkdown();
+    const currentMd = crepeRef.current.editor.action(getMarkdown());
     if (content !== currentMd) {
       lastSavedRef.current = content;
       crepeRef.current.editor.action(replaceAll(content));
@@ -91,7 +94,8 @@ export function DocumentEditor({
 
   const toggleSource = () => {
     if (!sourceView) {
-      sourceTextRef.current = content || crepeRef.current?.getMarkdown() || "";
+      const md = crepeRef.current?.editor ? crepeRef.current.editor.action(getMarkdown()) : "";
+      sourceTextRef.current = md || content || "";
     } else {
       if (crepeRef.current) crepeRef.current.editor.action(replaceAll(sourceTextRef.current));
     }
