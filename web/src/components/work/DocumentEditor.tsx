@@ -91,7 +91,7 @@ export function DocumentEditor({
 
   const toggleSource = () => {
     if (!sourceView) {
-      sourceTextRef.current = crepeRef.current?.getMarkdown() || content;
+      sourceTextRef.current = content || crepeRef.current?.getMarkdown() || "";
     } else {
       if (crepeRef.current) crepeRef.current.editor.action(replaceAll(sourceTextRef.current));
     }
