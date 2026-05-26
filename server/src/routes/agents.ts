@@ -2,7 +2,7 @@ import { Hono } from "hono";
 import { db } from "edgespark";
 import { auth } from "edgespark/http";
 import { eq, and, like } from "drizzle-orm";
-import { userAgents, workFiles } from "@defs";
+import { userAgents, workFiles, workSessions } from "@defs";
 
 export const userAgentRoutes = new Hono();
 
@@ -34,9 +34,32 @@ userAgentRoutes.post("/", async (c) => {
     name,
     title: name,
     agentsMd: `# ${name}\n\nDescribe the role of this agent.`,
-    userMd: "# User Memory\n\nPermanent preferences and document references.\n",
-    memoryMd: "# Agent Memory\n\nSelf-learned experience.\n",
+    userMd: "# User Memory\n\nPermanent preferences and document references. Write document paths and summaries below.\n",
+    memoryMd: "# Agent Memory\n\nSelf-learned experience from past tasks. The agent appends insights here automatically.\n",
   }).returning();
+
+  // Find a valid sessionId for file storage (use most recent session, or create one)
+  const sessions = await db.select().from(workSessions).where(eq(workSessions.userId, userId));
+  let sid = sessions[0]?.id;
+  if (!sid) {
+    const [s] = await db.insert(workSessions).values({ userId, title: "Agent Files" }).returning();
+    sid = s.id;
+  }
+
+  // Create agent file structure
+  const base = `agents/${name}`;
+  const fileEntries = [
+    { path: `${base}/AGENTS.md`, content: agent.agentsMd },
+    { path: `${base}/memory/USER.md`, content: agent.userMd },
+    { path: `${base}/memory/MEMORY.md`, content: agent.memoryMd },
+    { path: `${base}/skills`, content: "", isFolder: 1 },
+    { path: `${base}/context`, content: "", isFolder: 1 },
+    { path: `${base}/heartbeat/HEARTBEAT.md`, content: "# Heartbeat Configuration\n\nDefine scheduled tasks below.\n\n- time: \"0 9 * * *\"\n  task: \"Daily check\"\n" },
+  ];
+  for (const e of fileEntries) {
+    await db.insert(workFiles).values({ sessionId: sid, path: e.path, content: e.content, isFolder: e.isFolder || 0 });
+  }
+
   return c.json(agent, 201);
 });
 
