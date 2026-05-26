@@ -187,7 +187,7 @@ export function ChatPanel({
               rows={3} disabled={streaming.isActive} />
             <button onClick={streaming.isActive ? stopStreaming : sendMessage}
               disabled={!streaming.isActive && !input.trim()}
-              className="absolute right-2 bottom-2 w-8 h-8 rounded-full flex items-center justify-center shadow-sm hover:shadow-md transition-all disabled:opacity-40 disabled:cursor-not-allowed"
+              className="absolute right-3 bottom-3 w-8 h-8 rounded-full flex items-center justify-center shadow-sm hover:shadow-md transition-all disabled:opacity-40 disabled:cursor-not-allowed"
               style={{ background: "linear-gradient(135deg, var(--app-accent), var(--app-accent-deep))", color: "#1d1c19" }}>
               {streaming.isActive ? "■" : "➤"}
             </button>
