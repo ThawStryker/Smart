@@ -294,6 +294,7 @@ body {
 /* === Milkdown Crepe Typography === */
 .milkdown .ProseMirror {
   padding: 50px 100px !important;
+  min-height: 300px;
 }
 
 .milkdown .ProseMirror h1,
