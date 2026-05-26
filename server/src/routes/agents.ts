@@ -70,6 +70,7 @@ userAgentRoutes.patch("/:name", async (c) => {
   const body = await c.req.json<Record<string, string>>();
   const update: Record<string, string> = {};
   if (body.title !== undefined) update.title = body.title;
+  if (body.name !== undefined) update.name = body.name;
   if (body.agentsMd !== undefined) update.agentsMd = body.agentsMd;
   if (body.userMd !== undefined) update.userMd = body.userMd;
   if (body.memoryMd !== undefined) update.memoryMd = body.memoryMd;
