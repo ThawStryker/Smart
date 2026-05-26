@@ -181,10 +181,9 @@ export function ChatPanel({
           <textarea ref={inputRef} value={input}
             onChange={(e) => handleInput(e.target.value)} onKeyDown={handleKeyDown}
             placeholder="Message Hermes or @mention an agent..."
-            className="flex-1 rounded-xl px-4 py-3 text-sm resize-none outline-none transition-all duration-200 bg-[var(--app-surface)] border border-[var(--app-border)] text-[var(--app-text)]"
-            style={{ minHeight: "72px", maxHeight: "200px" }}
-            rows={3} disabled={streaming.isActive}
-            onInput={(e) => { const t = e.currentTarget; t.style.height = "auto"; t.style.height = Math.min(t.scrollHeight, 200) + "px"; }} />
+            className="flex-1 rounded-xl px-4 py-3 text-sm resize-none outline-none transition-all duration-200 bg-[var(--app-surface)] border border-[var(--app-border)] text-[var(--app-text)] overflow-auto"
+            style={{ height: "80px" }}
+            rows={3} disabled={streaming.isActive} />
           <button onClick={streaming.isActive ? stopStreaming : sendMessage}
             className={`shrink-0 w-11 h-11 rounded-xl flex items-center justify-center transition-all duration-200 font-bold text-sm ${
               streaming.isActive ? "" : "hover:-translate-y-0.5"
