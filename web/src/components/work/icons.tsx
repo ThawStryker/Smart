@@ -79,6 +79,14 @@ export function SkillsFolderIcon() {
   );
 }
 
+export function HeartbeatFolderIcon() {
+  return (
+    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#f472b6" strokeWidth="2" strokeLinecap="round" className="flex-shrink-0">
+      <polyline points="22 12 18 12 15 21 9 3 6 12 2 12" />
+    </svg>
+  );
+}
+
 export function ContextFolderIcon() {
   return (
     <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#4ade80" strokeWidth="2" strokeLinecap="round" className="flex-shrink-0">

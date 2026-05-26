@@ -1,5 +1,5 @@
 import React from "react";
-import { getFileIcon, DefaultFolderIcon, MemoryFolderIcon, SkillsFolderIcon, ContextFolderIcon } from "./icons";
+import { getFileIcon, DefaultFolderIcon, MemoryFolderIcon, SkillsFolderIcon, ContextFolderIcon, HeartbeatFolderIcon } from "./icons";
 import { FolderMenu, FileMenu } from "./ContextMenu";
 
 interface FileEntry {
@@ -69,12 +69,20 @@ export function renderFileChildren(
   }
   if (!node.__kids) return [];
   const entries = Object.entries(node.__kids) as Array<[string, any]>;
-  // Folders first, then files
-  entries.sort(([, a], [, b]) => {
+  // Fixed folder order: context → memory → skills → heartbeat, then other folders, then files
+  const folderOrder = ["context", "memory", "skills", "heartbeat"];
+  entries.sort(([aName, a], [bName, b]) => {
     const aIsFolder = a && typeof a === "object" && a.__kids !== undefined;
     const bIsFolder = b && typeof b === "object" && b.__kids !== undefined;
     if (aIsFolder && !bIsFolder) return -1;
     if (!aIsFolder && bIsFolder) return 1;
+    if (aIsFolder && bIsFolder) {
+      const ai = folderOrder.indexOf(aName);
+      const bi = folderOrder.indexOf(bName);
+      if (ai >= 0 && bi >= 0) return ai - bi;
+      if (ai >= 0) return -1;
+      if (bi >= 0) return 1;
+    }
     return 0;
   });
   return entries.map(([name, child]) => {
@@ -97,7 +105,7 @@ export function renderFileChildren(
                 <polyline points="6 9 12 15 18 9" />
               </svg>
             </span>
-            {name === "memory" ? <MemoryFolderIcon /> : name === "skills" ? <SkillsFolderIcon /> : name === "context" ? <ContextFolderIcon /> : <DefaultFolderIcon open={isOpen} />}
+            {name === "context" ? <ContextFolderIcon /> : name === "memory" ? <MemoryFolderIcon /> : name === "skills" ? <SkillsFolderIcon /> : name === "heartbeat" ? <HeartbeatFolderIcon /> : <DefaultFolderIcon open={isOpen} />}
             <span className="text-xs truncate font-medium ml-1.5 text-[var(--app-text-secondary)] flex-1">{name}</span>
             <span className="opacity-0 group-hover:opacity-100 transition-opacity ml-1">
               <FolderMenu folderPath={cp} folderName={name}
