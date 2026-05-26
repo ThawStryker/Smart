@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useRef, useLayoutEffect } from "react";
 
 // ── Menu icon components ──
 
@@ -47,6 +47,21 @@ export function MenuItem({ icon, label, onClick, danger }: { icon: React.ReactNo
   );
 }
 
+// ── Smart positioning hook ──
+
+function useFlip(open: boolean) {
+  const ref = useRef<HTMLDivElement>(null);
+  const [flip, setFlip] = useState(false);
+
+  useLayoutEffect(() => {
+    if (!open || !ref.current) { setFlip(false); return; }
+    const rect = ref.current.getBoundingClientRect();
+    if (rect.bottom > window.innerHeight - 8) setFlip(true);
+  }, [open]);
+
+  return { ref, flip };
+}
+
 // ── Folder context menu ──
 
 export function FolderMenu({
@@ -59,6 +74,7 @@ export function FolderMenu({
   onDelete: () => void;
 }) {
   const [open, setOpen] = useState(false);
+  const { ref, flip } = useFlip(open);
 
   return (
     <div className="relative" onClick={(e) => e.stopPropagation()}>
@@ -71,7 +87,8 @@ export function FolderMenu({
       {open && (
         <>
           <div className="fixed inset-0 z-30" onClick={() => setOpen(false)} />
-          <div className="absolute right-0 top-full mt-1 z-40 w-40 rounded-xl bg-[var(--app-surface)] border border-[var(--app-border)] shadow-xl overflow-hidden py-1">
+          <div ref={ref}
+            className={`absolute right-0 z-40 w-40 rounded-xl bg-[var(--app-surface)] border border-[var(--app-border)] shadow-xl overflow-hidden py-1 ${flip ? "bottom-full mb-1" : "top-full mt-1"}`}>
             <MenuItem icon={<NewFileIcon />} label="New File" onClick={() => { onCreateFile(folderPath); setOpen(false); }} />
             <MenuItem icon={<NewFolderIcon />} label="New Folder" onClick={() => { onCreateFolder(folderPath); setOpen(false); }} />
             <div className="border-t border-[var(--app-border)] my-0.5" />
@@ -94,6 +111,7 @@ export function FileMenu({
   onDelete: () => void;
 }) {
   const [open, setOpen] = useState(false);
+  const { ref, flip } = useFlip(open);
 
   return (
     <div className="relative" onClick={(e) => e.stopPropagation()}>
@@ -106,7 +124,8 @@ export function FileMenu({
       {open && (
         <>
           <div className="fixed inset-0 z-30" onClick={() => setOpen(false)} />
-          <div className="absolute right-0 top-full mt-1 z-40 w-36 rounded-xl bg-[var(--app-surface)] border border-[var(--app-border)] shadow-xl overflow-hidden py-1">
+          <div ref={ref}
+            className={`absolute right-0 z-40 w-36 rounded-xl bg-[var(--app-surface)] border border-[var(--app-border)] shadow-xl overflow-hidden py-1 ${flip ? "bottom-full mb-1" : "top-full mt-1"}`}>
             <MenuItem icon={<RenameIcon />} label="Rename" onClick={() => { setOpen(false); const n = prompt("Rename to:", fileName); if (n) onRename(n); }} />
             <MenuItem icon={<DeleteIcon />} label="Delete" onClick={() => { onDelete(); setOpen(false); }} danger />
           </div>
@@ -120,6 +139,7 @@ export function FileMenu({
 
 export function WorkspaceActions({ onCreateFile, onCreateFolder }: { onCreateFile: () => void; onCreateFolder: () => void }) {
   const [open, setOpen] = useState(false);
+  const { ref, flip } = useFlip(open);
 
   return (
     <div className="relative opacity-0 group-hover:opacity-100 transition-opacity" onClick={(e) => e.stopPropagation()}>
@@ -128,7 +148,8 @@ export function WorkspaceActions({ onCreateFile, onCreateFolder }: { onCreateFil
       {open && (
         <>
           <div className="fixed inset-0 z-30" onClick={() => setOpen(false)} />
-          <div className="absolute right-0 top-full mt-1 z-40 w-36 rounded-xl bg-[var(--app-surface)] border border-[var(--app-border)] shadow-xl overflow-hidden py-1">
+          <div ref={ref}
+            className={`absolute right-0 z-40 w-36 rounded-xl bg-[var(--app-surface)] border border-[var(--app-border)] shadow-xl overflow-hidden py-1 ${flip ? "bottom-full mb-1" : "top-full mt-1"}`}>
             <MenuItem icon={<NewFileIcon />} label="New File" onClick={() => { onCreateFile(); setOpen(false); }} />
             <MenuItem icon={<NewFolderIcon />} label="New Folder" onClick={() => { onCreateFolder(); setOpen(false); }} />
           </div>
