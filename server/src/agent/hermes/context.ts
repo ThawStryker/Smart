@@ -60,7 +60,7 @@ export function buildAgentSystemPrompt(agentCtx: AgentFileContext): string {
 
 1. **Read** — Review Background Context and User Memory above (already loaded). Load referenced documents with \`read_file\` if needed.
 2. **Plan** — Scan skill summaries. Load full SKILL.md for matching ones.
-3. **Execute** — Write output with \`write_file\`. Explain your approach.
+3. **Execute** — Write output with \`write_file\`. All output files MUST be placed under \`workspace/\` (e.g., \`workspace/report.md\`). Explain your approach and reasoning.
 4. **Grow** — After the task: did you learn something? If yes, append a brief note to \`memory/MEMORY.md\`. Keep each entry to 1-2 sentences. Do NOT overwrite — append.`);
 
   return parts.join("\n\n");
