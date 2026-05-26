@@ -71,6 +71,9 @@ export function ChatPanel({
   const [input, setInput] = useState("");
   const [streamSteps, setStreamSteps] = useState<StreamStep[]>([]);
   const [streamActive, setStreamActive] = useState(false);
+  const [streamText, setStreamText] = useState("");
+  const [streamAgent, setStreamAgent] = useState<string | null>(null);
+  const [hasRichSteps, setHasRichSteps] = useState(false);
   const [thinkingOpen, setThinkingOpen] = useState<Set<number>>(new Set());
   const [showMentions, setShowMentions] = useState(false);
   const [mentionFilter, setMentionFilter] = useState("");
@@ -113,6 +116,9 @@ export function ChatPanel({
 
     setStreamActive(true);
     setStreamSteps([]);
+    setStreamText("");
+    setStreamAgent(null);
+    setHasRichSteps(false);
     setThinkingOpen(new Set());
 
     const controller = new AbortController(); abortRef.current = controller;
@@ -149,6 +155,7 @@ export function ChatPanel({
   const handleSSE = (event: any) => {
     const t = event.type;
     if (t === "thinking") {
+      setHasRichSteps(true);
       setStreamSteps((p) => {
         const last = p[p.length - 1];
         if (last?.type === "thinking") {
@@ -159,8 +166,10 @@ export function ChatPanel({
         return [...p, { key: `think-${p.length}`, type: "thinking", content: event.delta || "" }];
       });
     } else if (t === "agent_start") {
+      setHasRichSteps(true);
       setStreamSteps((p) => [...p, { key: `agent-${p.length}`, type: "agent_card", agentName: event.agentName, content: "" }]);
     } else if (t === "tool_exec") {
+      setHasRichSteps(true);
       const toolName = event.toolName;
       // Auto-open file on write/edit
       if ((toolName === "write_file" || toolName === "edit_file") && onOpenFile) {
@@ -171,7 +180,12 @@ export function ChatPanel({
     } else if (t === "agent_done") {
       // mark completion — no visual change needed
     } else if (t === "text") {
-      setStreamSteps((p) => [...p, { key: `txt-${p.length}`, type: "text", agentName: event.agentName, content: event.delta || "" }]);
+      if (hasRichSteps) {
+        setStreamSteps((p) => [...p, { key: `txt-${p.length}`, type: "text", agentName: event.agentName, content: event.delta || "" }]);
+      } else {
+        setStreamText((p) => p + (event.delta || ""));
+        if (event.agentName) setStreamAgent(event.agentName);
+      }
     } else if (t === "doc") {
       // streaming doc content — handled by onOpenFile above
     }
@@ -223,8 +237,22 @@ export function ChatPanel({
           </div>
         ))}
 
-        {/* Streaming steps */}
-        {streamActive && streamSteps.map((step, i) => {
+        {/* Streaming: simple text (no agent) or rich steps */}
+        {streamActive && !hasRichSteps && (
+          <div className="animate-pageIn">
+            {streamAgent && (
+              <div className="flex items-center gap-2 mb-1">
+                <span className="w-1.5 h-1.5 rounded-full" style={{ background: "var(--app-text-secondary)" }} />
+                <span className="text-xs font-bold uppercase tracking-wider text-[var(--app-text-secondary)]">{streamAgent}</span>
+              </div>
+            )}
+            <div className="text-sm leading-relaxed whitespace-pre-wrap text-[var(--app-text)]">
+              {streamText || "Thinking..."}
+            </div>
+          </div>
+        )}
+
+        {streamActive && hasRichSteps && streamSteps.map((step, i) => {
           if (step.type === "thinking") {
             const open = thinkingOpen.has(i);
             return (
