@@ -42,5 +42,14 @@ export async function listFiles(
   const prefix = args.prefix as string | undefined;
   const allFiles = await db.select().from(workFiles).where(eq(workFiles.sessionId, sessionId));
   const filtered = prefix ? allFiles.filter((f) => f.path.startsWith(prefix)) : allFiles;
-  return filtered.map((f) => `${f.isFolder ? "[dir]" : "[file]"} ${f.path}`).join("\n");
+  return filtered
+    .map((f) => {
+      const label = f.isFolder ? "[dir]" : "[file]";
+      const firstLine = !f.isFolder && f.content
+        ? f.content.trim().split("\n")[0]?.replace(/^#+\s*/, "").slice(0, 60) || ""
+        : "";
+      const summary = firstLine ? ` | ${firstLine}` : "";
+      return `${label} ${f.path}${summary}`;
+    })
+    .join("\n");
 }

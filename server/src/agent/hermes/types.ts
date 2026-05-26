@@ -13,11 +13,16 @@ export interface HermesLoopParams {
   allFiles: Array<{ path: string; content: string }>;
 }
 
+export interface FileSummary {
+  path: string;
+  summary: string;
+}
+
 export interface AgentFileContext {
   agentsMd: string;
-  memories: string[];
-  skills: Array<{ name: string; entry: string }>;
-  contexts: string[];
+  memories: FileSummary[];
+  skills: Array<{ name: string; summary: string; entry: string }>;
+  contexts: FileSummary[];
 }
 
 export type SSEEvent =
