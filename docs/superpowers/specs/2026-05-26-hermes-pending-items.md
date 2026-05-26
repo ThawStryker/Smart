@@ -2,27 +2,33 @@
 
 **Date:** 2026-05-26
 
-## 1. Agent 目录结构定义（待讨论）
+## 1. Agent 目录结构定义（已确定）
 
 ```
 agents/<name>/
-  AGENTS.md         — 角色定义：我是谁，我的职责是什么
-  memory/           — Agent 自动写入的经验记忆
-  skills/           — 用户手动定义的技能（每个技能一个文件夹，SKILL.md 为入口）
-  context/          — 用户手动放入的参考资料
-  heartbeat.md      — 系统自动维护的运行状态
+  AGENTS.md              — 角色定义 + 约束（系统提示词补充）
+  memory/
+    USER.md              — 用户固定偏好 + 文档索引（删除按钮置灰）
+    MEMORY.md            — Agent 自驱成长记忆（删除按钮置灰）
+  skills/                — 用户手动定义的技能（摘要列表，按需加载）
+  context/               — 常驻背景知识（全量加载）
+  heartbeat/
+    HEARTBEAT.md         — 定时任务配置（cron 格式）
 ```
 
-**已确定的：**
-- `context/` — 用户手动放，不变，Agent 按需 `read_file` 读取（P0 已实现按需加载）
-- `memory/` — Agent 自动写入，记录从任务中学到的经验
-- `skills/` — 保持用户手动定义，不做自主创建（放弃了 P1）
+### 加载策略
 
-**待讨论：**
-- `context/` 内的文档是否需要 Agent 执行前预索引（文件名+标题摘要列表，供 LLM 判断相关性）
-- `memory/` 的读写策略细节：何时写？写什么格式？写多少？
+| 文件 | 加载方式 | 说明 |
+|------|---------|------|
+| AGENTS.md | 全量 | 身份定义 |
+| context/*.md | 全量 | 背景知识 |
+| memory/USER.md | 全量 | 用户偏好 + 文档索引 |
+| memory/MEMORY.md | 全量 | Agent 成长日志 |
+| USER.md 引用的文档 | 按需 read_file | 用户手动维护引用 |
+| skills/*/SKILL.md | 摘要列表，按需 read_file | 按触发条件匹配 |
+| heartbeat/HEARTBEAT.md | 定时读取 | 调度引擎读取 |
 
-## 2. 对话回复的表现方式（最终目标）
+## 2. 对话回复的表现方式（待实现）
 
 用户期望的聊天回复格式：
 
@@ -30,25 +36,19 @@ agents/<name>/
 [@教研 帮我写一份关于xxx的教学逐字稿]
 
 [图标]Thinking...
-> 好的，我来帮你完成一份 xxx 的教学逐字稿。
-
 [图标]Agent - [头像]教研
-
 [图标]Read: xxxxxxxxxxx.md
 [图标]Skill: xxxxxxxxxxxxxxx
-[图标]Thinking...
 [图标]Writing: xxxxxxxxxxx.md
 
 逐字稿写好了：xxxxxxxxxxxx.md
-教学思路：1.  2.  3.
-设计点：教学目标参考了.....
-如果你的学员是....可以告诉我，我可以做xxx样的修改。
+教学思路 / 设计点 / 可修改建议
 ```
 
-**核心需求：**
-- 每个步骤有独立图标（Thinking / Read / Skill / Writing）
-- Agent 名称和头像可见
-- 工具调用结果以卡片形式展示
-- 最终输出包含：正文 + 思路 + 设计点 + 可修改建议
+**实现方式：** 前端 SSE 事件渲染升级（已有 tool_exec、agent_start、doc 事件，需加 thinking 事件）
 
-**实现方式：** 前端 SSE 事件渲染升级（已有 `tool_exec`、`agent_start`、`doc` 事件，需加 `thinking` 事件）
+## 3. Heartbeat 调度引擎（待实现）
+
+- `heartbeat/HEARTBEAT.md` 已定义配置格式（cron + 任务描述）
+- 调度引擎尚未实现——需要后台服务定时读取配置并触发 Agent 执行
+- 实现时考虑：Cloudflare Workers Cron Triggers 或 Edgespark 内置调度
