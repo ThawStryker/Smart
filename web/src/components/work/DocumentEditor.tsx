@@ -87,13 +87,13 @@ export function DocumentEditor({
   }, [content, filePath, isStreaming, onSave]);
 
   const [sourceView, setSourceView] = useState(false);
-  const [sourceText, setSourceText] = useState("");
+  const sourceTextRef = useRef("");
 
   const toggleSource = () => {
     if (!sourceView) {
-      setSourceText(crepeRef.current?.getMarkdown() || content);
+      sourceTextRef.current = crepeRef.current?.getMarkdown() || content;
     } else {
-      if (crepeRef.current) crepeRef.current.editor.action(replaceAll(sourceText));
+      if (crepeRef.current) crepeRef.current.editor.action(replaceAll(sourceTextRef.current));
     }
     setSourceView(!sourceView);
   };
@@ -151,7 +151,7 @@ export function DocumentEditor({
           </div>
         ) : sourceView ? (
           <div className="flex-1 overflow-auto bg-[var(--app-bg)]">
-            <textarea value={sourceText} onChange={(e) => setSourceText(e.target.value)}
+            <textarea defaultValue={sourceTextRef.current} onChange={(e) => { sourceTextRef.current = e.target.value; }}
               className="w-full h-full p-6 text-sm font-mono outline-none resize-none bg-[var(--app-bg)] text-[var(--app-text)]" />
           </div>
         ) : (
