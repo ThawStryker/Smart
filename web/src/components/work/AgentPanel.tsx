@@ -74,7 +74,7 @@ export function AgentPanel({ sessionId, onFileSelect, selectedFile, onAgentListC
       method: "POST", headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ name }),
     });
-    loadUserAgents();
+    loadFiles(); loadUserAgents();
   };
 
   const renameAgent = async (oldName: string, newName: string) => {
@@ -88,7 +88,7 @@ export function AgentPanel({ sessionId, onFileSelect, selectedFile, onAgentListC
 
   const deleteAgent = async (name: string) => {
     await fetch(`/api/agents/${name}`, { method: "DELETE" });
-    loadUserAgents();
+    loadFiles(); loadUserAgents();
   };
 
   const createFile = useCallback(async (parentPath: string) => {
