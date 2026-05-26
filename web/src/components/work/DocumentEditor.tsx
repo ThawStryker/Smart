@@ -17,7 +17,6 @@ export function DocumentEditor({
 }: DocumentEditorProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const crepeRef = useRef<Crepe | null>(null);
-  const saveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const isInternalChangeRef = useRef(false);
   const lastSavedMd = useRef("");
 
@@ -63,27 +62,22 @@ export function DocumentEditor({
       crepeRef.current = crepe;
       lastSavedMd.current = crepe.getMarkdown();
 
-      // Listen for changes via Milkdown event
+      // Milkdown's native change listener — save on every edit
       crepe.on((listener) => {
         listener.markdownUpdated((_ctx, md) => {
           isInternalChangeRef.current = true;
           onContentChangeRef.current(md);
-
           const fp = filePathRef.current;
           if (fp && md) {
             lastSavedMd.current = md;
-            if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
-            saveTimerRef.current = setTimeout(() => {
-              onSaveRef.current(fp, md);
-            }, 1000);
+            onSaveRef.current(fp, md);
           }
         });
       });
     });
 
     return () => {
-      doSave(); // save on unmount
-      if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
+      doSave();
       crepeRef.current?.destroy();
       crepeRef.current = null;
     };
@@ -100,14 +94,9 @@ export function DocumentEditor({
     }
     if (isStreaming && filePath && content) {
       lastSavedMd.current = content;
-      if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
-      saveTimerRef.current = setTimeout(() => onSave(filePath, content), 1000);
+      onSave(filePath, content);
     }
   }, [content, filePath, isStreaming, onSave]);
-
-  useEffect(() => {
-    return () => { if (saveTimerRef.current) clearTimeout(saveTimerRef.current); };
-  }, []);
 
   const displayName = filePath ? filePath.split("/").pop() || filePath : null;
 
