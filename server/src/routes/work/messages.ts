@@ -6,7 +6,7 @@ import { workMessages } from "@defs";
 export const messagesRoutes = new Hono();
 
 messagesRoutes.get("/", async (c) => {
-  const sessionId = parseInt(c.req.param("id"));
+  const sessionId = parseInt(c.req.param("id") || "0");
   const messages = await db.select().from(workMessages).where(eq(workMessages.sessionId, sessionId));
   return c.json(messages);
 });

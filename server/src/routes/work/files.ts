@@ -14,7 +14,7 @@ function getFilePath(c: any, sessionId: number): string {
 }
 
 filesRoutes.get("/", async (c) => {
-  const sessionId = parseInt(c.req.param("id"));
+  const sessionId = parseInt(c.req.param("id") || "0");
   const prefix = c.req.query("prefix") || "";
   const condition = prefix
     ? and(eq(workFiles.sessionId, sessionId), like(workFiles.path, `${prefix}%`))
@@ -25,7 +25,7 @@ filesRoutes.get("/", async (c) => {
 
 // Batch create — MUST be before wildcard routes
 filesRoutes.post("/batch", async (c) => {
-  const sessionId = parseInt(c.req.param("id"));
+  const sessionId = parseInt(c.req.param("id") || "0");
   const items = await c.req.json<Array<{ path: string; content?: string; isFolder?: boolean }>>();
 
   const allPaths = new Set<string>();
@@ -52,7 +52,7 @@ filesRoutes.post("/batch", async (c) => {
 });
 
 filesRoutes.get("/*", async (c) => {
-  const sessionId = parseInt(c.req.param("id"));
+  const sessionId = parseInt(c.req.param("id") || "0");
   const filePath = getFilePath(c, sessionId);
   if (!filePath) return c.json({ error: "File path required" }, 400);
   const rows = await db.select().from(workFiles).where(and(eq(workFiles.sessionId, sessionId), eq(workFiles.path, filePath)));
@@ -62,7 +62,7 @@ filesRoutes.get("/*", async (c) => {
 });
 
 filesRoutes.put("/*", async (c) => {
-  const sessionId = parseInt(c.req.param("id"));
+  const sessionId = parseInt(c.req.param("id") || "0");
   const filePath = getFilePath(c, sessionId);
   if (!filePath) return c.json({ error: "File path required" }, 400);
   const { content, isFolder } = await c.req.json<{ content?: string; isFolder?: boolean }>();
@@ -94,7 +94,7 @@ filesRoutes.put("/*", async (c) => {
 });
 
 filesRoutes.delete("/*", async (c) => {
-  const sessionId = parseInt(c.req.param("id"));
+  const sessionId = parseInt(c.req.param("id") || "0");
   const filePath = getFilePath(c, sessionId);
   if (!filePath) return c.json({ error: "File path required" }, 400);
   await db.delete(workFiles).where(and(eq(workFiles.sessionId, sessionId), like(workFiles.path, `${filePath}%`)));
