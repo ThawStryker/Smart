@@ -123,6 +123,7 @@ export function WorkPage() {
           onSelectSession={(id) => setSearchParams({ session: String(id) })}
           onRenameSession={renameSession}
           onDeleteSession={deleteSession}
+          onOpenFile={(path) => { setActiveFile({ path, content: "" }); setIsStreaming(true); }}
         />
       </div>
     </div>

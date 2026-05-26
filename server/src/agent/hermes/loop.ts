@@ -80,6 +80,10 @@ export async function hermesLoop(params: HermesLoopParams): Promise<string> {
             const json = JSON.parse(data);
             const delta = json.choices?.[0]?.delta;
 
+            if (delta?.reasoning_content) {
+              emit(eventQueue, { type: "thinking", delta: delta.reasoning_content });
+            }
+
             if (delta?.content) {
               textContent += delta.content;
               emit(eventQueue, { type: "text", agentName: targetAgent, delta: delta.content });
@@ -134,10 +138,14 @@ export async function hermesLoop(params: HermesLoopParams): Promise<string> {
 
       // Execute tools and push results
       for (const tc of toolCalls) {
+        let parsedArgs: Record<string, unknown> | undefined;
+        try { parsedArgs = JSON.parse(tc.function.arguments); } catch {}
+
         emit(eventQueue, {
           type: "tool_exec",
           toolName: tc.function.name,
           agentName: targetAgent,
+          args: parsedArgs,
         });
 
         let result: string;
