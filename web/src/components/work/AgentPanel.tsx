@@ -61,6 +61,7 @@ export function AgentPanel({ sessionId, onFileSelect, selectedFile, onAgentListC
     if (res.ok) {
       const data: Array<{ name: string }> = await res.json();
       setAgentNames(data.map((a) => a.name));
+      onAgentListChange();
     }
   }, [onAgentListChange]);
 
