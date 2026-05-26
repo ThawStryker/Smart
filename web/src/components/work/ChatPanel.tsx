@@ -177,7 +177,7 @@ export function ChatPanel({
             ))}
           </div>
         )}
-        <div className="flex gap-2 p-3">
+        <div className="flex items-end gap-2 p-3">
           <textarea ref={inputRef} value={input}
             onChange={(e) => handleInput(e.target.value)} onKeyDown={handleKeyDown}
             placeholder="Message Hermes or @mention an agent..."
@@ -185,19 +185,10 @@ export function ChatPanel({
             style={{ height: "80px" }}
             rows={3} disabled={streaming.isActive} />
           <button onClick={streaming.isActive ? stopStreaming : sendMessage}
-            className={`shrink-0 w-11 h-11 rounded-xl flex items-center justify-center transition-all duration-200 font-bold text-sm ${
-              streaming.isActive ? "" : "hover:-translate-y-0.5"
-            }`}
-            style={streaming.isActive
-              ? { background: "var(--app-red-bg)", color: "var(--app-red)", border: "1px solid rgba(248,113,113,0.2)" }
-              : { background: "linear-gradient(135deg, var(--app-accent), var(--app-accent-deep))", color: "#1d1c19", boxShadow: "0 2px 12px rgba(245,158,11,0.15)", opacity: input.trim() ? 1 : 0.5 }
-            }
-            disabled={!streaming.isActive && !input.trim()}>
-            {streaming.isActive ? (
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor" style={{ color: "var(--app-red)" }}><rect x="6" y="6" width="12" height="12" rx="1" /></svg>
-            ) : (
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M22 2L11 13" /><path d="M22 2l-7 20-4-9-9-4 20-7z" /></svg>
-            )}
+            disabled={!streaming.isActive && !input.trim()}
+            className="shrink-0 w-8 h-8 rounded-full flex items-center justify-center shadow-sm hover:shadow-md transition-all disabled:opacity-40 disabled:cursor-not-allowed mb-1"
+            style={{ background: "linear-gradient(135deg, var(--app-accent), var(--app-accent-deep))", color: "#1d1c19" }}>
+            {streaming.isActive ? "■" : "➤"}
           </button>
         </div>
       </div>
