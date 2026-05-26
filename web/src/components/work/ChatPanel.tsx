@@ -177,7 +177,7 @@ export function ChatPanel({
             ))}
           </div>
         )}
-        <div className="flex items-end gap-2 p-3">
+        <div className="flex items-center gap-2 p-3">
           <textarea ref={inputRef} value={input}
             onChange={(e) => handleInput(e.target.value)} onKeyDown={handleKeyDown}
             placeholder="Message Hermes or @mention an agent..."
@@ -186,7 +186,7 @@ export function ChatPanel({
             rows={3} disabled={streaming.isActive} />
           <button onClick={streaming.isActive ? stopStreaming : sendMessage}
             disabled={!streaming.isActive && !input.trim()}
-            className="shrink-0 w-8 h-8 rounded-full flex items-center justify-center shadow-sm hover:shadow-md transition-all disabled:opacity-40 disabled:cursor-not-allowed mb-1"
+            className="shrink-0 w-8 h-8 rounded-full flex items-center justify-center shadow-sm hover:shadow-md transition-all disabled:opacity-40 disabled:cursor-not-allowed"
             style={{ background: "linear-gradient(135deg, var(--app-accent), var(--app-accent-deep))", color: "#1d1c19" }}>
             {streaming.isActive ? "■" : "➤"}
           </button>
