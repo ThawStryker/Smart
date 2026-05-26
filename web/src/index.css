@@ -289,3 +289,130 @@ body {
 [data-theme="dark"] .bg-amber-50 { background-color: var(--app-accent-bg); }
 [data-theme="dark"] .hover\:bg-amber-100:hover { background-color: rgba(245,158,11,0.15); }
 
+
+/* === Milkdown Crepe Typography === */
+.milkdown .ProseMirror {
+  padding: 40px 80px;
+}
+
+.milkdown .ProseMirror h1,
+.milkdown .ProseMirror h2,
+.milkdown .ProseMirror h3,
+.milkdown .ProseMirror h4,
+.milkdown .ProseMirror h5,
+.milkdown .ProseMirror h6 {
+  font-family: Georgia, Cambria, 'Times New Roman', Times, serif;
+  font-weight: 400;
+  padding: 2px 0;
+}
+
+.milkdown .ProseMirror h1 { font-size: 42px; line-height: 50px; margin-top: 32px; }
+.milkdown .ProseMirror h2 { font-size: 36px; line-height: 44px; margin-top: 28px; }
+.milkdown .ProseMirror h3 { font-size: 32px; line-height: 40px; margin-top: 24px; }
+.milkdown .ProseMirror h4 { font-size: 24px; line-height: 32px; margin-top: 20px; }
+.milkdown .ProseMirror h5 { font-size: 20px; line-height: 28px; margin-top: 16px; }
+.milkdown .ProseMirror h6 { font-size: 18px; font-weight: 700; line-height: 28px; margin-top: 16px; }
+
+.milkdown .ProseMirror p {
+  font-size: 16px;
+  line-height: 28px;
+  padding: 4px 0;
+}
+
+.milkdown .ProseMirror code {
+  color: #ba1a1a;
+  background: rgba(0,0,0,0.04);
+  font-family: 'Fira Code', 'JetBrains Mono', Menlo, monospace;
+  padding: 0.1em 0.4em;
+  border-radius: 4px;
+  font-size: 87.5%;
+}
+
+.milkdown .ProseMirror pre {
+  background: rgba(0,0,0,0.04);
+  padding: 12px 16px;
+  border-radius: 8px;
+}
+
+.milkdown .ProseMirror pre code {
+  padding: 0;
+  background: transparent;
+  color: inherit;
+  font-size: 85%;
+}
+
+.milkdown .ProseMirror blockquote {
+  position: relative;
+  padding-left: 40px;
+  padding-top: 4px;
+  padding-bottom: 4px;
+  margin: 8px 0;
+}
+
+.milkdown .ProseMirror blockquote::before {
+  content: '';
+  width: 4px;
+  left: 8px;
+  top: 4px;
+  bottom: 4px;
+  position: absolute;
+  background: #d4d4d4;
+  border-radius: 100px;
+}
+
+.milkdown .ProseMirror ul,
+.milkdown .ProseMirror ol {
+  padding-left: 24px;
+}
+
+.milkdown .ProseMirror li {
+  font-size: 16px;
+  line-height: 28px;
+  padding: 2px 0;
+}
+
+.milkdown .ProseMirror a {
+  color: #2563eb;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+.milkdown .ProseMirror hr {
+  border: none;
+  height: 18px;
+  background: transparent;
+  position: relative;
+}
+
+.milkdown .ProseMirror hr::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 50%;
+  height: 1px;
+  background: rgba(0,0,0,0.1);
+}
+
+.milkdown .ProseMirror img {
+  max-width: 100%;
+  border-radius: 8px;
+}
+
+.milkdown .ProseMirror table {
+  border-collapse: collapse;
+  width: 100%;
+  margin: 8px 0;
+}
+
+.milkdown .ProseMirror th,
+.milkdown .ProseMirror td {
+  border: 1px solid rgba(0,0,0,0.1);
+  padding: 8px 12px;
+  text-align: left;
+}
+
+.milkdown .ProseMirror th {
+  background: rgba(0,0,0,0.02);
+  font-weight: 600;
+}
