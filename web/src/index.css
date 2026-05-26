@@ -488,3 +488,31 @@ body {
 [data-theme="dark"] .milkdown .ProseMirror {
   background: var(--app-surface) !important;
 }
+
+/* Dark mode: code blocks */
+[data-theme="dark"] .cm-editor,
+[data-theme="dark"] .cm-editor .cm-gutters,
+[data-theme="dark"] .milkdown .ProseMirror pre,
+[data-theme="dark"] .milkdown .ProseMirror pre code {
+  background: #1e1e1e !important;
+  color: #d4d4d4 !important;
+  border-color: var(--app-border) !important;
+}
+[data-theme="dark"] .cm-gutters {
+  border-right-color: var(--app-border) !important;
+}
+[data-theme="dark"] .cm-activeLine {
+  background: rgba(255,255,255,0.05) !important;
+}
+
+/* Dark mode: image caption */
+[data-theme="dark"] .milkdown-image-block figcaption,
+[data-theme="dark"] .milkdown-image-block .image-caption,
+[data-theme="dark"] figcaption {
+  color: var(--app-text-secondary) !important;
+}
+
+/* Dark mode: general image block */
+[data-theme="dark"] .milkdown-image-block {
+  color: var(--app-text) !important;
+}
