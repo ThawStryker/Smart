@@ -151,7 +151,7 @@ export function AgentPanel({ sessionId, onFileSelect, selectedFile, onAgentListC
       <div className="flex items-center justify-between px-4 py-3 border-b border-[var(--app-border)]">
         <span className="text-xs font-bold uppercase tracking-widest text-[var(--app-text-tertiary)]">Agents</span>
         <button onClick={createAgent}
-          className="w-6 h-6 rounded-lg flex items-center justify-center text-base font-medium transition-all duration-200 hover:scale-110 bg-[var(--app-accent-bg)] text-[var(--app-accent)]">+</button>
+          className="w-6 h-6 rounded-lg flex items-center justify-center text-sm font-bold transition-all duration-200 hover:scale-110 bg-[var(--app-accent-bg)] text-[var(--app-accent)] leading-none">+</button>
       </div>
 
       <div className="overflow-auto py-1" style={{ flex: "1 1 0", minHeight: 0 }}>

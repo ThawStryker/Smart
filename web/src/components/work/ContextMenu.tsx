@@ -142,9 +142,9 @@ export function WorkspaceActions({ onCreateFile, onCreateFolder }: { onCreateFil
   const { ref, flip } = useFlip(open);
 
   return (
-    <div className="relative opacity-0 group-hover:opacity-100 transition-opacity" onClick={(e) => e.stopPropagation()}>
+    <div className="relative" onClick={(e) => e.stopPropagation()}>
       <button onClick={() => setOpen(!open)}
-        className="w-6 h-6 rounded-lg flex items-center justify-center text-sm font-medium transition-all duration-200 hover:scale-110 bg-[var(--app-accent-bg)] text-[var(--app-accent)]">+</button>
+        className="w-6 h-6 rounded-lg flex items-center justify-center text-sm font-medium transition-all duration-200 hover:scale-110 bg-[var(--app-accent-bg)] text-[var(--app-accent)] leading-none">+</button>
       {open && (
         <>
           <div className="fixed inset-0 z-30" onClick={() => setOpen(false)} />

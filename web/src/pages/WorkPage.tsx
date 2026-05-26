@@ -90,10 +90,8 @@ export function WorkPage() {
     });
   };
 
-  // Only show sessions with real content in the dropdown
-  const activeSessions = sessions.filter((s) => s.title !== "新对话");
-  // But if there would be nothing to show, keep the current one
-  const visibleSessions = activeSessions.length > 0 ? activeSessions : sessions.filter((s) => s.id === sessionId);
+  // Dropdown: never show empty sessions (title === "新对话")
+  const visibleSessions = sessions.filter((s) => s.title !== "新对话");
 
   if (loading || !sessionId) {
     return (

@@ -71,7 +71,7 @@ export function SessionBar({
           )}
         </div>
         <button onClick={onCreateSession}
-          className="w-6 h-6 rounded-full flex items-center justify-center text-sm font-medium transition-all duration-200 hover:scale-110 shrink-0 border border-[var(--app-accent-border)] text-[var(--app-accent)] hover:bg-[var(--app-accent-bg)]"
+          className="w-6 h-6 rounded-full flex items-center justify-center text-sm font-bold transition-all duration-200 hover:scale-110 shrink-0 border border-[var(--app-accent-border)] text-[var(--app-accent)] hover:bg-[var(--app-accent-bg)] leading-none"
           title="新对话">+</button>
 
         {editing !== null && (
