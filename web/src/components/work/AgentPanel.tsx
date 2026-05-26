@@ -203,13 +203,15 @@ export function AgentPanel({ sessionId, onFileSelect, selectedFile, onAgentListC
                     onClick={(e) => e.stopPropagation()}
                   />
                 ) : (
-                  <span className="text-sm font-medium truncate text-[var(--app-text)] cursor-pointer hover:opacity-70"
-                    onDoubleClick={(e) => { e.stopPropagation(); setRenaming(name); setRenameValue(name); }}>
+                  <span className="text-sm font-medium truncate text-[var(--app-text)]">
                     {name}
                   </span>
                 )}
-                <button onClick={(e) => { e.stopPropagation(); if (confirm(`Delete ${name}?`)) deleteAgent(name); }}
-                  className="ml-auto text-xs opacity-0 group-hover:opacity-60 hover:opacity-100 transition-all px-1 text-[var(--app-red)]">&times;</button>
+                <span className="opacity-0 group-hover:opacity-100 transition-opacity ml-auto">
+                  <AgentMenu agentName={name}
+                    onRename={() => { setRenaming(name); setRenameValue(name); }}
+                    onDelete={() => deleteAgent(name)} />
+                </span>
               </div>
               {isExpanded && (
                 <div className="ml-7 border-l border-[var(--app-border)]">
@@ -241,6 +243,39 @@ export function AgentPanel({ sessionId, onFileSelect, selectedFile, onAgentListC
         deleteFile={deleteFile}
       />
 
+    </div>
+  );
+}
+
+// ── Agent kebab menu ──
+
+function AgentMenu({ agentName, onRename, onDelete }: { agentName: string; onRename: () => void; onDelete: () => void }) {
+  const [open, setOpen] = useState(false);
+  return (
+    <div className="relative" onClick={(e) => e.stopPropagation()}>
+      <button onClick={() => setOpen(!open)}
+        className="w-5 h-5 rounded flex items-center justify-center hover:bg-[var(--app-accent-bg)] transition-colors">
+        <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor" style={{ color: "var(--app-text-tertiary)" }}>
+          <circle cx="12" cy="5" r="2" /><circle cx="12" cy="12" r="2" /><circle cx="12" cy="19" r="2" />
+        </svg>
+      </button>
+      {open && (
+        <>
+          <div className="fixed inset-0 z-30" onClick={() => setOpen(false)} />
+          <div className="absolute right-0 top-full mt-1 z-40 w-32 rounded-xl bg-[var(--app-surface)] border border-[var(--app-border)] shadow-xl overflow-hidden py-1">
+            <div onClick={() => { onRename(); setOpen(false); }}
+              className="px-3 py-1.5 text-xs cursor-pointer transition-colors hover:bg-[var(--app-accent-bg)] flex items-center gap-2 text-[var(--app-text)]">
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" className="flex-shrink-0"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" /><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z" /></svg>
+              Rename
+            </div>
+            <div onClick={() => { if (confirm(`Delete ${agentName}?`)) { onDelete(); setOpen(false); } }}
+              className="px-3 py-1.5 text-xs cursor-pointer transition-colors hover:bg-[var(--app-accent-bg)] flex items-center gap-2 text-[var(--app-red)]">
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" className="flex-shrink-0"><polyline points="3 6 5 6 21 6" /><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" /></svg>
+              Delete
+            </div>
+          </div>
+        </>
+      )}
     </div>
   );
 }
