@@ -516,3 +516,14 @@ body {
 [data-theme="dark"] .milkdown-image-block {
   color: var(--app-text) !important;
 }
+
+/* Dark mode: define Crepe CSS variables that Nord theme doesn't provide */
+[data-theme="dark"] .milkdown {
+  --crepe-color-surface: #252422;
+  --crepe-color-surface-low: #2a2926;
+  --crepe-color-on-surface: var(--app-text);
+  --crepe-color-on-surface-variant: var(--app-text-secondary);
+  --crepe-color-outline: var(--app-border);
+  --crepe-color-secondary: rgba(255,255,255,0.08);
+  --crepe-color-hover: rgba(255,255,255,0.06);
+}
