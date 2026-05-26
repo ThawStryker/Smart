@@ -421,3 +421,14 @@ body {
 .milkdown .ProseMirror {
   font-family: 'Open Sans', Arial, Helvetica, sans-serif !important;
 }
+
+/* Fix block handle colors (Nord theme doesn't define Crepe variables) */
+.milkdown .milkdown-block-handle .operation-item {
+  background: transparent;
+}
+.milkdown .milkdown-block-handle .operation-item svg {
+  fill: var(--app-text-tertiary);
+}
+.milkdown .milkdown-block-handle .operation-item:hover {
+  background: var(--app-accent-bg);
+}
