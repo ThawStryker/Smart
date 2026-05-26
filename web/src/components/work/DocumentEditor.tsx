@@ -154,10 +154,8 @@ export function DocumentEditor({
             </div>
           </div>
         ) : sourceView ? (
-          <div className="flex-1 overflow-auto bg-[var(--app-bg)]">
-            <textarea defaultValue={sourceTextRef.current} onChange={(e) => { sourceTextRef.current = e.target.value; }}
-              className="w-full h-full p-6 text-sm font-mono outline-none resize-none bg-[var(--app-bg)] text-[var(--app-text)]" />
-          </div>
+          <textarea defaultValue={sourceTextRef.current} onChange={(e) => { sourceTextRef.current = e.target.value; }}
+            className="flex-1 w-full p-6 text-sm font-mono outline-none resize-none bg-[var(--app-bg)] text-[var(--app-text)] overflow-auto" />
         ) : (
           <div className="max-w-3xl mx-auto my-6 rounded-xl shadow-2xl overflow-hidden bg-white" style={{ minHeight: "calc(100% - 3rem)" }}>
             <div ref={containerRef} className="milkdown px-12 py-10 text-neutral-900" />
