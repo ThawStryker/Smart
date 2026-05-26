@@ -20,7 +20,30 @@ export function AgentPanel({ sessionId, onFileSelect, selectedFile, onAgentListC
 
   const loadFiles = useCallback(async () => {
     const res = await fetch(`/api/work/sessions/${sessionId}/files`);
-    if (res.ok) setFiles(await res.json());
+    if (res.ok) {
+      const sessionFiles = await res.json();
+      // Also load agent files from user-level (across all sessions)
+      const agentFileRes = await fetch("/api/agents");
+      if (agentFileRes.ok) {
+        const agents = await agentFileRes.json();
+        const allAgentFiles = await Promise.all(
+          agents.map(async (a: { name: string }) => {
+            const res = await fetch(`/api/agents/${a.name}/files`);
+            return res.ok ? res.json() : [];
+          }),
+        );
+        const merged = [...sessionFiles, ...allAgentFiles.flat()];
+        // Deduplicate by path
+        const seen = new Set<string>();
+        setFiles(merged.filter((f: FileEntry) => {
+          if (seen.has(f.path)) return false;
+          seen.add(f.path);
+          return true;
+        }));
+      } else {
+        setFiles(sessionFiles);
+      }
+    }
   }, [sessionId]);
 
   const loadUserAgents = useCallback(async () => {
