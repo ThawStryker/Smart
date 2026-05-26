@@ -16,7 +16,17 @@ export function AgentPanel({ sessionId, onFileSelect, selectedFile, onAgentListC
   const [expanded, setExpanded] = useState<Set<string>>(new Set(["agents"]));
   const [renaming, setRenaming] = useState<string | null>(null);
   const [renameValue, setRenameValue] = useState("");
+  const [renamingPath, setRenamingPath] = useState<string | null>(null);
   const [agentNames, setAgentNames] = useState<string[]>([]);
+
+  const startFileRename = (path: string, name: string) => { setRenamingPath(path); setRenameValue(name); };
+  const finishFileRename = (path: string, oldName: string) => {
+    if (renameValue.trim() && renameValue.trim() !== oldName) {
+      if (path.includes(`/${oldName}`)) renameFile(path, renameValue.trim());
+    }
+    setRenamingPath(null);
+    setRenameValue("");
+  };
 
   const loadFiles = useCallback(async () => {
     const res = await fetch(`/api/work/sessions/${sessionId}/files`);
@@ -215,7 +225,7 @@ export function AgentPanel({ sessionId, onFileSelect, selectedFile, onAgentListC
               </div>
               {isExpanded && (
                 <div className="ml-7 border-l border-[var(--app-border)]">
-                  {renderFileChildren(`agents/${name}`, tree, expanded, toggleExpand, onFileSelect, selectedFile, 0, createFile, createFolder, renameFolder, deleteFolder, renameFile, deleteFile)}
+                  {renderFileChildren(`agents/${name}`, tree, expanded, toggleExpand, onFileSelect, selectedFile, 0, createFile, createFolder, renameFolder, deleteFolder, renameFile, deleteFile, renamingPath, renameValue, startFileRename, setRenameValue, finishFileRename)}
                 </div>
               )}
             </div>
@@ -241,6 +251,11 @@ export function AgentPanel({ sessionId, onFileSelect, selectedFile, onAgentListC
         deleteFolder={deleteFolder}
         renameFile={renameFile}
         deleteFile={deleteFile}
+        renamingPath={renamingPath}
+        renameValue={renameValue}
+        onStartRename={startFileRename}
+        onRenameChange={setRenameValue}
+        onFinishRename={finishFileRename}
       />
 
     </div>

@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect, useLayoutEffect } from "react";
+import React, { useState, useRef, useLayoutEffect } from "react";
 
 // ── Menu icon components ──
 
@@ -67,38 +67,19 @@ function useFlip(open: boolean) {
   return { ref, flip };
 }
 
-// ── Inline rename input ──
-
-function InlineRename({ value, onSave, onCancel }: { value: string; onSave: (v: string) => void; onCancel: () => void }) {
-  const ref = useRef<HTMLInputElement>(null);
-  useEffect(() => { ref.current?.select(); }, []);
-  return (
-    <input ref={ref} defaultValue={value}
-      onKeyDown={(e) => {
-        if (e.key === "Enter") onSave(e.currentTarget.value);
-        if (e.key === "Escape") onCancel();
-      }}
-      onBlur={() => onCancel()}
-      className="bg-[var(--app-surface)] border border-[var(--app-accent)] rounded px-2 py-0.5 text-xs outline-none text-[var(--app-text)] min-w-0"
-      autoFocus
-      onClick={(e) => e.stopPropagation()}
-    />
-  );
-}
 
 // ── Folder context menu ──
 
 export function FolderMenu({
-  folderPath, folderName, onCreateFile, onCreateFolder, onRename, onDelete,
+  folderPath, onCreateFile, onCreateFolder, onStartRename, onDelete,
 }: {
-  folderPath: string; folderName: string;
+  folderPath: string;
   onCreateFile: (parentPath: string) => Promise<void>;
   onCreateFolder: (parentPath: string) => Promise<void>;
-  onRename: (newName: string) => void;
+  onStartRename: () => void;
   onDelete: () => void;
 }) {
   const [open, setOpen] = useState(false);
-  const [renaming, setRenaming] = useState(false);
   const { ref, flip } = useFlip(open);
 
   return (
@@ -109,7 +90,7 @@ export function FolderMenu({
           <circle cx="12" cy="5" r="2" /><circle cx="12" cy="12" r="2" /><circle cx="12" cy="19" r="2" />
         </svg>
       </button>
-      {open && !renaming && (
+      {open && (
         <>
           <div className="fixed inset-0 z-30" onClick={() => setOpen(false)} />
           <div ref={ref}
@@ -117,15 +98,10 @@ export function FolderMenu({
             <MenuItem icon={<NewFileIcon />} label="New File" onClick={() => { onCreateFile(folderPath); setOpen(false); }} />
             <MenuItem icon={<NewFolderIcon />} label="New Folder" onClick={() => { onCreateFolder(folderPath); setOpen(false); }} />
             <div className="border-t border-[var(--app-border)] my-0.5" />
-            <MenuItem icon={<RenameIcon />} label="Rename" onClick={() => { setRenaming(true); setOpen(false); }} />
+            <MenuItem icon={<RenameIcon />} label="Rename" onClick={() => { onStartRename(); setOpen(false); }} />
             <MenuItem icon={<DeleteIcon />} label="Delete" onClick={() => { onDelete(); setOpen(false); }} danger />
           </div>
         </>
-      )}
-      {renaming && (
-        <InlineRename value={folderName}
-          onSave={(v) => { if (v.trim()) onRename(v.trim()); setRenaming(false); }}
-          onCancel={() => setRenaming(false)} />
       )}
     </div>
   );
@@ -134,15 +110,13 @@ export function FolderMenu({
 // ── File context menu ──
 
 export function FileMenu({
-  fileName, onRename, onDelete, canDelete = true,
+  onStartRename, onDelete, canDelete = true,
 }: {
-  fileName: string;
-  onRename: (newName: string) => void;
+  onStartRename: () => void;
   onDelete: () => void;
   canDelete?: boolean;
 }) {
   const [open, setOpen] = useState(false);
-  const [renaming, setRenaming] = useState(false);
   const { ref, flip } = useFlip(open);
 
   return (
@@ -153,20 +127,15 @@ export function FileMenu({
           <circle cx="12" cy="5" r="2" /><circle cx="12" cy="12" r="2" /><circle cx="12" cy="19" r="2" />
         </svg>
       </button>
-      {open && !renaming && (
+      {open && (
         <>
           <div className="fixed inset-0 z-30" onClick={() => setOpen(false)} />
           <div ref={ref}
             className={`absolute right-0 z-40 w-36 rounded-xl bg-[var(--app-surface)] border border-[var(--app-border)] shadow-xl overflow-hidden py-1 ${flip ? "bottom-full mb-1" : "top-full mt-1"}`}>
-            <MenuItem icon={<RenameIcon />} label="Rename" onClick={() => { setRenaming(true); setOpen(false); }} />
+            <MenuItem icon={<RenameIcon />} label="Rename" onClick={() => { onStartRename(); setOpen(false); }} />
             <MenuItem icon={<DeleteIcon />} label="Delete" onClick={canDelete ? () => { onDelete(); setOpen(false); } : () => {}} danger={canDelete} />
           </div>
         </>
-      )}
-      {renaming && (
-        <InlineRename value={fileName}
-          onSave={(v) => { if (v.trim()) onRename(v.trim()); setRenaming(false); }}
-          onCancel={() => setRenaming(false)} />
       )}
     </div>
   );

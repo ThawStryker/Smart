@@ -60,6 +60,11 @@ export function renderFileChildren(
   deleteFolder: (folderPath: string) => void,
   renameFile: (filePath: string, newName: string) => void,
   deleteFile: (filePath: string) => void,
+  renamingPath: string | null,
+  renameValue: string,
+  onStartRename: (path: string, name: string) => void,
+  onRenameChange: (v: string) => void,
+  onFinishRename: (path: string, oldName: string) => void,
 ): React.ReactNode[] {
   const parts = prefix.split("/");
   let node = tree;
@@ -106,15 +111,25 @@ export function renderFileChildren(
               </svg>
             </span>
             {name === "context" ? <ContextFolderIcon /> : name === "memory" ? <MemoryFolderIcon /> : name === "skills" ? <SkillsFolderIcon /> : name === "heartbeat" ? <HeartbeatFolderIcon /> : <DefaultFolderIcon open={isOpen} />}
-            <span className="text-xs truncate font-medium ml-1.5 text-[var(--app-text-secondary)] flex-1">{name}</span>
+            {renamingPath === cp ? (
+              <input value={renameValue} onChange={(e) => onRenameChange(e.target.value)}
+                onBlur={() => onFinishRename(cp, name)}
+                onKeyDown={(e) => { if (e.key === "Enter") onFinishRename(cp, name); if (e.key === "Escape") onRenameChange(name); }}
+                className="flex-1 bg-[var(--app-surface)] border border-[var(--app-accent)] rounded px-2 py-0.5 text-xs outline-none text-[var(--app-text)] min-w-0 ml-1.5"
+                autoFocus onFocus={(e) => e.target.select()}
+                onClick={(e) => e.stopPropagation()}
+              />
+            ) : (
+              <span className="text-xs truncate font-medium ml-1.5 text-[var(--app-text-secondary)] flex-1">{name}</span>
+            )}
             <span className="opacity-0 group-hover:opacity-100 transition-opacity ml-1">
-              <FolderMenu folderPath={cp} folderName={name}
+              <FolderMenu folderPath={cp}
                 onCreateFile={createFile} onCreateFolder={createFolder}
-                onRename={(n) => renameFolder(cp, n)}
+                onStartRename={() => onStartRename(cp, name)}
                 onDelete={() => deleteFolder(cp)} />
             </span>
           </div>
-          {isOpen && renderFileChildren(cp, tree, expanded, toggleExpand, onFileSelect, selectedFile, depth + 1, createFile, createFolder, renameFolder, deleteFolder, renameFile, deleteFile)}
+          {isOpen && renderFileChildren(cp, tree, expanded, toggleExpand, onFileSelect, selectedFile, depth + 1, createFile, createFolder, renameFolder, deleteFolder, renameFile, deleteFile, renamingPath, renameValue, onStartRename, onRenameChange, onFinishRename)}
         </div>
       );
     }
@@ -135,10 +150,20 @@ export function renderFileChildren(
         {/* Spacer to align with folder icons that have a chevron */}
         <span className="flex-shrink-0" style={{ width: "18px" }} />
         <FileIcon active={isActive} />
-        <span className="text-xs truncate ml-1.5 flex-1" style={{ color: isActive ? "var(--app-accent)" : "var(--app-text-secondary)" }}>{name}</span>
+        {renamingPath === cp ? (
+          <input value={renameValue} onChange={(e) => onRenameChange(e.target.value)}
+            onBlur={() => onFinishRename(cp, name)}
+            onKeyDown={(e) => { if (e.key === "Enter") onFinishRename(cp, name); if (e.key === "Escape") onRenameChange(name); }}
+            className="flex-1 bg-[var(--app-surface)] border border-[var(--app-accent)] rounded px-2 py-0.5 text-xs outline-none text-[var(--app-text)] min-w-0 ml-1.5"
+            autoFocus onFocus={(e) => e.target.select()}
+            onClick={(e) => e.stopPropagation()}
+          />
+        ) : (
+          <span className="text-xs truncate ml-1.5 flex-1" style={{ color: isActive ? "var(--app-accent)" : "var(--app-text-secondary)" }}>{name}</span>
+        )}
         <span className="opacity-0 group-hover:opacity-100 transition-opacity ml-1">
-          <FileMenu fileName={name}
-            onRename={(n) => renameFile(cp, n)}
+          <FileMenu
+            onStartRename={() => onStartRename(cp, name)}
             onDelete={() => deleteFile(cp)}
             canDelete={name !== "USER.md" && name !== "MEMORY.md"} />
         </span>
