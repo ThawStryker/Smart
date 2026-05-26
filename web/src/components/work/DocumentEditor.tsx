@@ -140,8 +140,8 @@ export function DocumentEditor({
         <div className="max-w-3xl mx-auto my-6 rounded-xl shadow-2xl overflow-hidden" style={{ height: "calc(100% - 3rem)", background: "var(--app-surface)" }}>
           <textarea ref={sourceRef} defaultValue={lastSavedRef.current || content}
             onChange={handleSourceEdit}
-            className="w-full h-full p-5 text-sm font-mono leading-relaxed outline-none resize-none border-0 bg-transparent"
-            style={{ color: "var(--app-text)", tabSize: 2, fontFamily: "'JetBrains Mono', 'Fira Code', 'Cascadia Code', 'SF Mono', Menlo, monospace" }}
+            className="w-full h-full text-sm font-mono leading-relaxed outline-none resize-none border-0 bg-transparent"
+            style={{ color: "var(--app-text)", tabSize: 2, padding: "50px 100px", fontFamily: "'JetBrains Mono', 'Fira Code', 'Cascadia Code', 'SF Mono', Menlo, monospace" }}
             spellCheck={false} placeholder="Markdown source..." />
         </div>
       </div>
