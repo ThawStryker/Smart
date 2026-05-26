@@ -112,8 +112,8 @@ workRoutes.put("/sessions/:id/files/*", async (c) => {
     });
   }
 
-  // Auto-create parent folders for agent paths
-  if (filePath.startsWith("agents/")) {
+  // Auto-create parent folders for nested paths
+  if (filePath.includes("/")) {
     const parts = filePath.split("/");
     for (let i = 1; i < parts.length; i++) {
       const parentPath = parts.slice(0, i).join("/");
