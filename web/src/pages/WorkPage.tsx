@@ -18,7 +18,7 @@ export function WorkPage() {
   const [isStreaming, setIsStreaming] = useState(false);
   const [agents, setAgents] = useState<string[]>([]);
 
-  // Auto-initialize: if no sessions exist, create one; if sessionId is invalid, redirect to first
+  // Init: if no sessions exist, create one; if invalid sessionId, redirect to first
   useEffect(() => {
     if (loading) return;
     if (sessions.length === 0) {
@@ -51,11 +51,24 @@ export function WorkPage() {
 
   const deleteSession = async (id: number) => {
     await hookDeleteSession(id);
+    const remaining = sessions.filter((x) => x.id !== id);
     if (id === sessionId) {
-      const remaining = sessions.filter((x) => x.id !== id);
-      if (remaining.length > 0) setSearchParams({ session: String(remaining[0].id) });
-      else setSearchParams({});
+      if (remaining.length > 0) {
+        setSearchParams({ session: String(remaining[0].id) });
+      } else {
+        // Last session deleted — create a new empty one
+        const s = await createSession();
+        if (s) setSearchParams({ session: String(s.id) });
+      }
     }
+  };
+
+  const handleCreateSession = async () => {
+    // If current session is empty (default title), don't create a new one
+    const current = sessions.find((s) => s.id === sessionId);
+    if (current?.title === "新对话") return;
+    const s = await createSession();
+    if (s) setSearchParams({ session: String(s.id) });
   };
 
   const handleFirstMessage = useCallback(async (message: string) => {
@@ -77,6 +90,9 @@ export function WorkPage() {
     });
   };
 
+  // Active sessions: exclude empty "新对话" sessions unless they are the current one
+  const activeSessions = sessions.filter((s) => s.title !== "新对话" || s.id === sessionId);
+
   if (loading || !sessionId) {
     return (
       <div className="flex items-center justify-center h-full bg-[var(--app-bg)]">
@@ -90,25 +106,20 @@ export function WorkPage() {
 
   return (
     <div className="flex h-full bg-[var(--app-bg)]">
-      {/* Left Panel */}
       <div className="w-64 flex-shrink-0 flex flex-col overflow-hidden border-r border-[var(--app-border)]">
         <AgentPanel sessionId={sessionId} onFileSelect={handleFileSelect} selectedFile={activeFile?.path || null} onAgentListChange={loadAgents} />
       </div>
-
-      {/* Center Panel */}
       <div className="flex-1 overflow-hidden">
         <DocumentEditor content={activeFile?.content || ""} filePath={activeFile?.path || null} isStreaming={isStreaming} onSave={handleSave}
           onContentChange={(content) => { if (activeFile) setActiveFile({ ...activeFile, content }); }} />
       </div>
-
-      {/* Right Panel */}
       <div className="w-80 flex-shrink-0 overflow-hidden border-l border-[var(--app-border)]">
         <ChatPanel
           sessionId={sessionId}
           agents={agents}
-          sessions={sessions}
+          sessions={activeSessions}
           onFirstMessage={handleFirstMessage}
-          onCreateSession={createSession}
+          onCreateSession={handleCreateSession}
           onSelectSession={(id) => setSearchParams({ session: String(id) })}
           onRenameSession={renameSession}
           onDeleteSession={deleteSession}
