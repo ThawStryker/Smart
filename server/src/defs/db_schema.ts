@@ -229,3 +229,18 @@ export const workMessages = sqliteTable("work_messages", {
   createdAt: text("created_at").default(sql`(datetime('now'))`),
 });
 
+// 用户级 Agent 配置（跨会话共享）
+export const userAgents = sqliteTable("user_agents", {
+  id: integer("id").primaryKey({ autoIncrement: true }),
+  userId: text("user_id").notNull(),
+  name: text("name").notNull(),
+  title: text("title").default(""),
+  agentsMd: text("agents_md").default(""),
+  userMd: text("user_md").default(""),
+  memoryMd: text("memory_md").default(""),
+  createdAt: text("created_at").default(sql`(datetime('now'))`),
+  updatedAt: text("updated_at").default(sql`(datetime('now'))`),
+}, (table) => ({
+  userNameUnique: uniqueIndex("user_agents_user_name_unique").on(table.userId, table.name),
+}));
+

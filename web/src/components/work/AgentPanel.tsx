@@ -16,13 +16,24 @@ export function AgentPanel({ sessionId, onFileSelect, selectedFile, onAgentListC
   const [expanded, setExpanded] = useState<Set<string>>(new Set(["agents"]));
   const [renaming, setRenaming] = useState<string | null>(null);
   const [renameValue, setRenameValue] = useState("");
+  const [agentNames, setAgentNames] = useState<string[]>([]);
 
   const loadFiles = useCallback(async () => {
     const res = await fetch(`/api/work/sessions/${sessionId}/files`);
     if (res.ok) setFiles(await res.json());
   }, [sessionId]);
 
+  const loadUserAgents = useCallback(async () => {
+    const res = await fetch("/api/agents");
+    if (res.ok) {
+      const data = await res.json();
+      setAgentNames(data.map((a: { name: string }) => a.name));
+      onAgentListChange();
+    }
+  }, [onAgentListChange]);
+
   useEffect(() => { if (sessionId) loadFiles(); }, [sessionId, loadFiles]);
+  useEffect(() => { loadUserAgents(); }, [loadUserAgents]);
 
   const toggleExpand = (path: string) => {
     setExpanded((prev) => {
@@ -33,44 +44,28 @@ export function AgentPanel({ sessionId, onFileSelect, selectedFile, onAgentListC
   };
 
   const createAgent = async () => {
-    const existingNames = Object.keys(tree.__kids?.agents?.__kids || {});
-    let idx = existingNames.length + 1;
+    let idx = agentNames.length + 1;
     let name = `新Agent ${idx}`;
-    while (existingNames.includes(name)) { idx++; name = `新Agent ${idx}`; }
-    const base = `agents/${name}`;
-    // Single batch: all folders + AGENTS.md in one round trip
-    await fetch(`/api/work/sessions/${sessionId}/files/batch`, {
+    while (agentNames.includes(name)) { idx++; name = `新Agent ${idx}`; }
+    await fetch("/api/agents", {
       method: "POST", headers: { "Content-Type": "application/json" },
-      body: JSON.stringify([
-        { path: `${base}/AGENTS.md`, content: `# ${name}\n\nDescribe the role of this agent.` },
-        { path: `${base}/memory/USER.md`, content: "# User Memory\n\nPermanent preferences and document references. Write document paths and summaries below — the agent will load them on demand.\n\nExample:\n- `context/教学大纲.md` — 初中物理教学大纲\n- `context/评分标准.md` — 作业评分标准\n" },
-        { path: `${base}/memory/MEMORY.md`, content: "# Agent Memory\n\nSelf-learned experience from past tasks. The agent appends insights here automatically.\n" },
-        { path: `${base}/skills`, isFolder: true },
-        { path: `${base}/context`, isFolder: true },
-        { path: `${base}/heartbeat/HEARTBEAT.md`, content: "# Heartbeat Configuration\n\nDefine scheduled tasks below. The system checks this file on every heartbeat cycle.\n\n## Schedule Format\n\nEach task has a cron time trigger and a description:\n\n- time: \"0 9 * * *\"\n  task: \"Check for new user feedback and summarize it\"\n\n- time: \"*/30 * * * *\"\n  task: \"Monitor error logs and alert if new errors appear\"\n\n- time: \"0 9 * * 1\"\n  task: \"Generate weekly progress report\"\n\n- time: \"0 9 * * *\"\n  task: \"详见 context/日报模板.md\"\n\nTime uses standard 5-field cron: minute hour day month weekday\n" },
-      ]),
+      body: JSON.stringify({ name }),
     });
-    loadFiles(); onAgentListChange();
+    loadUserAgents();
   };
 
   const renameAgent = async (oldName: string, newName: string) => {
     if (!newName.trim() || newName.trim() === oldName) return;
-    const agentFiles = files.filter((f) => f.path.startsWith(`agents/${oldName}/`));
-    // Copy all files in parallel, then delete old
-    await Promise.all(agentFiles.map((f) => {
-      const newPath = f.path.replace(`agents/${oldName}/`, `agents/${newName.trim()}/`);
-      return fetch(`/api/work/sessions/${sessionId}/files/${newPath}`, {
-        method: "PUT", headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ content: f.content, isFolder: f.isFolder ? true : undefined }),
-      });
-    }));
-    await fetch(`/api/work/sessions/${sessionId}/files/agents/${oldName}`, { method: "DELETE" });
-    loadFiles(); onAgentListChange();
+    await fetch(`/api/agents/${oldName}`, {
+      method: "PATCH", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ name: newName.trim() }),
+    });
+    loadUserAgents();
   };
 
   const deleteAgent = async (name: string) => {
-    await fetch(`/api/work/sessions/${sessionId}/files/agents/${name}`, { method: "DELETE" });
-    loadFiles(); onAgentListChange();
+    await fetch(`/api/agents/${name}`, { method: "DELETE" });
+    loadUserAgents();
   };
 
   const createFile = useCallback(async (parentPath: string) => {
@@ -145,7 +140,7 @@ export function AgentPanel({ sessionId, onFileSelect, selectedFile, onAgentListC
   }, [sessionId, loadFiles]);
 
   const tree = buildTree(files);
-  const agents = Object.keys(tree.__kids?.agents?.__kids || {});
+  const agents = agentNames;
 
   return (
     <div className="flex flex-col h-full bg-[var(--app-bg)]">

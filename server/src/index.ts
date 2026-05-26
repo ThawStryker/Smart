@@ -33,6 +33,7 @@ import { mcpsRoutes } from "./routes/mcps";
 import { marketRoutes } from "./routes/market";
 import { adminRoutes } from "./routes/admin";
 import { workRoutes } from "./routes/work";
+import { userAgentRoutes } from "./routes/agents";
 
 const app = new Hono()
   .get("/api/public/hello", (c) =>
@@ -54,6 +55,7 @@ const app = new Hono()
   .route("/", mcpsRoutes)
   .route("/", marketRoutes)
   .route("/", adminRoutes)
-  .route("/api/work", workRoutes);
+  .route("/api/work", workRoutes)
+  .route("/api/agents", userAgentRoutes);
 
 export default app;

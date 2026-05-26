@@ -34,18 +34,12 @@ export function WorkPage() {
   }, [loading, sessions, sessionId, createSession, setSearchParams]);
 
   const loadAgents = useCallback(async () => {
-    if (!sessionId) return;
-    const res = await fetch(`/api/work/sessions/${sessionId}/files?prefix=agents/`);
+    const res = await fetch("/api/agents");
     if (res.ok) {
-      const files: Array<{ path: string }> = await res.json();
-      const names = new Set<string>();
-      for (const f of files) {
-        const match = f.path.match(/^agents\/([^/]+)\//);
-        if (match) names.add(match[1]);
-      }
-      setAgents(Array.from(names));
+      const data: Array<{ name: string }> = await res.json();
+      setAgents(data.map((a) => a.name));
     }
-  }, [sessionId]);
+  }, []);
 
   useEffect(() => { loadAgents(); }, [loadAgents]);
 
