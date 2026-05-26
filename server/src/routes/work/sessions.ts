@@ -36,7 +36,6 @@ sessionsRoutes.patch("/:id", async (c) => {
 
 sessionsRoutes.delete("/:id", async (c) => {
   const id = parseInt(c.req.param("id"));
-  await db.delete(workFiles).where(eq(workFiles.sessionId, id));
   await db.delete(workMessages).where(eq(workMessages.sessionId, id));
   await db.delete(workSessions).where(eq(workSessions.id, id));
   return c.json({ ok: true });
