@@ -21,6 +21,7 @@ export function DocumentEditor({
   const isInternalChangeRef = useRef(false);
   const lastSavedRef = useRef("");
   const sourceRef = useRef<HTMLTextAreaElement>(null);
+  const lineNumRef = useRef<HTMLDivElement>(null);
   const [sourceView, setSourceView] = useState(false);
 
   const onSaveRef = useRef(onSave); onSaveRef.current = onSave;
@@ -31,7 +32,6 @@ export function DocumentEditor({
   useEffect(() => {
     if (!containerRef.current) return;
     if (crepeRef.current) { crepeRef.current.destroy(); crepeRef.current = null; }
-
     const crepe = new Crepe({ root: containerRef.current, defaultValue: content || "" });
     crepe.create().then(() => {
       crepeRef.current = crepe;
@@ -48,7 +48,7 @@ export function DocumentEditor({
     return () => { crepeRef.current?.destroy(); crepeRef.current = null; };
   }, [filePath]);
 
-  // Sync external content to preview
+  // Sync external content
   useEffect(() => {
     if (isInternalChangeRef.current) { isInternalChangeRef.current = false; return; }
     if (!crepeRef.current) return;
@@ -63,13 +63,16 @@ export function DocumentEditor({
     }
   }, [content, filePath, isStreaming, onSave]);
 
-  // Toggle preview ↔ source
+  // Toggle
   const toggleSource = () => {
     if (!sourceView) {
       const md = crepeRef.current?.editor ? crepeRef.current.editor.action(getMarkdown()) : content;
       lastSavedRef.current = md;
       requestAnimationFrame(() => {
-        if (sourceRef.current) sourceRef.current.value = md;
+        if (sourceRef.current) {
+          sourceRef.current.value = md;
+          sourceRef.current.dispatchEvent(new Event("input", { bubbles: true }));
+        }
       });
     } else {
       const md = sourceRef.current?.value ?? "";
@@ -83,11 +86,26 @@ export function DocumentEditor({
     setSourceView(!sourceView);
   };
 
+  const updateLineNumbers = () => {
+    if (!sourceRef.current || !lineNumRef.current) return;
+    const lines = sourceRef.current.value.split("\n").length;
+    const nums = Array.from({ length: lines }, (_, i) => i + 1).join("\n");
+    lineNumRef.current.textContent = nums;
+  };
+
   const handleSourceEdit = () => {
+    updateLineNumbers();
     const md = sourceRef.current?.value ?? "";
     lastSavedRef.current = md;
     onContentChange(md);
     if (filePath) onSave(filePath, md);
+  };
+
+  // Sync scroll between textarea and line numbers
+  const handleSourceScroll = () => {
+    if (sourceRef.current && lineNumRef.current) {
+      lineNumRef.current.scrollTop = sourceRef.current.scrollTop;
+    }
   };
 
   if (!filePath) {
@@ -107,7 +125,7 @@ export function DocumentEditor({
 
   return (
     <div className="flex flex-col h-full bg-[var(--app-bg)]">
-      {/* File header */}
+      {/* Header */}
       <div className="flex items-center gap-2 px-5 py-2 border-b border-[var(--app-border)] bg-[var(--app-surface)] min-w-0">
         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--app-accent)" strokeWidth="2" strokeLinecap="round" className="shrink-0">
           <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" /><polyline points="14 2 14 8 20 8" />
@@ -135,20 +153,25 @@ export function DocumentEditor({
         )}
       </div>
 
-      {/* Source view */}
-      <div className="flex-1 overflow-auto" style={{ display: sourceView ? "block" : "none", background: "var(--app-bg)" }}>
-        <div className="max-w-3xl mx-auto my-6 rounded-xl shadow-2xl overflow-hidden" style={{ background: "#1e1e1e", height: "calc(100% - 3rem)" }}>
+      {/* Source view — code editor style with line numbers */}
+      <div className="flex-1 overflow-hidden" style={{ display: sourceView ? "flex" : "none", background: "#1e1e1e" }}>
+        <div className="flex-1 flex overflow-hidden">
+          {/* Line numbers */}
+          <div ref={lineNumRef}
+            className="shrink-0 overflow-hidden select-none pt-5 pb-5 pl-4 pr-3 text-right"
+            style={{ color: "#6e7681", fontSize: "13px", fontFamily: "'JetBrains Mono', 'Fira Code', 'Cascadia Code', 'SF Mono', Menlo, monospace", lineHeight: "1.625", minWidth: "48px" }} />
+          {/* Editor */}
           <textarea ref={sourceRef} defaultValue={lastSavedRef.current || content}
-            onChange={handleSourceEdit}
-            className="w-full h-full p-5 text-sm font-mono leading-relaxed outline-none resize-none border-0 bg-transparent"
-            style={{ color: "#d4d4d4", tabSize: 2, fontFamily: "'JetBrains Mono', 'Fira Code', 'Cascadia Code', 'SF Mono', Menlo, monospace" }}
-            spellCheck={false} placeholder="Markdown source..." />
+            onChange={handleSourceEdit} onScroll={handleSourceScroll} onInput={updateLineNumbers}
+            className="flex-1 p-5 pl-1 text-sm font-mono leading-relaxed outline-none resize-none border-0 bg-transparent overflow-auto"
+            style={{ color: "#d4d4d4", tabSize: 2, fontFamily: "'JetBrains Mono', 'Fira Code', 'Cascadia Code', 'SF Mono', Menlo, monospace", lineHeight: "1.625" }}
+            spellCheck={false} placeholder="Start writing markdown..." />
         </div>
       </div>
 
       {/* Preview view */}
       <div className="flex-1 overflow-auto" style={{ display: sourceView ? "none" : "block" }}>
-        <div className="max-w-3xl mx-auto my-6 rounded-xl shadow-2xl overflow-hidden bg-white" style={{ minHeight: "calc(100% - 3rem)", width: "100%" }}>
+        <div className="max-w-3xl mx-auto my-6 rounded-xl shadow-2xl overflow-hidden bg-white" style={{ minHeight: "calc(100% - 3rem)" }}>
           <div ref={containerRef} className="milkdown px-12 py-10" style={{ color: "var(--app-text)" }} />
         </div>
       </div>
