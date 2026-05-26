@@ -247,38 +247,38 @@ export function AgentPanel({ sessionId, onFileSelect, selectedFile, onAgentListC
 
 function buildTree(files: FileEntry[]): Record<string, any> {
   const root: Record<string, any> = { __kids: {} };
-  const folderPaths = new Set<string>();
-  for (const f of files) {
+
+  // Process folders first, then files — stable order regardless of file operations
+  const folders = files.filter((f) => f.isFolder);
+  const nonFolders = files.filter((f) => !f.isFolder);
+
+  // Create all folder nodes
+  for (const f of folders) {
     const parts = f.path.split("/");
-    for (let i = 1; i <= parts.length - 1; i++) folderPaths.add(parts.slice(0, i).join("/"));
-  }
-  for (const fp of folderPaths) {
-    const parts = fp.split("/");
     let node = root;
-    for (const part of parts) {
+    for (let i = 0; i < parts.length; i++) {
+      const part = parts[i];
       if (!node.__kids) node.__kids = {};
-      if (!node.__kids[part]) node.__kids[part] = { __kids: {} };
+      const isLast = i === parts.length - 1;
+      if (!node.__kids[part]) {
+        node.__kids[part] = isLast ? { __kids: {}, _entry: f } : { __kids: {} };
+      } else if (isLast) {
+        if (!node.__kids[part].__kids) node.__kids[part] = { __kids: {}, _entry: f };
+        else node.__kids[part]._entry = f;
+      }
       node = node.__kids[part];
     }
   }
-  for (const f of files) {
+
+  // Place non-folder files
+  for (const f of nonFolders) {
     const parts = f.path.split("/");
     let node = root;
     for (let i = 0; i < parts.length - 1; i++) node = node.__kids[parts[i]];
     if (!node.__kids) node.__kids = {};
-    const lastName = parts[parts.length - 1];
-    // Folders need __kids wrapper even when empty, so they render as folders
-    if (f.isFolder) {
-      const existing = node.__kids[lastName];
-      if (existing && existing.__kids) {
-        existing._entry = f;
-      } else {
-        node.__kids[lastName] = { __kids: {}, _entry: f };
-      }
-    } else {
-      node.__kids[lastName] = f;
-    }
+    node.__kids[parts[parts.length - 1]] = f;
   }
+
   return root;
 }
 
@@ -310,14 +310,6 @@ function renderFileChildren(
   }
   if (!node.__kids) return [];
   const entries = Object.entries(node.__kids) as Array<[string, any]>;
-  // Sort: folders first, then files
-  entries.sort(([, a], [, b]) => {
-    const aIsFolder = a && typeof a === "object" && a.__kids !== undefined;
-    const bIsFolder = b && typeof b === "object" && b.__kids !== undefined;
-    if (aIsFolder && !bIsFolder) return -1;
-    if (!aIsFolder && bIsFolder) return 1;
-    return 0;
-  });
   return entries.map(([name, child]) => {
     const cp = `${prefix}/${name}`;
     const isFolder = child && typeof child === "object" && child.__kids !== undefined;
