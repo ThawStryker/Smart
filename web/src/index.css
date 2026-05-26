@@ -444,3 +444,10 @@ body {
 .milkdown-block-handle .operation-item svg {
   fill: var(--app-text-tertiary) !important;
 }
+
+/* Fix CodeMirror active line gutter dark background */
+.cm-activeLineGutter,
+.cm-gutterElement.cm-activeLineGutter {
+  background: transparent !important;
+  color: inherit !important;
+}
