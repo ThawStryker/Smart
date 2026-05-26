@@ -154,7 +154,7 @@ export function AgentPanel({ sessionId, onFileSelect, selectedFile, onAgentListC
           className="w-6 h-6 rounded-lg flex items-center justify-center text-base font-medium transition-all duration-200 hover:scale-110 bg-[var(--app-accent-bg)] text-[var(--app-accent)]">+</button>
       </div>
 
-      <div className="flex-1 overflow-auto py-1" style={{ minHeight: 0 }}>
+      <div className="overflow-auto py-1" style={{ flex: "1 1 0", minHeight: 0 }}>
         {agents.map((name) => {
           const isExpanded = expanded.has(`agents/${name}`);
           const avatar = getAgentAvatar(name);

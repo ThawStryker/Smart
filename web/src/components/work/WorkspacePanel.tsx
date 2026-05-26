@@ -20,7 +20,7 @@ export function WorkspacePanel({
   createFile, createFolder, renameFolder, deleteFolder, renameFile, deleteFile,
 }: WorkspacePanelProps) {
   return (
-    <div className="border-t border-[var(--app-border)] flex flex-col" style={{ maxHeight: "40%" }}>
+    <div className="border-t border-[var(--app-border)] flex flex-col" style={{ flex: "0 0 50%", minHeight: 0 }}>
       <div className="flex items-center justify-between px-4 py-2.5 cursor-pointer group" onClick={() => toggleExpand("workspace")}>
         <div className="flex items-center gap-2">
           <span className="mr-0.5 transition-transform duration-150 flex-shrink-0 opacity-60"
