@@ -29,31 +29,32 @@ export function AgentPanel({ sessionId, onFileSelect, selectedFile, onAgentListC
   };
 
   const loadFiles = useCallback(async () => {
-    const res = await fetch(`/api/work/sessions/${sessionId}/files`);
-    if (res.ok) {
-      const sessionFiles = await res.json();
-      // Also load agent files from user-level (across all sessions)
-      const agentFileRes = await fetch("/api/agents");
-      if (agentFileRes.ok) {
-        const agents = await agentFileRes.json();
-        const allAgentFiles = await Promise.all(
-          agents.map(async (a: { name: string }) => {
-            const res = await fetch(`/api/agents/${a.name}/files`);
-            return res.ok ? res.json() : [];
-          }),
-        );
-        const merged = [...sessionFiles, ...allAgentFiles.flat()];
-        // Deduplicate by path
-        const seen = new Set<string>();
-        setFiles(merged.filter((f: FileEntry) => {
-          if (seen.has(f.path)) return false;
-          seen.add(f.path);
-          return true;
-        }));
-      } else {
-        setFiles(sessionFiles);
-      }
+    // Load session files + global workspace files + agent files
+    const [sessionRes, workspaceRes, agentRes] = await Promise.all([
+      fetch(`/api/work/sessions/${sessionId}/files`),
+      fetch(`/api/work/sessions/${sessionId}/files?all=1&prefix=workspace/`),
+      fetch("/api/agents"),
+    ]);
+    let allFiles: FileEntry[] = [];
+    if (sessionRes.ok) allFiles = await sessionRes.json();
+    if (workspaceRes.ok) allFiles = [...allFiles, ...(await workspaceRes.json())];
+    if (agentRes.ok) {
+      const agents = await agentRes.json();
+      const agentFiles = await Promise.all(
+        agents.map(async (a: { name: string }) => {
+          const r = await fetch(`/api/agents/${a.name}/files`);
+          return r.ok ? r.json() : [];
+        }),
+      );
+      allFiles = [...allFiles, ...agentFiles.flat()];
     }
+    // Deduplicate by path
+    const seen = new Set<string>();
+    setFiles(allFiles.filter((f: FileEntry) => {
+      if (seen.has(f.path)) return false;
+      seen.add(f.path);
+      return true;
+    }));
   }, [sessionId]);
 
   const loadUserAgents = useCallback(async () => {

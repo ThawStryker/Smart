@@ -1,6 +1,6 @@
 import { Hono } from "hono";
 import { db } from "edgespark";
-import { eq, and, like } from "drizzle-orm";
+import { eq, and, like, asc } from "drizzle-orm";
 import { workFiles } from "@defs";
 
 export const filesRoutes = new Hono();
@@ -16,10 +16,19 @@ function getFilePath(c: any, sessionId: number): string {
 filesRoutes.get("/", async (c) => {
   const sessionId = parseInt(c.req.param("id") || "0");
   const prefix = c.req.query("prefix") || "";
+  const allSessions = c.req.query("all") === "1";
+  if (allSessions) {
+    const condition = prefix
+      ? like(workFiles.path, `${prefix}%`)
+      : undefined;
+    const query = db.select().from(workFiles).orderBy(asc(workFiles.createdAt));
+    const files = condition ? await query.where(condition) : await query;
+    return c.json(files);
+  }
   const condition = prefix
     ? and(eq(workFiles.sessionId, sessionId), like(workFiles.path, `${prefix}%`))
     : eq(workFiles.sessionId, sessionId);
-  const files = await db.select().from(workFiles).where(condition);
+  const files = await db.select().from(workFiles).where(condition).orderBy(asc(workFiles.createdAt));
   return c.json(files);
 });
 

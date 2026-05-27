@@ -356,7 +356,7 @@ export function ChatPanel({
 
       <div className="border-t border-[var(--app-border)]">
         {showMentions && filteredMentions.length > 0 && (
-          <div className="mx-3 mt-2 rounded-xl overflow-hidden shadow-lg bg-[var(--app-surface)] border border-[var(--app-border)]">
+          <div className="mx-3 mt-2 rounded-xl overflow-hidden shadow-lg bg-[var(--app-surface)] border border-[var(--app-border)] max-h-48 overflow-y-auto">
             {filteredMentions.map((agent, i) => (
               <div key={agent} className="px-3 py-2 text-sm cursor-pointer transition-colors flex items-center gap-2"
                 style={{ background: i === mentionIndex ? "rgba(255,255,255,0.04)" : "transparent", color: i === mentionIndex ? "var(--app-accent)" : "var(--app-text-secondary)" }}
