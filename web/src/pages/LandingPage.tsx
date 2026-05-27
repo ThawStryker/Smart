@@ -1,9 +1,9 @@
 import { useNavigate } from "react-router-dom";
 import { useState, useEffect } from "react";
 import { useAuth } from "@/hooks/useAuth";
-import { useProfile } from "@/hooks/useProfile";
 import { client } from "@/lib/edgespark";
 import { LoadingSpinner } from "@/components/shared/LoadingSpinner";
+import { TopNav } from "@/components/layout/TopNav";
 
 interface Listing {
   id: number;
@@ -38,8 +38,7 @@ function getInitials(name: string): string {
 
 export function LandingPage() {
   const navigate = useNavigate();
-  const { user, loading: authLoading } = useAuth();
-  const { isAdmin } = useProfile();
+  const { user } = useAuth();
   const [listings, setListings] = useState<Listing[]>([]);
   const [marketLoading, setMarketLoading] = useState(true);
 
@@ -60,38 +59,7 @@ export function LandingPage() {
 
   return (
     <div className="h-screen flex flex-col bg-[#fafafa] animate-pageIn">
-      {/* Nav */}
-      <header className="flex items-center justify-between px-6 py-3 border-b border-neutral-200 shrink-0 bg-white/80 backdrop-blur-sm shadow-sm">
-        <div className="flex items-center gap-2 cursor-pointer" onClick={() => navigate("/")}>
-          <div className="w-8 h-8 rounded-lg bg-gradient-to-r from-indigo-500 to-violet-600 flex items-center justify-center shadow-md shadow-indigo-200">
-            <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"/></svg>
-          </div>
-          <span className="font-bold text-lg bg-gradient-to-r from-indigo-500 to-violet-600 bg-clip-text text-transparent">Smart</span>
-        </div>
-        <div className="flex items-center gap-4">
-          {!authLoading && (
-            user ? (
-              <>
-                {isAdmin && (
-                  <button onClick={() => navigate("/admin")} className="text-sm bg-amber-50 text-amber-600 px-3 py-1.5 rounded-lg hover:shadow-sm hover:shadow-amber-100 transition-all">
-                    管理
-                  </button>
-                )}
-                <span className="text-sm text-neutral-600 font-medium px-3 py-1.5 bg-neutral-50 rounded-lg">
-                  {user.name}
-                </span>
-                <button onClick={() => client.auth.signOut()} className="text-sm text-neutral-600 hover:text-red-500 transition-colors px-3 py-1.5 rounded-lg hover:bg-red-50">
-                  退出
-                </button>
-              </>
-            ) : (
-              <button onClick={() => navigate("/login")} className="text-sm text-neutral-600 hover:text-amber-600 transition-colors">
-                登录
-              </button>
-            )
-          )}
-        </div>
-      </header>
+      <TopNav user={user} />
 
       <div className="flex-1 flex flex-col justify-center px-6">
         {/* Hero */}
