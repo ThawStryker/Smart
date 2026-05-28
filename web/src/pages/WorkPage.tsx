@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { useSearchParams } from "react-router-dom";
 import { useWorkSession } from "@/hooks/useWorkSession";
 import type { WorkSession } from "@/types/work";
@@ -17,6 +17,8 @@ export function WorkPage() {
   const [activeFile, setActiveFile] = useState<{ path: string; content: string } | null>(null);
   const [isStreaming, setIsStreaming] = useState(false);
   const [agents, setAgents] = useState<string[]>([]);
+  const [reloadCounter, setReloadCounter] = useState(0);
+  const savedContent = useRef<Record<string, string>>({});
 
   // Init: if no sessions exist, create one; if invalid sessionId, redirect to first
   useEffect(() => {
@@ -74,11 +76,25 @@ export function WorkPage() {
   }, [sessionId, sessions, renameSession]);
 
   const handleFileSelect = (path: string, content: string) => {
-    setActiveFile({ path, content }); setIsStreaming(false);
+    setActiveFile({ path, content: savedContent.current[path] ?? content }); setIsStreaming(false);
   };
 
   const handleSave = async (path: string, content: string) => {
-    await fetch(`/api/work/sessions/${sessionId}/files/${path}`, {
+    let url: string;
+    const agentMatch = path.match(/^agents\/([^/]+)\/(.+)$/);
+    if (agentMatch) {
+      const encoded = agentMatch[2].split("/").map(encodeURIComponent).join("/");
+      url = `/api/agents/${encodeURIComponent(agentMatch[1])}/files/${encoded}`;
+    } else if (path.startsWith("workspace/")) {
+      const apiPath = path.slice("workspace/".length);
+      const encoded = apiPath.split("/").map(encodeURIComponent).join("/");
+      url = `/api/work/workspace/${encoded}`;
+    } else {
+      const encoded = path.split("/").map(encodeURIComponent).join("/");
+      url = `/api/work/sessions/${sessionId}/files/${encoded}`;
+    }
+    savedContent.current[path] = content;
+    await fetch(url, {
       method: "PUT", headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ content }),
     });
@@ -101,15 +117,21 @@ export function WorkPage() {
   return (
     <div className="flex h-full bg-[var(--app-bg)]">
       <div className="w-64 flex-shrink-0 flex flex-col overflow-hidden border-r border-[var(--app-border)]">
-        <AgentPanel sessionId={sessionId} onFileSelect={handleFileSelect} selectedFile={activeFile?.path || null} onAgentListChange={loadAgents} />
+        <AgentPanel sessionId={sessionId} onFileSelect={handleFileSelect} selectedFile={activeFile?.path || null} onAgentListChange={loadAgents} reloadTrigger={reloadCounter} />
       </div>
       <div className="flex-1 overflow-hidden">
         <DocumentEditor content={activeFile?.content || ""} filePath={activeFile?.path || null} isStreaming={isStreaming} onSave={handleSave}
-          onContentChange={(content) => { if (activeFile) setActiveFile({ ...activeFile, content }); }}
-          onClose={() => { setActiveFile(null); setIsStreaming(false); }} />
+          onContentChange={(content) => {
+            if (activeFile) {
+              setActiveFile({ ...activeFile, content });
+              savedContent.current[activeFile.path] = content;
+            }
+          }}
+          onClose={() => { if (activeFile) delete savedContent.current[activeFile.path]; setActiveFile(null); setIsStreaming(false); }} />
       </div>
       <div className="w-80 flex-shrink-0 overflow-hidden border-l border-[var(--app-border)]">
         <ChatPanel
+          key={sessionId}
           sessionId={sessionId}
           agents={agents}
           sessions={visibleSessions}
@@ -122,7 +144,7 @@ export function WorkPage() {
           onDocDelta={(path, delta) => {
             setActiveFile((prev) => prev && prev.path === path ? { ...prev, content: (prev.content || "") + delta } : prev);
           }}
-          onStreamEnd={() => setIsStreaming(false)}
+          onStreamEnd={() => { setIsStreaming(false); setReloadCounter((c) => c + 1); }}
         />
       </div>
     </div>

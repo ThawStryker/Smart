@@ -34,6 +34,7 @@ const toolMeta: Record<string, { icon: string; label: string }> = {
   web_search: { icon: "🔍", label: "Search" },
   list_files: { icon: "📂", label: "List" },
   call_agent: { icon: "🤖", label: "Agent" },
+  use_skill: { icon: "🎯", label: "Skill" },
 };
 
 function getToolLabel(name: string, args?: Record<string, unknown>): string {
@@ -43,6 +44,9 @@ function getToolLabel(name: string, args?: Record<string, unknown>): string {
     const path = (args?.path as string) || "";
     const file = path.split("/").pop() || path;
     return `${meta.label} ${file}`;
+  }
+  if (name === "use_skill") {
+    return `${meta.label} ${(args?.name as string) || ""}`;
   }
   if (name === "web_search") {
     return `${meta.label} ${(args?.query as string) || ""}`;
@@ -83,31 +87,61 @@ export function ChatPanel({
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
   const abortRef = useRef<AbortController | null>(null);
+  const hasRichStepsRef = useRef(false);
+  const streamTextRef = useRef("");
+  const streamStepsRef = useRef<StreamStep[]>([]);
+  const preStreamMsgCountRef = useRef(0);
 
-  const loadMessages = useCallback(async () => {
+  const loadMessages = useCallback(async (restoreSteps?: boolean) => {
     const res = await fetch(`/api/work/sessions/${sessionId}/messages`);
     if (res.ok) {
-      const msgs = await res.json();
+      const msgs: ChatMessage[] = await res.json();
       setMessages(msgs);
-      // Restore persisted steps from last session (only if no new stream is active)
-      try {
-        const key = `steps-${sessionId}`;
-        const saved = sessionStorage.getItem(key);
-        if (saved) {
-          const data = JSON.parse(saved);
-          if (data.rich && data.steps && data.steps.length > 0) {
-            setStreamSteps(data.steps);
-            setStreamText(data.text || "");
-            setStreamAgent(data.agent || null);
-            setHasRichSteps(true);
+      if (restoreSteps) {
+        try {
+          const key = `steps-${sessionId}`;
+          const saved = sessionStorage.getItem(key);
+          if (saved) {
+            const data = JSON.parse(saved);
+            if (data._v === 2 && data.rich && data.steps && data.steps.length > 0) {
+              setStreamSteps(data.steps);
+              streamStepsRef.current = data.steps;
+              setStreamText(data.text || "");
+              streamTextRef.current = data.text || "";
+              setStreamAgent(data.agent || null);
+              setHasRichSteps(true);
+              hasRichStepsRef.current = true;
+            } else {
+              sessionStorage.removeItem(key);
+            }
           }
-        }
-      } catch {}
+        } catch {}
+      }
     }
   }, [sessionId]);
 
-  useEffect(() => { if (sessionId) loadMessages(); }, [sessionId, loadMessages]);
+  useEffect(() => { if (sessionId) loadMessages(true); }, [sessionId, loadMessages]);
+  // Reset session-scoped state when switching sessions
+  useEffect(() => {
+    setMessages([]);
+    setStreamSteps([]);
+    setStreamText("");
+    streamTextRef.current = "";
+    setStreamAgent(null);
+    setHasRichSteps(false);
+    hasRichStepsRef.current = false;
+  }, [sessionId]);
   useEffect(() => { messagesEndRef.current?.scrollIntoView({ behavior: "smooth" }); }, [messages, streamSteps]);
+
+  // Persist streaming steps to sessionStorage when stream completes
+  useEffect(() => {
+    if (!streamActive && hasRichSteps && streamSteps.length > 0) {
+      try {
+        const key = `steps-${sessionId}`;
+        sessionStorage.setItem(key, JSON.stringify({ _v: 2, steps: streamSteps, text: streamText, agent: streamAgent, rich: hasRichSteps }));
+      } catch {}
+    }
+  }, [streamActive, hasRichSteps, streamSteps, streamText, streamAgent, sessionId]);
 
   const handleInput = (value: string) => {
     setInput(value);
@@ -133,12 +167,30 @@ export function ChatPanel({
     const message = input.trim(); setInput("");
     if (messages.length === 0 && onFirstMessage) onFirstMessage(message);
 
+    // Optimistic user message — appears immediately
+    const tempId = -(Date.now());
+    const optimisticMsg: ChatMessage = { id: tempId, role: "user", content: message, agentName: null, createdAt: new Date().toISOString() };
+    setMessages((prev) => { preStreamMsgCountRef.current = prev.length + 1; return [...prev, optimisticMsg]; });
+
+    const isDirectChat = !message.includes("@");
     setStreamActive(true);
     setStreamSteps([]);
+    streamStepsRef.current = [];
     setStreamText("");
+    streamTextRef.current = "";
     setStreamAgent(null);
-    setHasRichSteps(false);
     setThinkingOpen(new Set());
+    if (isDirectChat) {
+      // Simple chat — use same step-card style as agent mode
+      setHasRichSteps(true);
+      hasRichStepsRef.current = true;
+      const initStep: StreamStep = { key: "yumi-init", type: "text" as const, content: "" };
+      setStreamSteps([initStep]);
+      streamStepsRef.current = [initStep];
+    } else {
+      setHasRichSteps(false);
+      hasRichStepsRef.current = false;
+    }
     try { sessionStorage.removeItem(`steps-${sessionId}`); } catch {}
 
     const controller = new AbortController(); abortRef.current = controller;
@@ -166,52 +218,64 @@ export function ChatPanel({
       }
     } catch (err: any) {
       if (err.name !== "AbortError") {
-        setStreamSteps((p) => [...p, { key: `err-${Date.now()}`, type: "text", content: `Error: ${err.message}` }]);
+        setStreamSteps((p) => { const next: StreamStep[] = [...p, { key: `err-${Date.now()}`, type: "text" as const, content: `Error: ${err.message}` }]; streamStepsRef.current = next; return next; });
       }
     }
-    // Save steps to sessionStorage for persistence across refresh
-    try {
-      const key = `steps-${sessionId}`;
-      if (hasRichSteps && streamSteps.length > 0) {
-        sessionStorage.setItem(key, JSON.stringify({ steps: streamSteps, text: streamText, agent: streamAgent, rich: hasRichSteps }));
-      }
-    } catch {}
     if (onStreamEnd) onStreamEnd();
-    setStreamActive(false); abortRef.current = null; loadMessages();
+    setStreamActive(false); abortRef.current = null;
+    // loadMessages will dedup (streamStepsRef has the steps)
+    loadMessages();
   };
 
   const handleSSE = (event: any) => {
     const t = event.type;
     if (t === "thinking") {
-      setHasRichSteps(true);
+      if (!hasRichStepsRef.current) { hasRichStepsRef.current = true; setHasRichSteps(true); }
       setStreamSteps((p) => {
         const last = p[p.length - 1];
+        let next: StreamStep[];
         if (last?.type === "thinking") {
           const updated = [...p];
           updated[p.length - 1] = { ...last, content: last.content + (event.delta || "") };
-          return updated;
+          next = updated;
+        } else {
+          next = [...p, { key: `think-${p.length}`, type: "thinking" as const, content: event.delta || "" }];
         }
-        return [...p, { key: `think-${p.length}`, type: "thinking", content: event.delta || "" }];
+        streamStepsRef.current = next;
+        return next;
       });
     } else if (t === "agent_start") {
-      setHasRichSteps(true);
-      setStreamSteps((p) => [...p, { key: `agent-${p.length}`, type: "agent_card", agentName: event.agentName, content: "" }]);
+      if (!hasRichStepsRef.current) { hasRichStepsRef.current = true; setHasRichSteps(true); }
+      setStreamSteps((p) => { const next: StreamStep[] = [...p, { key: `agent-${p.length}`, type: "agent_card" as const, agentName: event.agentName, content: "" }]; streamStepsRef.current = next; return next; });
     } else if (t === "tool_exec") {
-      setHasRichSteps(true);
+      if (!hasRichStepsRef.current) { hasRichStepsRef.current = true; setHasRichSteps(true); }
       const toolName = event.toolName;
-      // Auto-open file on write/edit
       if ((toolName === "write_file" || toolName === "edit_file") && onOpenFile) {
         const path = event.args?.path as string;
         if (path) onOpenFile(path);
       }
-      setStreamSteps((p) => [...p, { key: `tool-${p.length}`, type: "tool", toolName, args: event.args, content: "" }]);
+      setStreamSteps((p) => { const next: StreamStep[] = [...p, { key: `tool-${p.length}`, type: "tool" as const, toolName, args: event.args, content: "" }]; streamStepsRef.current = next; return next; });
     } else if (t === "agent_done") {
       // mark completion — no visual change needed
     } else if (t === "text") {
-      if (hasRichSteps) {
-        setStreamSteps((p) => [...p, { key: `txt-${p.length}`, type: "text", agentName: event.agentName, content: event.delta || "" }]);
+      if (hasRichStepsRef.current) {
+        setStreamSteps((p) => {
+          const last = p[p.length - 1];
+          const delta = event.delta || "";
+          let next: StreamStep[];
+          if (last?.type === "text" && last.agentName === event.agentName) {
+            const updated = [...p];
+            updated[p.length - 1] = { ...last, content: last.content + delta };
+            next = updated;
+          } else {
+            next = [...p, { key: `txt-${p.length}`, type: "text" as const, agentName: event.agentName, content: delta }];
+          }
+          streamStepsRef.current = next;
+          return next;
+        });
       } else {
         setStreamText((p) => p + (event.delta || ""));
+        streamTextRef.current += (event.delta || "");
         if (event.agentName) setStreamAgent(event.agentName);
       }
     } else if (t === "doc") {
@@ -235,6 +299,12 @@ export function ChatPanel({
 
   const filteredMentions = agents.filter((a) => a.toLowerCase().startsWith(mentionFilter.toLowerCase()));
 
+  // View-level dedup: hide assistant msgs added by the CURRENT stream (not previous ones)
+  const hasStreamContent = streamSteps.length > 0 || (streamText !== "" && !hasRichSteps);
+  const visibleMessages = hasStreamContent
+    ? messages.filter((m, i) => !(m.role === "assistant" && i >= preStreamMsgCountRef.current))
+    : messages;
+
   return (
     <div className="flex flex-col h-full bg-[var(--app-bg)]">
       <SessionBar
@@ -244,7 +314,8 @@ export function ChatPanel({
       />
 
       <div className="flex-1 overflow-auto px-4 py-3 space-y-3">
-        {messages.map((msg) => (
+        {/* Message bubbles (view-deduped: hide last assistant when steps are visible) */}
+        {visibleMessages.map((msg) => (
           <div key={msg.id} className="animate-pageIn">
             <div className="flex items-center gap-2 mb-1">
               {msg.role === "user" ? (
@@ -253,7 +324,7 @@ export function ChatPanel({
                 <>
                   <span className="w-1.5 h-1.5 rounded-full" style={{ background: msg.agentName ? "#a78bfa" : "var(--app-text-secondary)" }} />
                   <span className="text-xs font-bold uppercase tracking-wider" style={{ color: msg.agentName ? "#a78bfa" : "var(--app-text-secondary)" }}>
-                    {msg.agentName || "Hermes"}
+                    {msg.agentName || "Yumi"}
                   </span>
                 </>
               )}
@@ -265,33 +336,22 @@ export function ChatPanel({
           </div>
         ))}
 
-        {/* Streaming: simple text (no agent) or rich steps — persist after completion */}
-        {!streamActive && !hasRichSteps && streamText && (
+        {/* Simple text streaming fallback (legacy) */}
+        {(streamActive || streamText !== "") && !hasRichSteps && (
           <div className="animate-pageIn">
-            {streamAgent && (
-              <div className="flex items-center gap-2 mb-1">
-                <span className="w-1.5 h-1.5 rounded-full" style={{ background: "var(--app-text-secondary)" }} />
-                <span className="text-xs font-bold uppercase tracking-wider text-[var(--app-text-secondary)]">{streamAgent}</span>
-              </div>
-            )}
-            <div className="text-sm leading-relaxed whitespace-pre-wrap text-[var(--app-text)]">{streamText}</div>
-          </div>
-        )}
-
-        {streamActive && !hasRichSteps && (
-          <div className="animate-pageIn">
-            {streamAgent && (
-              <div className="flex items-center gap-2 mb-1">
-                <span className="w-1.5 h-1.5 rounded-full" style={{ background: "var(--app-text-secondary)" }} />
-                <span className="text-xs font-bold uppercase tracking-wider text-[var(--app-text-secondary)]">{streamAgent}</span>
-              </div>
-            )}
+            <div className="flex items-center gap-2 mb-1">
+              <span className="w-1.5 h-1.5 rounded-full" style={{ background: "var(--app-text-secondary)" }} />
+              <span className="text-xs font-bold uppercase tracking-wider text-[var(--app-text-secondary)]">
+                {streamAgent || "Yumi"}
+              </span>
+            </div>
             <div className="text-sm leading-relaxed whitespace-pre-wrap text-[var(--app-text)]">
-              {streamText || "Thinking..."}
+              {streamText || (streamActive ? "Thinking..." : "")}
             </div>
           </div>
         )}
 
+        {/* Rich step cards (agent mode) */}
         {(streamActive || streamSteps.length > 0) && hasRichSteps && streamSteps.map((step, i) => {
           if (step.type === "thinking") {
             const open = thinkingOpen.has(i);
@@ -336,17 +396,19 @@ export function ChatPanel({
             );
           }
 
-          // type === "text"
-          const isHermes = !step.agentName;
+          // type === "text" — final answer text
+          const isDirect = !step.agentName;
           return (
             <div key={step.key} className="animate-pageIn">
-              {isHermes && (
+              {isDirect && (
                 <div className="flex items-center gap-2 mb-1">
                   <span className="w-1.5 h-1.5 rounded-full" style={{ background: "var(--app-text-secondary)" }} />
-                  <span className="text-xs font-bold uppercase tracking-wider text-[var(--app-text-secondary)]">Hermes</span>
+                  <span className="text-xs font-bold uppercase tracking-wider text-[var(--app-text-secondary)]">Yumi</span>
                 </div>
               )}
-              <div className="text-sm leading-relaxed whitespace-pre-wrap text-[var(--app-text)]">{step.content}</div>
+              <div className="text-sm leading-relaxed whitespace-pre-wrap text-[var(--app-text)]">
+                {step.content || (streamActive ? "Thinking..." : "")}
+              </div>
             </div>
           );
         })}
@@ -370,7 +432,7 @@ export function ChatPanel({
           <div className="relative">
             <textarea ref={inputRef} value={input}
               onChange={(e) => handleInput(e.target.value)} onKeyDown={handleKeyDown}
-              placeholder="Message Hermes or @mention an agent..."
+              placeholder="Message Yumi or @mention an agent..."
               className="w-full rounded-xl px-4 py-3 pr-12 text-sm resize-none outline-none transition-all duration-200 bg-[var(--app-surface)] border border-[var(--app-border)] text-[var(--app-text)] overflow-y-auto [scrollbar-gutter:stable]"
               style={{ height: "80px" }}
               rows={3} disabled={streamActive} />

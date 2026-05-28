@@ -88,7 +88,7 @@ export function renderFileChildren(
       if (ai >= 0) return -1;
       if (bi >= 0) return 1;
     }
-    return 0;
+    return aName.localeCompare(bName, undefined, { numeric: true });
   });
   return entries.map(([name, child]) => {
     const cp = `${prefix}/${name}`;

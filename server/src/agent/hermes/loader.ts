@@ -1,6 +1,6 @@
 import { db } from "edgespark";
 import { eq, and, like } from "drizzle-orm";
-import { workFiles, workMessages } from "@defs";
+import { agentFiles, userAgents, workMessages } from "@defs";
 import type { AgentFileContext } from "./types";
 
 function extractSummary(content: string): string {
@@ -9,17 +9,16 @@ function extractSummary(content: string): string {
 }
 
 export async function loadAgentFiles(
-  sessionId: number,
+  userId: string,
   agentName: string,
 ): Promise<AgentFileContext> {
-  const prefix = `agents/${agentName}/`;
   const allFiles = await db
     .select()
-    .from(workFiles)
+    .from(agentFiles)
     .where(
       and(
-        eq(workFiles.sessionId, sessionId),
-        like(workFiles.path, `${prefix}%`),
+        eq(agentFiles.userId, userId),
+        eq(agentFiles.agentName, agentName),
       ),
     );
 
@@ -28,14 +27,14 @@ export async function loadAgentFiles(
     fileMap.set(f.path, f.content || "");
   }
 
-  const agentsMd = fileMap.get(`${prefix}AGENTS.md`) || "";
-  const userMd = fileMap.get(`${prefix}memory/USER.md`) || "";
-  const memoryMd = fileMap.get(`${prefix}memory/MEMORY.md`) || "";
+  const agentsMd = fileMap.get("AGENTS.md") || "";
+  const userMd = fileMap.get("memory/USER.md") || "";
+  const memoryMd = fileMap.get("memory/MEMORY.md") || "";
 
   // Skills: summaries + full SKILL.md entry
   const skills: Array<{ name: string; summary: string; entry: string }> = [];
   for (const [path, content] of fileMap.entries()) {
-    const match = path.match(new RegExp(`^${prefix}skills/([^/]+)/SKILL\\.md$`));
+    const match = path.match(/^skills\/([^/]+)\/SKILL\.md$/);
     if (match) {
       skills.push({ name: match[1], summary: extractSummary(content), entry: content });
     }
@@ -44,7 +43,7 @@ export async function loadAgentFiles(
   // Context: full content, always loaded
   const contexts: string[] = [];
   for (const [path, content] of fileMap.entries()) {
-    if (path.startsWith(`${prefix}context/`) && path.endsWith(".md")) {
+    if (path.startsWith("context/") && path.endsWith(".md")) {
       contexts.push(content);
     }
   }
@@ -63,4 +62,9 @@ export async function loadSessionMessages(
     agentName: m.agentName,
     content: m.content || "",
   }));
+}
+
+export async function listAgentNames(userId: string): Promise<string[]> {
+  const agents = await db.select({ name: userAgents.name }).from(userAgents).where(eq(userAgents.userId, userId));
+  return agents.map((a) => a.name);
 }

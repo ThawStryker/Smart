@@ -303,16 +303,16 @@ body {
 .milkdown .ProseMirror h4,
 .milkdown .ProseMirror h5,
 .milkdown .ProseMirror h6 {
-  font-family: Georgia, Cambria, 'Times New Roman', Times, serif !important;
-  font-weight: 400;
+  font-family: 'Open Sans', Arial, Helvetica, sans-serif !important;
+  font-weight: 600 !important;
   padding: 2px 0;
 }
 
-.milkdown .ProseMirror h1 { font-size: 42px; line-height: 50px; margin-top: 32px; }
-.milkdown .ProseMirror h2 { font-size: 36px; line-height: 44px; margin-top: 28px; }
-.milkdown .ProseMirror h3 { font-size: 32px; line-height: 40px; margin-top: 24px; }
-.milkdown .ProseMirror h4 { font-size: 24px; line-height: 32px; margin-top: 20px; }
-.milkdown .ProseMirror h5 { font-size: 20px; line-height: 28px; margin-top: 16px; }
+.milkdown .ProseMirror h1 { font-size: 42px; line-height: 50px; margin-top: 32px; font-weight: 700; }
+.milkdown .ProseMirror h2 { font-size: 36px; line-height: 44px; margin-top: 28px; font-weight: 700; }
+.milkdown .ProseMirror h3 { font-size: 32px; line-height: 40px; margin-top: 24px; font-weight: 700; }
+.milkdown .ProseMirror h4 { font-size: 24px; line-height: 32px; margin-top: 20px; font-weight: 700; }
+.milkdown .ProseMirror h5 { font-size: 20px; line-height: 28px; margin-top: 16px; font-weight: 700; }
 .milkdown .ProseMirror h6 { font-size: 18px; font-weight: 700; line-height: 28px; margin-top: 16px; }
 
 .milkdown .ProseMirror p {

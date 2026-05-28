@@ -19,64 +19,76 @@ export function DocumentEditor({
   const containerRef = useRef<HTMLDivElement>(null);
   const crepeRef = useRef<Crepe | null>(null);
   const isInternalChangeRef = useRef(false);
-  const lastSavedRef = useRef("");
   const sourceRef = useRef<HTMLTextAreaElement>(null);
   const [sourceView, setSourceView] = useState(false);
+  const [ready, setReady] = useState(false);
 
   const onSaveRef = useRef(onSave); onSaveRef.current = onSave;
   const onContentChangeRef = useRef(onContentChange); onContentChangeRef.current = onContentChange;
   const filePathRef = useRef(filePath); filePathRef.current = filePath;
+  const prevPathRef = useRef<string | null>(null);
 
-  // Init preview editor
+  // Init Crepe once on mount, save before switching files
   useEffect(() => {
     if (!containerRef.current) return;
-    if (crepeRef.current) { crepeRef.current.destroy(); crepeRef.current = null; }
-
     const crepe = new Crepe({ root: containerRef.current, defaultValue: content || "" });
     crepe.create().then(() => {
       crepeRef.current = crepe;
-      lastSavedRef.current = crepe.editor.action(getMarkdown());
       crepe.on((listener) => {
         listener.markdownUpdated((_ctx, md) => {
           isInternalChangeRef.current = true;
           onContentChangeRef.current(md);
           const fp = filePathRef.current;
-          if (fp && md) { lastSavedRef.current = md; onSaveRef.current(fp, md); }
+          if (fp) onSaveRef.current(fp, md);
         });
       });
+      setReady(true);
     });
-    return () => { crepeRef.current?.destroy(); crepeRef.current = null; };
+    return () => { try { crepe.destroy(); } catch {} crepeRef.current = null; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // When switching files: save old, load new
+  useEffect(() => {
+    const prev = prevPathRef.current;
+    prevPathRef.current = filePath;
+    if (!ready || !crepeRef.current) return;
+    // Save previous file before loading new one
+    if (prev && prev !== filePath) {
+      const md = crepeRef.current.editor.action(getMarkdown());
+      if (md) onSaveRef.current(prev, md);
+    }
+    // Load new file content or clear if closed
+    crepeRef.current.editor.action(replaceAll(filePath ? (content || "") : ""));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [filePath]);
 
-  // Sync external content to preview
+  // Sync external content (streaming updates)
   useEffect(() => {
+    if (!ready || !crepeRef.current || !filePath) return;
     if (isInternalChangeRef.current) { isInternalChangeRef.current = false; return; }
-    if (!crepeRef.current) return;
     const currentMd = crepeRef.current.editor.action(getMarkdown());
     if (content !== currentMd) {
-      lastSavedRef.current = content;
       crepeRef.current.editor.action(replaceAll(content));
     }
-    if (isStreaming && filePath && content) {
-      lastSavedRef.current = content;
+    if (isStreaming && content) {
       onSave(filePath, content);
     }
-  }, [content, filePath, isStreaming, onSave]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [content, isStreaming]);
 
-  // Toggle preview ↔ source
+  // Toggle preview <-> source
   const toggleSource = () => {
     if (!sourceView) {
       const md = crepeRef.current?.editor ? crepeRef.current.editor.action(getMarkdown()) : content;
-      lastSavedRef.current = md;
       requestAnimationFrame(() => {
-        if (sourceRef.current) sourceRef.current.value = md;
+        if (sourceRef.current) sourceRef.current.value = md || "";
       });
     } else {
       const md = sourceRef.current?.value ?? "";
       if (crepeRef.current) {
         crepeRef.current.editor.action(replaceAll(md));
         onContentChange(md);
-        lastSavedRef.current = md;
         if (filePath) onSave(filePath, md);
       }
     }
@@ -85,30 +97,14 @@ export function DocumentEditor({
 
   const handleSourceEdit = () => {
     const md = sourceRef.current?.value ?? "";
-    lastSavedRef.current = md;
     onContentChange(md);
     if (filePath) onSave(filePath, md);
   };
 
-  if (!filePath) {
-    return (
-      <div className="flex items-center justify-center h-full bg-[var(--app-bg)]">
-        <div className="text-center animate-pageIn">
-          <div className="w-16 h-16 rounded-2xl mx-auto mb-4 flex items-center justify-center border border-[var(--app-border)]" style={{ background: "rgba(255,255,255,0.02)" }}>
-            <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="var(--app-text-tertiary)" strokeWidth="1.2" strokeLinecap="round">
-              <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" /><polyline points="14 2 14 8 20 8" /><line x1="16" y1="13" x2="8" y2="13" /><line x1="16" y1="17" x2="8" y2="17" />
-            </svg>
-          </div>
-          <p className="text-sm font-medium text-[var(--app-text-tertiary)]">Select a file to edit</p>
-        </div>
-      </div>
-    );
-  }
-
   return (
     <div className="flex flex-col h-full bg-[var(--app-bg)]">
       {/* File header */}
-      <div className="flex items-center gap-2 px-5 py-2 border-b border-[var(--app-border)] bg-[var(--app-surface)] min-w-0">
+      {filePath && (<div className="flex items-center gap-2 px-5 py-2 border-b border-[var(--app-border)] bg-[var(--app-surface)] min-w-0">
         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--app-accent)" strokeWidth="2" strokeLinecap="round" className="shrink-0">
           <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" /><polyline points="14 2 14 8 20 8" />
         </svg>
@@ -133,12 +129,12 @@ export function DocumentEditor({
             <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="var(--app-red)" strokeWidth="2"><line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" /></svg>
           </button>
         )}
-      </div>
+      </div>)}
 
       {/* Source view */}
       <div className="flex-1 overflow-auto" style={{ display: sourceView ? "block" : "none", background: "var(--app-bg)" }}>
         <div className="max-w-3xl mx-auto my-6 rounded-xl shadow-2xl overflow-hidden" style={{ height: "calc(100% - 3rem)", background: "var(--app-surface)" }}>
-          <textarea ref={sourceRef} defaultValue={lastSavedRef.current || content}
+          <textarea ref={sourceRef} defaultValue={content}
             onChange={handleSourceEdit}
             className="w-full h-full text-sm font-mono leading-relaxed outline-none resize-none border-0 bg-transparent"
             style={{ color: "var(--app-text)", tabSize: 2, padding: "50px 100px", fontFamily: "'JetBrains Mono', 'Fira Code', 'Cascadia Code', 'SF Mono', Menlo, monospace" }}
@@ -149,7 +145,12 @@ export function DocumentEditor({
       {/* Preview view */}
       <div className="flex-1 overflow-auto" style={{ display: sourceView ? "none" : "block" }}>
         <div className="max-w-3xl mx-auto my-6 rounded-xl shadow-2xl overflow-hidden flex flex-col" style={{ minHeight: "calc(100% - 3rem)", width: "100%", background: "var(--app-surface)", color: "var(--app-text)" }}>
-          <div ref={containerRef} className="milkdown px-0 py-0 flex-1" />
+          <div ref={containerRef} className="milkdown px-0 py-0 flex-1" style={{ display: filePath ? "block" : "none" }} />
+          {!filePath && (
+            <div className="flex items-center justify-center flex-1">
+              <p className="text-sm text-[var(--app-text-tertiary)]">Select a file to edit</p>
+            </div>
+          )}
         </div>
       </div>
     </div>

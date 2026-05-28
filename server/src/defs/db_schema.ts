@@ -219,6 +219,33 @@ export const workFiles = sqliteTable("work_files", {
   sessionPathUnique: uniqueIndex("work_files_session_path_unique").on(table.sessionId, table.path),
 }));
 
+// Agent 文件（独立于会话）
+export const agentFiles = sqliteTable("agent_files", {
+  id: integer("id").primaryKey({ autoIncrement: true }),
+  userId: text("user_id").notNull(),
+  agentName: text("agent_name").notNull(),
+  path: text("path").notNull(),
+  content: text("content").default(""),
+  isFolder: integer("is_folder").default(0),
+  createdAt: text("created_at").default(sql`(datetime('now'))`),
+  updatedAt: text("updated_at").default(sql`(datetime('now'))`),
+}, (table) => ({
+  agentPathUnique: uniqueIndex("agent_files_agent_path_unique").on(table.userId, table.agentName, table.path),
+}));
+
+// 工作区文件（独立于会话）
+export const workspaceFiles = sqliteTable("workspace_files", {
+  id: integer("id").primaryKey({ autoIncrement: true }),
+  userId: text("user_id").notNull(),
+  path: text("path").notNull(),
+  content: text("content").default(""),
+  isFolder: integer("is_folder").default(0),
+  createdAt: text("created_at").default(sql`(datetime('now'))`),
+  updatedAt: text("updated_at").default(sql`(datetime('now'))`),
+}, (table) => ({
+  workspacePathUnique: uniqueIndex("workspace_files_path_unique").on(table.userId, table.path),
+}));
+
 // 工作对话消息
 export const workMessages = sqliteTable("work_messages", {
   id: integer("id").primaryKey({ autoIncrement: true }),

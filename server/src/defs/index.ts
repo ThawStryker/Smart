@@ -22,7 +22,7 @@
 
 // User tables
 export * from "./db_schema";
-export { workSessions, workFiles, workMessages } from "./db_schema";
+export { workSessions, workFiles, workMessages, agentFiles, workspaceFiles, userAgents } from "./db_schema";
 // User app relations
 export * from "./db_relations";
 

@@ -2,24 +2,25 @@ import { emit } from "../stream";
 import { executeAgentTool, AGENT_TOOLS } from "./tools";
 import { db } from "edgespark";
 import { eq } from "drizzle-orm";
-import { loadAgentFiles, loadSessionMessages } from "./loader";
+import { loadAgentFiles, loadSessionMessages, listAgentNames } from "./loader";
 import {
   buildAgentSystemPrompt,
   buildConversationSummary,
-  listAgentNames,
 } from "./context";
-import { workFiles, workMessages } from "@defs";
+import { workMessages } from "@defs";
 import type { HermesLoopParams } from "./types";
 
 export async function hermesLoop(params: HermesLoopParams): Promise<string> {
-  const { sessionId, userMessage, targetAgent, modelConfig, eventQueue, allFiles } = params;
+  const { sessionId, userId, userMessage, targetAgent, modelConfig, eventQueue } = params;
   let fullResponse = "";
 
   if (targetAgent) {
     // ── Sub-agent mode ──
-    emit(eventQueue, { type: "agent_start", agentName: targetAgent });
+    if (!params.suppressAgentCard) {
+      emit(eventQueue, { type: "agent_start", agentName: targetAgent });
+    }
 
-    const agentCtx = await loadAgentFiles(sessionId, targetAgent);
+    const agentCtx = await loadAgentFiles(userId, targetAgent);
     const agentSystemPrompt = buildAgentSystemPrompt(agentCtx);
     const msgs = await loadSessionMessages(sessionId);
     const summary = buildConversationSummary(msgs);
@@ -172,17 +173,19 @@ export async function hermesLoop(params: HermesLoopParams): Promise<string> {
       content: fullResponse,
     });
 
-    emit(eventQueue, { type: "agent_done", agentName: targetAgent });
+    if (!params.suppressAgentCard) {
+      emit(eventQueue, { type: "agent_done", agentName: targetAgent });
+    }
   } else {
-    // ── Direct Hermes chat (no agent) ──
+    // ── Direct Yumi chat (no agent) ──
     const msgs = await loadSessionMessages(sessionId);
     const summary = buildConversationSummary(msgs);
-    const availableAgents = listAgentNames(allFiles);
+    const availableAgents = await listAgentNames(userId);
 
     const messages: Array<Record<string, unknown>> = [
       {
         role: "system",
-        content: `You are Hermes, a workflow coordinator. Available agents: ${availableAgents.join(", ") || "none yet"}. Help the user organize document-writing tasks.`,
+        content: `You are Yumi, a workflow coordinator. Available agents: ${availableAgents.join(", ") || "none yet"}. Help the user organize document-writing tasks.`,
       },
     ];
     if (summary) {

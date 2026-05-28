@@ -1,6 +1,7 @@
 import { writeFile, readFile, listFiles } from "./file-ops";
 import { webSearch } from "./web-search";
 import { callAgent } from "./call-agent";
+import { useSkill } from "./use-skill";
 import type { HermesLoopParams } from "../types";
 
 export async function executeAgentTool(
@@ -12,11 +13,12 @@ export async function executeAgentTool(
   hermesLoop: (params: HermesLoopParams) => Promise<string>,
 ): Promise<string> {
   switch (name) {
-    case "write_file": return writeFile(args, sessionId, eventQueue);
-    case "read_file": return readFile(args, sessionId);
-    case "list_files": return listFiles(args, sessionId);
+    case "write_file": return writeFile(args, sessionId, eventQueue, params.userId, params.targetAgent);
+    case "read_file": return readFile(args, sessionId, params.userId, params.targetAgent);
+    case "list_files": return listFiles(args, sessionId, params.userId, params.targetAgent);
     case "web_search": return webSearch(args);
     case "call_agent": return callAgent(args, params, eventQueue, hermesLoop);
+    case "use_skill": return useSkill(args, params.userId, params.targetAgent);
     default: return `Unknown tool: ${name}`;
   }
 }
@@ -77,6 +79,20 @@ export const AGENT_TOOLS = [
           prefix: { type: "string" as const, description: "Path prefix filter" },
         },
         required: [],
+      },
+    },
+  },
+  {
+    type: "function" as const,
+    function: {
+      name: "use_skill",
+      description: "Load and apply a skill's full instructions. Call this when a task matches an available skill.",
+      parameters: {
+        type: "object" as const,
+        properties: {
+          name: { type: "string" as const, description: "Skill name (from Available Skills list)" },
+        },
+        required: ["name"],
       },
     },
   },

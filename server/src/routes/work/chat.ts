@@ -2,7 +2,7 @@ import { Hono } from "hono";
 import { db, vars, secret, ctx } from "edgespark";
 import { auth } from "edgespark/http";
 import { eq } from "drizzle-orm";
-import { workSessions, workFiles, workMessages } from "@defs";
+import { workSessions, workMessages } from "@defs";
 import { createSSEStream, SSE_HEADERS } from "../../agent/stream";
 import { hermesLoop } from "../../agent/hermes/loop";
 
@@ -25,8 +25,6 @@ chatRoutes.post("/", async (c) => {
 
   await db.insert(workMessages).values({ sessionId, agentName: null, role: "user", content: message });
 
-  const allFiles = await db.select().from(workFiles).where(eq(workFiles.sessionId, sessionId));
-
   const isAgent = !!targetAgent;
   const modelConfig = {
     baseURL: isAgent ? (vars.get("SEED_PRO_BASE_URL") || "https://ark.cn-beijing.volces.com/api/v3") : (vars.get("SEED_LITE_BASE_URL") || "https://ark.cn-beijing.volces.com/api/v3"),
@@ -40,7 +38,7 @@ chatRoutes.post("/", async (c) => {
 
   ctx.runInBackground((async () => {
     try {
-      await hermesLoop({ sessionId, userId, userMessage: cleanMessage, targetAgent, modelConfig, eventQueue, allFiles: allFiles.map((f) => ({ path: f.path, content: f.content || "" })) });
+      await hermesLoop({ sessionId, userId, userMessage: cleanMessage, targetAgent, modelConfig, eventQueue });
     } catch (err: any) {
       eventQueue.push({ type: "error", message: err.message });
     }

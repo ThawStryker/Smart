@@ -3,6 +3,7 @@ export interface HermesLoopParams {
   userId: string;
   userMessage: string;
   targetAgent: string | null;
+  suppressAgentCard?: boolean;
   modelConfig: {
     baseURL: string;
     apiPath: string;
@@ -10,7 +11,6 @@ export interface HermesLoopParams {
     modelName: string;
   };
   eventQueue: Array<Record<string, unknown>>;
-  allFiles: Array<{ path: string; content: string }>;
 }
 
 export interface FileSummary {

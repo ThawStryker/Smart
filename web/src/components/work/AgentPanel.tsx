@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { getAgentAvatar } from "./icons";
 import { WorkspacePanel } from "./WorkspacePanel";
 import { buildTree, renderFileChildren } from "./FileTree";
@@ -9,48 +9,73 @@ interface AgentPanelProps {
   onFileSelect: (path: string, content: string) => void;
   selectedFile: string | null;
   onAgentListChange: () => void;
+  reloadTrigger?: number;
 }
 
-export function AgentPanel({ sessionId, onFileSelect, selectedFile, onAgentListChange }: AgentPanelProps) {
+export function AgentPanel({ sessionId, onFileSelect, selectedFile, onAgentListChange, reloadTrigger }: AgentPanelProps) {
   const [files, setFiles] = useState<FileEntry[]>([]);
   const [expanded, setExpanded] = useState<Set<string>>(new Set(["agents"]));
   const [renaming, setRenaming] = useState<string | null>(null);
   const [renameValue, setRenameValue] = useState("");
   const [renamingPath, setRenamingPath] = useState<string | null>(null);
   const [agentNames, setAgentNames] = useState<string[]>([]);
+  const pendingDeletesRef = useRef<Set<string>>(new Set());
 
   const startFileRename = (path: string, name: string) => { setRenamingPath(path); setRenameValue(name); };
   const finishFileRename = (path: string, oldName: string) => {
     if (renameValue.trim() && renameValue.trim() !== oldName) {
-      if (path.includes(`/${oldName}`)) renameFile(path, renameValue.trim());
+      if (path.includes(`/${oldName}`)) {
+        const tree = buildTree(files);
+        const isFolder = (() => {
+          const parts = path.split("/");
+          let node: any = tree;
+          for (const p of parts) { if (!node?.__kids?.[p]) return false; node = node.__kids[p]; }
+          return node && typeof node === "object" && "__kids" in node;
+        })();
+        if (isFolder) renameFolder(path, renameValue.trim());
+        else renameFile(path, renameValue.trim());
+      }
     }
     setRenamingPath(null);
     setRenameValue("");
   };
 
   const loadFiles = useCallback(async () => {
-    // Load session files + global workspace files + agent files
     const [sessionRes, workspaceRes, agentRes] = await Promise.all([
       fetch(`/api/work/sessions/${sessionId}/files`),
-      fetch(`/api/work/sessions/${sessionId}/files?all=1&prefix=workspace/`),
+      fetch("/api/work/workspace"),
       fetch("/api/agents"),
     ]);
     let allFiles: FileEntry[] = [];
-    if (sessionRes.ok) allFiles = await sessionRes.json();
-    if (workspaceRes.ok) allFiles = [...allFiles, ...(await workspaceRes.json())];
+    // Session files — exclude workspace/ and agents/ (now in their own tables)
+    if (sessionRes.ok) {
+      const sf = await sessionRes.json();
+      allFiles = sf.filter((f: FileEntry) => !f.path.startsWith("workspace/") && !f.path.startsWith("agents/"));
+    }
+    // Workspace files — prefix with "workspace/" for tree display
+    if (workspaceRes.ok) {
+      const wsFiles = await workspaceRes.json();
+      for (const f of wsFiles) {
+        allFiles.push({ ...f, path: `workspace/${f.path}` });
+      }
+    }
+    // Agent files — prefix with "agents/<name>/" for tree display (parallel)
     if (agentRes.ok) {
       const agents = await agentRes.json();
-      const agentFiles = await Promise.all(
+      const agentFileResults = await Promise.all(
         agents.map(async (a: { name: string }) => {
           const r = await fetch(`/api/agents/${a.name}/files`);
-          return r.ok ? r.json() : [];
+          if (!r.ok) return [];
+          const files = await r.json();
+          return files.map((f: FileEntry) => ({ ...f, path: `agents/${a.name}/${f.path}` }));
         }),
       );
-      allFiles = [...allFiles, ...agentFiles.flat()];
+      for (const af of agentFileResults) allFiles.push(...af);
     }
-    // Deduplicate by path
+    // Deduplicate by path + skip pending deletes
     const seen = new Set<string>();
     setFiles(allFiles.filter((f: FileEntry) => {
+      if (pendingDeletesRef.current.has(f.path)) return false;
       if (seen.has(f.path)) return false;
       seen.add(f.path);
       return true;
@@ -68,6 +93,7 @@ export function AgentPanel({ sessionId, onFileSelect, selectedFile, onAgentListC
 
   useEffect(() => { if (sessionId) loadFiles(); }, [sessionId, loadFiles]);
   useEffect(() => { loadUserAgents(); }, [loadUserAgents]);
+  useEffect(() => { if (reloadTrigger && sessionId) loadFiles(); }, [reloadTrigger]);
 
   const toggleExpand = (path: string) => {
     setExpanded((prev) => {
@@ -98,8 +124,11 @@ export function AgentPanel({ sessionId, onFileSelect, selectedFile, onAgentListC
   };
 
   const deleteAgent = async (name: string) => {
-    await fetch(`/api/agents/${name}`, { method: "DELETE" });
-    loadFiles(); loadUserAgents();
+    setAgentNames((prev) => prev.filter((a) => a !== name));
+    setFiles((prev) => prev.filter((f) => !f.path.startsWith(`agents/${name}/`)));
+    try {
+      await fetch(`/api/agents/${name}`, { method: "DELETE" });
+    } catch { loadFiles(); loadUserAgents(); }
   };
 
   const createFile = useCallback(async (parentPath: string) => {
@@ -108,10 +137,8 @@ export function AgentPanel({ sessionId, onFileSelect, selectedFile, onAgentListC
     let path = `${prefix}${name}`;
     let idx = 1;
     while (files.some((f) => f.path === path)) { idx++; path = `${prefix}新文件 ${idx}.md`; }
-    await fetch(`/api/work/sessions/${sessionId}/files/${path}`, {
-      method: "PUT", headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ content: "" }),
-    });
+    const api = resolveApi(path);
+    if (api) await fetch(api.url, { method: api.method, headers: { "Content-Type": "application/json" }, body: JSON.stringify({ content: "" }) });
     loadFiles();
   }, [sessionId, files, loadFiles]);
 
@@ -121,10 +148,8 @@ export function AgentPanel({ sessionId, onFileSelect, selectedFile, onAgentListC
     let path = `${prefix}${name}`;
     let idx = 1;
     while (files.some((f) => f.path === path)) { idx++; path = `${prefix}新文件夹 ${idx}`; }
-    await fetch(`/api/work/sessions/${sessionId}/files/${path}`, {
-      method: "PUT", headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ isFolder: true }),
-    });
+    const api = resolveApi(path);
+    if (api) await fetch(api.url, { method: api.method, headers: { "Content-Type": "application/json" }, body: JSON.stringify({ isFolder: true }) });
     loadFiles();
   }, [sessionId, files, loadFiles]);
 
@@ -134,44 +159,88 @@ export function AgentPanel({ sessionId, onFileSelect, selectedFile, onAgentListC
     const newPath = parentPath ? `${parentPath}/${newName.trim()}` : newName.trim();
     if (newPath === folderPath) return;
     const children = files.filter((f) => f.path.startsWith(`${folderPath}/`) || f.path === folderPath);
-    // Copy all children to new paths, then delete old
     await Promise.all(children.map((f) => {
       const updated = f.path.replace(folderPath, newPath);
-      return fetch(`/api/work/sessions/${sessionId}/files/${updated}`, {
-        method: "PUT", headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ content: f.content, isFolder: f.isFolder ? true : undefined }),
-      });
+      const api = resolveApi(updated);
+      if (api) return fetch(api.url, { method: api.method, headers: { "Content-Type": "application/json" }, body: JSON.stringify({ content: f.content, isFolder: f.isFolder ? true : undefined }) });
     }));
-    await fetch(`/api/work/sessions/${sessionId}/files/${folderPath}`, { method: "DELETE" });
+    await fetch(resolveApiDelete(folderPath), { method: "DELETE" });
     loadFiles();
-  }, [sessionId, files, loadFiles]);
+  }, [files, loadFiles]);
+
+  const encodePath = (p: string) => p.split("/").map(encodeURIComponent).join("/");
+
+  // Resolve tree path to API url + apiPath
+  function resolveApi(treePath: string): { url: string; method: string } | null {
+    const agentMatch = treePath.match(/^agents\/([^/]+)\/(.+)$/);
+    if (agentMatch) {
+      return { url: `/api/agents/${encodeURIComponent(agentMatch[1])}/files/${encodePath(agentMatch[2])}`, method: "PUT" };
+    }
+    if (treePath.startsWith("workspace/")) {
+      const apiPath = treePath.slice("workspace/".length);
+      return { url: `/api/work/workspace/${encodePath(apiPath)}`, method: "PUT" };
+    }
+    return { url: `/api/work/sessions/${sessionId}/files/${encodePath(treePath)}`, method: "PUT" };
+  }
+
+  function resolveApiDelete(treePath: string): string {
+    const agentMatch = treePath.match(/^agents\/([^/]+)\/(.+)$/);
+    if (agentMatch) {
+      return `/api/agents/${encodeURIComponent(agentMatch[1])}/files/${encodePath(agentMatch[2])}`;
+    }
+    if (treePath.startsWith("workspace/")) {
+      const apiPath = treePath.slice("workspace/".length);
+      return `/api/work/workspace/${encodePath(apiPath)}`;
+    }
+    return `/api/work/sessions/${sessionId}/files/${encodePath(treePath)}`;
+  }
 
   const deleteFolder = useCallback(async (folderPath: string) => {
     if (!confirm(`Delete "${folderPath}" and all its contents?`)) return;
-    await fetch(`/api/work/sessions/${sessionId}/files/${folderPath}`, { method: "DELETE" });
-    loadFiles();
-  }, [sessionId, loadFiles]);
+    pendingDeletesRef.current.add(folderPath);
+    setFiles((prev) => prev.filter((f) => f.path !== folderPath && !f.path.startsWith(`${folderPath}/`)));
+    try {
+      const res = await fetch(resolveApiDelete(folderPath), { method: "DELETE" });
+      if (!res.ok) throw new Error(`Delete failed: ${res.status}`);
+    } catch { loadFiles(); }
+    pendingDeletesRef.current.delete(folderPath);
+  }, [loadFiles]);
 
   const renameFile = useCallback(async (filePath: string, newName: string) => {
     if (!newName.trim()) return;
     const parentPath = filePath.split("/").slice(0, -1).join("/");
     const newPath = parentPath ? `${parentPath}/${newName.trim()}` : newName.trim();
     if (newPath === filePath) return;
-    const existing = files.find((f) => f.path === filePath);
-    if (!existing) return;
-    await fetch(`/api/work/sessions/${sessionId}/files/${newPath}`, {
-      method: "PUT", headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ content: existing.content, isFolder: false }),
-    });
-    await fetch(`/api/work/sessions/${sessionId}/files/${filePath}`, { method: "DELETE" });
+    // Fetch current content from server (files state may be stale)
+    let currentContent = "";
+    const getUrl = resolveApi(filePath)?.url;
+    if (getUrl) {
+      try {
+        const r = await fetch(getUrl);
+        if (r.ok) {
+          const data = await r.json();
+          currentContent = data.content || "";
+        }
+      } catch {}
+    }
+    const newApi = resolveApi(newPath);
+    if (newApi) {
+      await fetch(newApi.url, { method: newApi.method, headers: { "Content-Type": "application/json" }, body: JSON.stringify({ content: currentContent, isFolder: false }) });
+    }
+    await fetch(resolveApiDelete(filePath), { method: "DELETE" });
     loadFiles();
-  }, [sessionId, files, loadFiles]);
+  }, [loadFiles]);
 
   const deleteFile = useCallback(async (filePath: string) => {
     if (!confirm(`Delete "${filePath}"?`)) return;
-    await fetch(`/api/work/sessions/${sessionId}/files/${filePath}`, { method: "DELETE" });
-    loadFiles();
-  }, [sessionId, loadFiles]);
+    pendingDeletesRef.current.add(filePath);
+    setFiles((prev) => prev.filter((f) => f.path !== filePath));
+    try {
+      const res = await fetch(resolveApiDelete(filePath), { method: "DELETE" });
+      if (!res.ok) throw new Error(`Delete failed: ${res.status}`);
+    } catch { loadFiles(); }
+    pendingDeletesRef.current.delete(filePath);
+  }, [loadFiles]);
 
   const tree = buildTree(files);
   const agents = agentNames;

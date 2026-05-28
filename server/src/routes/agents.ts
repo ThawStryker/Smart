@@ -1,15 +1,15 @@
 import { Hono } from "hono";
 import { db } from "edgespark";
 import { auth } from "edgespark/http";
-import { eq, and, like } from "drizzle-orm";
-import { userAgents, workFiles, workSessions } from "@defs";
+import { eq, and, like, asc } from "drizzle-orm";
+import { userAgents, agentFiles } from "@defs";
 
 export const userAgentRoutes = new Hono();
 
 // List all agents for current user
 userAgentRoutes.get("/", async (c) => {
   const userId = auth.user!.id;
-  const agents = await db.select().from(userAgents).where(eq(userAgents.userId, userId));
+  const agents = await db.select().from(userAgents).where(eq(userAgents.userId, userId)).orderBy(asc(userAgents.createdAt));
   return c.json(agents);
 });
 
@@ -38,26 +38,19 @@ userAgentRoutes.post("/", async (c) => {
     memoryMd: "# Agent Memory\n\nSelf-learned experience from past tasks. The agent appends insights here automatically.\n",
   }).returning();
 
-  // Find a valid sessionId for file storage (use most recent session, or create one)
-  const sessions = await db.select().from(workSessions).where(eq(workSessions.userId, userId));
-  let sid = sessions[0]?.id;
-  if (!sid) {
-    const [s] = await db.insert(workSessions).values({ userId, title: "Agent Files" }).returning();
-    sid = s.id;
-  }
-
-  // Create agent file structure
-  const base = `agents/${name}`;
+  // Create agent file structure in agent_files (no sessionId)
   const fileEntries = [
-    { path: `${base}/AGENTS.md`, content: agent.agentsMd },
-    { path: `${base}/memory/USER.md`, content: agent.userMd },
-    { path: `${base}/memory/MEMORY.md`, content: agent.memoryMd },
-    { path: `${base}/skills`, content: "", isFolder: 1 },
-    { path: `${base}/context`, content: "", isFolder: 1 },
-    { path: `${base}/heartbeat/HEARTBEAT.md`, content: "# Heartbeat Configuration\n\nDefine scheduled tasks below.\n\n- time: \"0 9 * * *\"\n  task: \"Daily check\"\n" },
+    { path: "AGENTS.md", content: agent.agentsMd },
+    { path: "memory/USER.md", content: agent.userMd },
+    { path: "memory/MEMORY.md", content: agent.memoryMd },
+    { path: "skills", content: "", isFolder: 1 },
+    { path: "context", content: "", isFolder: 1 },
+    { path: "heartbeat/HEARTBEAT.md", content: "# Heartbeat Configuration\n\nDefine scheduled tasks below.\n\n- time: \"0 9 * * *\"\n  task: \"Daily check\"\n" },
   ];
   for (const e of fileEntries) {
-    await db.insert(workFiles).values({ sessionId: sid, path: e.path, content: e.content, isFolder: e.isFolder || 0 });
+    await db.insert(agentFiles).values({
+      userId, agentName: name, path: e.path, content: e.content, isFolder: e.isFolder || 0,
+    });
   }
 
   return c.json(agent, 201);
@@ -77,13 +70,11 @@ userAgentRoutes.patch("/:name", async (c) => {
   const newName = update.name;
   await db.update(userAgents).set(update).where(and(eq(userAgents.userId, userId), eq(userAgents.name, name)));
 
-  // Also update file paths if name changed
+  // Update agentName in agent_files if renamed
   if (newName && newName !== name) {
-    const files = await db.select().from(workFiles).where(like(workFiles.path, `agents/${name}/%`));
-    for (const f of files) {
-      const newPath = f.path.replace(`agents/${name}/`, `agents/${newName}/`);
-      await db.update(workFiles).set({ path: newPath }).where(eq(workFiles.id, f.id));
-    }
+    await db.update(agentFiles).set({ agentName: newName }).where(
+      and(eq(agentFiles.userId, userId), eq(agentFiles.agentName, name)),
+    );
   }
 
   return c.json({ ok: true });
@@ -94,16 +85,78 @@ userAgentRoutes.delete("/:name", async (c) => {
   const userId = auth.user!.id;
   const name = c.req.param("name");
   await db.delete(userAgents).where(and(eq(userAgents.userId, userId), eq(userAgents.name, name)));
-  // Also clean up agent files across all sessions
-  await db.delete(workFiles).where(like(workFiles.path, `agents/${name}/%`));
+  await db.delete(agentFiles).where(and(eq(agentFiles.userId, userId), eq(agentFiles.agentName, name)));
   return c.json({ ok: true });
 });
 
-// List agent files (across all sessions)
+// List agent files
 userAgentRoutes.get("/:name/files", async (c) => {
+  try {
+    const userId = auth.user!.id;
+    const name = c.req.param("name");
+    const prefix = c.req.query("prefix") || "";
+    const condition = prefix
+      ? and(eq(agentFiles.userId, userId), eq(agentFiles.agentName, name), like(agentFiles.path, `${prefix}%`))
+      : and(eq(agentFiles.userId, userId), eq(agentFiles.agentName, name));
+    const files = await db.select().from(agentFiles).where(condition).orderBy(asc(agentFiles.createdAt));
+    return c.json(files);
+  } catch (err: any) {
+    return c.json({ error: err.message, stack: err.stack }, 500);
+  }
+});
+
+// Get single agent file
+userAgentRoutes.get("/:name/files/:path{.+}", async (c) => {
+  const userId = auth.user!.id;
   const name = c.req.param("name");
-  const prefix = c.req.query("prefix") || "";
-  const searchPath = prefix ? `agents/${name}/${prefix}` : `agents/${name}/`;
-  const files = await db.select().from(workFiles).where(like(workFiles.path, `${searchPath}%`));
-  return c.json(files);
+  const filePath = c.req.param("path");
+  if (!filePath) return c.json({ error: "Path required" }, 400);
+  const rows = await db.select().from(agentFiles).where(and(eq(agentFiles.userId, userId), eq(agentFiles.agentName, name), eq(agentFiles.path, filePath)));
+  const file = rows[0];
+  if (!file) return c.json({ error: "Not found" }, 404);
+  return c.json(file);
+});
+
+userAgentRoutes.put("/:name/files/:path{.+}", async (c) => {
+  try {
+  const userId = auth.user!.id;
+  const name = c.req.param("name");
+  const filePath = c.req.param("path");
+  if (!filePath) return c.json({ error: "Path required" }, 400);
+  const { content, isFolder } = await c.req.json<{ content?: string; isFolder?: boolean }>();
+
+  const rows = await db.select().from(agentFiles).where(and(eq(agentFiles.userId, userId), eq(agentFiles.agentName, name), eq(agentFiles.path, filePath)));
+  const existing = rows[0];
+
+  if (existing) {
+    await db.update(agentFiles).set({
+      content: content !== undefined ? content : existing.content,
+      updatedAt: new Date().toISOString(),
+    }).where(eq(agentFiles.id, existing.id));
+  } else {
+    await db.insert(agentFiles).values({ userId, agentName: name, path: filePath, content: content || "", isFolder: isFolder ? 1 : 0 });
+    // Auto-create parent folders
+    if (filePath.includes("/")) {
+      const parts = filePath.split("/");
+      for (let i = 1; i < parts.length; i++) {
+        const parentPath = parts.slice(0, i).join("/");
+        const parentRows = await db.select().from(agentFiles).where(and(eq(agentFiles.userId, userId), eq(agentFiles.agentName, name), eq(agentFiles.path, parentPath)));
+        if (!parentRows[0]) {
+          await db.insert(agentFiles).values({ userId, agentName: name, path: parentPath, content: "", isFolder: 1 });
+        }
+      }
+    }
+  }
+
+  return c.json({ ok: true });
+  } catch (err: any) { return c.json({ error: err.message }, 500); }
+});
+
+userAgentRoutes.delete("/:name/files/:path{.+}", async (c) => {
+  const userId = auth.user!.id;
+  const name = c.req.param("name");
+  const filePath = c.req.param("path");
+  if (!filePath) return c.json({ error: "Path required" }, 400);
+  await db.delete(agentFiles).where(and(eq(agentFiles.userId, userId), eq(agentFiles.agentName, name), like(agentFiles.path, `${filePath}%`)));
+  return c.json({ ok: true });
 });

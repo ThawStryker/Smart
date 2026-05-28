@@ -106,6 +106,11 @@ filesRoutes.delete("/*", async (c) => {
   const sessionId = parseInt(c.req.param("id") || "0");
   const filePath = getFilePath(c, sessionId);
   if (!filePath) return c.json({ error: "File path required" }, 400);
-  await db.delete(workFiles).where(and(eq(workFiles.sessionId, sessionId), like(workFiles.path, `${filePath}%`)));
+  const allSessions = c.req.query("all") === "1";
+  if (allSessions) {
+    await db.delete(workFiles).where(like(workFiles.path, `${filePath}%`));
+  } else {
+    await db.delete(workFiles).where(and(eq(workFiles.sessionId, sessionId), like(workFiles.path, `${filePath}%`)));
+  }
   return c.json({ ok: true });
 });
