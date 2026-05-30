@@ -1,5 +1,5 @@
 /**
- * Three-tier system prompt assembly — inspired by Hermes Agent's system_prompt.py.
+ * Three-tier system prompt assembly — inspired by open-source Hermes Agent's system_prompt.py.
  *
  * Stable   — identity, role definition, skills (full content), tool guidance,
  *            platform hints, workflow. Built once, reused across turns.

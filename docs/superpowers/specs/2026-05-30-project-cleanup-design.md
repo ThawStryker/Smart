@@ -2,6 +2,8 @@
 comet_change: project-cleanup
 role: technical-design
 canonical_spec: openspec
+archived-with: 2026-05-30-project-cleanup
+status: final
 ---
 
 # 项目清理 — 技术设计

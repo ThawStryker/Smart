@@ -1,4 +1,4 @@
-export interface HermesLoopParams {
+export interface MoseLoopParams {
   sessionId: number;
   userId: string;
   userMessage: string;

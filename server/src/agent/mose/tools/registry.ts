@@ -1,12 +1,12 @@
-import type { HermesLoopParams } from "../types";
+import type { MoseLoopParams } from "../types";
 
 export interface ToolContext {
   sessionId: number;
   userId: string;
   agentName: string | null;
-  params: HermesLoopParams;
+  params: MoseLoopParams;
   emit: (event: Record<string, unknown>) => void;
-  hermesLoop: (params: HermesLoopParams) => Promise<string>;
+  moseLoop: (params: MoseLoopParams) => Promise<string>;
 }
 
 export interface ToolDef {

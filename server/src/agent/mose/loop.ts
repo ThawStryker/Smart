@@ -8,9 +8,9 @@ import {
   buildConversationSummary,
 } from "./context";
 import { workMessages } from "@defs";
-import type { HermesLoopParams } from "./types";
+import type { MoseLoopParams } from "./types";
 
-export async function hermesLoop(params: HermesLoopParams): Promise<string> {
+export async function moseLoop(params: MoseLoopParams): Promise<string> {
   const { sessionId, userId, userMessage, targetAgent, modelConfig, eventQueue } = params;
   let fullResponse = "";
 
@@ -152,7 +152,7 @@ export async function hermesLoop(params: HermesLoopParams): Promise<string> {
         let result: string;
         try {
           const args = JSON.parse(tc.function.arguments);
-          result = await executeAgentTool(tc.function.name, args, sessionId, params, eventQueue, hermesLoop);
+          result = await executeAgentTool(tc.function.name, args, sessionId, params, eventQueue, moseLoop);
         } catch (err: unknown) {
           result = `Error: ${err instanceof Error ? err.message : String(err)}`;
         }

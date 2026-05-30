@@ -2,6 +2,7 @@
 change: project-cleanup
 design-doc: docs/superpowers/specs/2026-05-30-project-cleanup-design.md
 base-ref: 0f1f85391a5f3fc761abc76a479f30309ef7f578
+archived-with: 2026-05-30-project-cleanup
 ---
 
 # 项目清理 实施计划
@@ -14,6 +15,7 @@ base-ref: 0f1f85391a5f3fc761abc76a479f30309ef7f578
 
 **Tech Stack:** 纯文件操作，无代码变更
 
+archived-with: 2026-05-30-project-cleanup
 ---
 
 ### Task 1: 删除废弃文件

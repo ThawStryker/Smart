@@ -4,7 +4,7 @@ import { auth } from "edgespark/http";
 import { eq } from "drizzle-orm";
 import { workSessions, workMessages } from "@defs";
 import { createSSEStream, SSE_HEADERS } from "../../agent/stream";
-import { hermesLoop } from "../../agent/hermes/loop";
+import { moseLoop } from "../../agent/mose/loop";
 import { getModel, DEFAULTS } from "../../models";
 
 export const chatRoutes = new Hono();
@@ -37,7 +37,7 @@ chatRoutes.post("/", async (c) => {
 
   ctx.runInBackground((async () => {
     try {
-      await hermesLoop({ sessionId, userId, userMessage: cleanMessage, targetAgent, modelConfig, eventQueue });
+      await moseLoop({ sessionId, userId, userMessage: cleanMessage, targetAgent, modelConfig, eventQueue });
     } catch (err: any) {
       eventQueue.push({ type: "error", message: err.message });
     }

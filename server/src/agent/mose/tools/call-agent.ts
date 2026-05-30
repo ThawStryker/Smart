@@ -1,15 +1,15 @@
-import type { HermesLoopParams } from "../types";
+import type { MoseLoopParams } from "../types";
 
 export async function callAgent(
   args: Record<string, unknown>,
-  params: HermesLoopParams,
+  params: MoseLoopParams,
   eventQueue: Array<Record<string, unknown>>,
-  hermesLoop: (params: HermesLoopParams) => Promise<string>,
+  moseLoop: (params: MoseLoopParams) => Promise<string>,
 ): Promise<string> {
   const agentName = args.name as string | undefined;
   const task = args.task as string | undefined;
   if (!agentName || !task) return "Error: name and task required";
   const isSelfCall = agentName === params.targetAgent;
-  const result = await hermesLoop({ ...params, userMessage: task, targetAgent: agentName, suppressAgentCard: isSelfCall });
+  const result = await moseLoop({ ...params, userMessage: task, targetAgent: agentName, suppressAgentCard: isSelfCall });
   return result;
 }

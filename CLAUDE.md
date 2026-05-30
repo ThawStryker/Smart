@@ -84,7 +84,7 @@ If you have the `building-edgespark-apps` skill installed, use its references:
 | 区域 | 路径 |
 |------|------|
 | 服务端 Work 路由 | `server/src/routes/work/` |
-| Agent 引擎 | `server/src/agent/hermes/` |
+| Agent 引擎 | `server/src/agent/mose/` |
 | 前端 Work 组件 | `web/src/components/work/` |
 | 前端 Hooks | `web/src/hooks/` |
 | 前端模块入口 | `web/src/modules/` |
@@ -115,7 +115,7 @@ cd /Users/cuitao/Documents/Smart && edgespark deploy
 
 ### 7. 经验沉淀
 
-- 复杂任务完成后 → 更新或创建 skill（Hermes skill）。
+- 复杂任务完成后 → 更新或创建 skill（Mose skill）。
 - 用户纠正过的偏好 → 写到 memory。
 - Bug 修复后发现的新知 → 补充到对应 skill 的 pitfalls。
 

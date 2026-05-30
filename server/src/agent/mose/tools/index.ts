@@ -2,22 +2,22 @@ import { writeFile, readFile, listFiles } from "./file-ops";
 import { webSearch } from "./web-search";
 import { callAgent } from "./call-agent";
 import { useSkill } from "./use-skill";
-import type { HermesLoopParams } from "../types";
+import type { MoseLoopParams } from "../types";
 
 export async function executeAgentTool(
   name: string,
   args: Record<string, unknown>,
   sessionId: number,
-  params: HermesLoopParams,
+  params: MoseLoopParams,
   eventQueue: Array<Record<string, unknown>>,
-  hermesLoop: (params: HermesLoopParams) => Promise<string>,
+  moseLoop: (params: MoseLoopParams) => Promise<string>,
 ): Promise<string> {
   switch (name) {
     case "write_file": return writeFile(args, sessionId, eventQueue, params.userId, params.targetAgent);
     case "read_file": return readFile(args, sessionId, params.userId, params.targetAgent);
     case "list_files": return listFiles(args, sessionId, params.userId, params.targetAgent);
     case "web_search": return webSearch(args);
-    case "call_agent": return callAgent(args, params, eventQueue, hermesLoop);
+    case "call_agent": return callAgent(args, params, eventQueue, moseLoop);
     case "use_skill": return useSkill(args, params.userId, params.targetAgent);
     default: return `Unknown tool: ${name}`;
   }
