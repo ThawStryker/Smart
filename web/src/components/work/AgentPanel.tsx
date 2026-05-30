@@ -10,9 +10,10 @@ interface AgentPanelProps {
   selectedFile: string | null;
   onAgentListChange: () => void;
   reloadTrigger?: number;
+  onCloseFile?: () => void;
 }
 
-export function AgentPanel({ sessionId, onFileSelect, selectedFile, onAgentListChange, reloadTrigger }: AgentPanelProps) {
+export function AgentPanel({ sessionId, onFileSelect, selectedFile, onAgentListChange, reloadTrigger, onCloseFile }: AgentPanelProps) {
   const [files, setFiles] = useState<FileEntry[]>([]);
   const [expanded, setExpanded] = useState<Set<string>>(new Set(["agents"]));
   const [renaming, setRenaming] = useState<string | null>(null);
@@ -72,9 +73,11 @@ export function AgentPanel({ sessionId, onFileSelect, selectedFile, onAgentListC
       );
       for (const af of agentFileResults) allFiles.push(...af);
     }
-    // Deduplicate by path + skip pending deletes
+    // Deduplicate by path + skip pending deletes + skip sessionStorage deleted
+    const deletedFiles: string[] = JSON.parse(sessionStorage.getItem("deletedFiles") || "[]");
     const seen = new Set<string>();
     setFiles(allFiles.filter((f: FileEntry) => {
+      if (deletedFiles.includes(f.path)) return false;
       if (pendingDeletesRef.current.has(f.path)) return false;
       if (seen.has(f.path)) return false;
       seen.add(f.path);
@@ -233,14 +236,21 @@ export function AgentPanel({ sessionId, onFileSelect, selectedFile, onAgentListC
 
   const deleteFile = useCallback(async (filePath: string) => {
     if (!confirm(`Delete "${filePath}"?`)) return;
-    pendingDeletesRef.current.add(filePath);
-    setFiles((prev) => prev.filter((f) => f.path !== filePath));
+    if (selectedFile === filePath && onCloseFile) onCloseFile();
     try {
       const res = await fetch(resolveApiDelete(filePath), { method: "DELETE" });
       if (!res.ok) throw new Error(`Delete failed: ${res.status}`);
-    } catch { loadFiles(); }
-    pendingDeletesRef.current.delete(filePath);
-  }, [loadFiles]);
+      const deletedFiles: string[] = JSON.parse(sessionStorage.getItem("deletedFiles") || "[]");
+      deletedFiles.push(filePath);
+      sessionStorage.setItem("deletedFiles", JSON.stringify(deletedFiles));
+      // Remove from local state immediately — D1 is eventually consistent,
+      // so reloading would likely return stale data and "resurrect" the file.
+      setFiles((prev) => prev.filter((f) => f.path !== filePath));
+    } catch {
+      alert(`Delete failed: ${filePath}`);
+      loadFiles(); // fallback: reload to sync
+    }
+  }, [selectedFile, onCloseFile, loadFiles]);
 
   const tree = buildTree(files);
   const agents = agentNames;

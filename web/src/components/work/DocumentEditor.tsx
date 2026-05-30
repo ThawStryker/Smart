@@ -146,11 +146,6 @@ export function DocumentEditor({
       <div className="flex-1 overflow-auto" style={{ display: sourceView ? "none" : "block" }}>
         <div className="max-w-3xl mx-auto my-6 rounded-xl shadow-2xl overflow-hidden flex flex-col" style={{ minHeight: "calc(100% - 3rem)", width: "100%", background: "var(--app-surface)", color: "var(--app-text)" }}>
           <div ref={containerRef} className="milkdown px-0 py-0 flex-1" style={{ display: filePath ? "block" : "none" }} />
-          {!filePath && (
-            <div className="flex items-center justify-center flex-1">
-              <p className="text-sm text-[var(--app-text-tertiary)]">Select a file to edit</p>
-            </div>
-          )}
         </div>
       </div>
     </div>

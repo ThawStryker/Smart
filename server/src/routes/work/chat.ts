@@ -1,10 +1,11 @@
 import { Hono } from "hono";
-import { db, vars, secret, ctx } from "edgespark";
+import { db, secret, ctx } from "edgespark";
 import { auth } from "edgespark/http";
 import { eq } from "drizzle-orm";
 import { workSessions, workMessages } from "@defs";
 import { createSSEStream, SSE_HEADERS } from "../../agent/stream";
 import { hermesLoop } from "../../agent/hermes/loop";
+import { getModel, DEFAULTS } from "../../models";
 
 export const chatRoutes = new Hono();
 
@@ -26,12 +27,10 @@ chatRoutes.post("/", async (c) => {
   await db.insert(workMessages).values({ sessionId, agentName: null, role: "user", content: message });
 
   const isAgent = !!targetAgent;
-  const modelConfig = {
-    baseURL: isAgent ? (vars.get("SEED_PRO_BASE_URL") || "https://ark.cn-beijing.volces.com/api/v3") : (vars.get("SEED_LITE_BASE_URL") || "https://ark.cn-beijing.volces.com/api/v3"),
-    apiPath: "/chat/completions",
-    apiKey: isAgent ? (secret.get("SEED_PRO_API_KEY") || "") : (secret.get("SEED_LITE_API_KEY") || ""),
-    modelName: isAgent ? "doubao-seed-2-0-pro-260215" : "doubao-seed-2-0-lite-260428",
-  };
+  const modelKey = isAgent ? DEFAULTS.agent : DEFAULTS.chat;
+  const model = getModel(modelKey);
+  if (!model) return c.json({ error: `Model not configured: ${modelKey}` }, 500);
+  const modelConfig = { baseURL: model.baseURL, apiPath: model.apiPath, apiKey: model.apiKey, modelName: model.modelName };
 
   const eventQueue: Array<Record<string, unknown>> = [];
   const stream = createSSEStream(eventQueue);
