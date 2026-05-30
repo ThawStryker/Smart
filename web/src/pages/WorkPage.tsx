@@ -1,7 +1,9 @@
 import { useState, useEffect } from "react";
 import { useSearchParams } from "react-router-dom";
 import { useSessions, useAgents, useFiles, useActiveFile } from "@/hooks";
-import { AgentPanel, DocumentEditor, ChatPanel } from "@/modules";
+import { AgentPanel } from "@/components/work/AgentPanel";
+import { DocumentEditor } from "@/components/work/DocumentEditor";
+import { ChatPanel } from "@/components/work/ChatPanel";
 
 function truncateTitle(text: string, max = 30): string {
   return text.length > max ? text.slice(0, max) + "..." : text;
