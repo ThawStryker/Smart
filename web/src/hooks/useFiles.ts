@@ -6,6 +6,7 @@
  * - Server is the source of truth. This prevents "file reappears" bugs.
  */
 import { useState, useCallback } from "react";
+import { resolveApiUrl, resolveDeleteUrl, resolveRenameUrl, loadAllAgentFiles } from "@/lib/file-api";
 
 export interface FileEntry {
   id: number;
@@ -17,53 +18,36 @@ export interface FileEntry {
 export function useFiles(sessionId: number) {
   const [files, setFiles] = useState<FileEntry[]>([]);
 
-  const encodePath = (p: string) => p.split("/").map(encodeURIComponent).join("/");
-
-  const resolveApi = (treePath: string) => {
-    const agentMatch = treePath.match(/^agents\/([^/]+)\/(.+)$/);
-    if (agentMatch)
-      return { url: `/api/agents/${encodeURIComponent(agentMatch[1])}/files/${encodePath(agentMatch[2])}`, method: "PUT" };
-    if (treePath.startsWith("workspace/"))
-      return { url: `/api/work/workspace/${encodePath(treePath.slice("workspace/".length))}`, method: "PUT" };
-    return { url: `/api/work/sessions/${sessionId}/files/${encodePath(treePath)}`, method: "PUT" };
-  };
-
-  const delUrl = (treePath: string) => {
-    const m = treePath.match(/^agents\/([^/]+)\/(.+)$/);
-    if (m) return `/api/agents/${encodeURIComponent(m[1])}/files/${encodePath(m[2])}`;
-    if (treePath.startsWith("workspace/")) return `/api/work/workspace/${encodePath(treePath.slice("workspace/".length))}`;
-    return `/api/work/sessions/${sessionId}/files/${encodePath(treePath)}`;
-  };
+  const resolveApi = (treePath: string) => resolveApiUrl(treePath, sessionId);
+  const delUrl = (treePath: string) => resolveDeleteUrl(treePath, sessionId);
 
   const load = useCallback(async () => {
-    const [sessionRes, workspaceRes, agentRes] = await Promise.all([
-      fetch(`/api/work/sessions/${sessionId}/files`),
-      fetch("/api/work/workspace"),
-      fetch("/api/agents"),
-    ]);
-    const all: FileEntry[] = [];
-    if (sessionRes.ok) {
-      const sf = await sessionRes.json();
-      all.push(...sf.filter((f: FileEntry) => !f.path.startsWith("workspace/") && !f.path.startsWith("agents/")));
+    try {
+      const [sessionRes, workspaceRes] = await Promise.all([
+        fetch(`/api/work/sessions/${sessionId}/files`).catch(() => ({ ok: false } as Response)),
+        fetch("/api/work/workspace").catch(() => ({ ok: false } as Response)),
+      ]);
+      const all: FileEntry[] = [];
+      if (sessionRes.ok) {
+        const sf = await sessionRes.json();
+        all.push(...sf.filter((f: FileEntry) => !f.path.startsWith("workspace/") && !f.path.startsWith("agents/")));
+      }
+      if (workspaceRes.ok) {
+        const ws = await workspaceRes.json();
+        for (const f of ws) all.push({ ...f, path: `workspace/${f.path}` });
+      }
+      // Agent files — 批量加载（N+1 → 1 请求）
+      const agentFileMap = await loadAllAgentFiles();
+      for (const [agentName, files] of agentFileMap) {
+        for (const f of files) {
+          all.push({ ...f, path: `agents/${agentName}/${f.path}` });
+        }
+      }
+      const seen = new Set<string>();
+      setFiles(all.filter((f) => { if (seen.has(f.path)) return false; seen.add(f.path); return true; }));
+    } catch {
+      // Network error — keep existing file list unchanged
     }
-    if (workspaceRes.ok) {
-      const ws = await workspaceRes.json();
-      for (const f of ws) all.push({ ...f, path: `workspace/${f.path}` });
-    }
-    if (agentRes.ok) {
-      const agents = await agentRes.json();
-      const results = await Promise.all(
-        agents.map(async (a: { name: string }) => {
-          const r = await fetch(`/api/agents/${a.name}/files`);
-          if (!r.ok) return [];
-          const fl = await r.json();
-          return fl.map((f: FileEntry) => ({ ...f, path: `agents/${a.name}/${f.path}` }));
-        }),
-      );
-      for (const af of results) all.push(...af);
-    }
-    const seen = new Set<string>();
-    setFiles(all.filter((f) => { if (seen.has(f.path)) return false; seen.add(f.path); return true; }));
   }, [sessionId]);
 
   const create = useCallback(async (parentPath: string) => {
@@ -92,9 +76,11 @@ export function useFiles(sessionId: number) {
       if (!res.ok) throw new Error(`Delete failed: ${res.status}`);
       await load();
     } catch {
-      alert(`Delete failed: ${filePath}`);
+      console.error(`Delete failed: ${filePath}`);
     }
   }, [load]);
+
+  const renameUrl = (treePath: string) => resolveRenameUrl(treePath, sessionId) ?? "";
 
   const rename = useCallback(async (filePath: string, newName: string) => {
     if (!newName.trim()) return;
@@ -102,24 +88,18 @@ export function useFiles(sessionId: number) {
     parts[parts.length - 1] = newName.trim();
     const newPath = parts.join("/");
     if (newPath === filePath) return;
-    if (files.some((f) => f.path === newPath)) { alert(`"${newName}" already exists`); return; }
-
-    const entry = files.find((f) => f.path === filePath);
-    const content = entry?.content || "";
-    const isFolder = !!entry?.isFolder;
-
     try {
-      const newApi = resolveApi(newPath);
-      if (newApi) {
-        const r = await fetch(newApi.url, { method: newApi.method, headers: { "Content-Type": "application/json" }, body: JSON.stringify({ content, isFolder: isFolder || undefined }) });
-        if (!r.ok) throw new Error("Create failed");
-      }
-      await fetch(delUrl(filePath), { method: "DELETE" });
+      const res = await fetch(renameUrl(filePath), {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ oldPath: filePath, newPath }),
+      });
+      if (!res.ok) throw new Error("Rename failed");
       await load();
     } catch {
       load();
     }
-  }, [files, load]);
+  }, [sessionId, load]);
 
   return { files, load, create, createFolder, remove, rename };
 }

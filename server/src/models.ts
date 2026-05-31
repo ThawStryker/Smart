@@ -29,6 +29,11 @@ const _models: Record<string, { baseKey: VarKey; apiPath: string; secretKey: Sec
     secretKey: "DEEPSEEK_API_KEY", modelName: "deepseek-v4-pro",
     fallbackURL: "https://api.deepseek.com",
   },
+  "deepseek-v4-pro-260425": {
+    baseKey: "SEED_BASE_URL", apiPath: "/chat/completions",
+    secretKey: "SEED_API_KEY", modelName: "deepseek-v4-pro-260425",
+    fallbackURL: "https://ark.cn-beijing.volces.com/api/v3",
+  },
 };
 
 export function getModel(key: string): ModelConfig | null {
@@ -41,7 +46,7 @@ export function getModel(key: string): ModelConfig | null {
 }
 
 export const DEFAULTS = {
-  agent: "deepseek-v4-pro",
+  agent: "deepseek-v4-pro-260425",
   chat: "seed-pro",
   coding: "seed-code",
 };

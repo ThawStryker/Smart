@@ -1,15 +1,17 @@
 import { Hono } from "hono";
 import { db } from "edgespark";
 import { auth } from "edgespark/http";
-import { eq } from "drizzle-orm";
+import { eq, desc } from "drizzle-orm";
 import { workSessions, workFiles, workMessages } from "@defs";
 
 export const sessionsRoutes = new Hono();
 
 sessionsRoutes.get("/", async (c) => {
   const userId = auth.user!.id;
-  const sessions = await db.select().from(workSessions).where(eq(workSessions.userId, userId));
-  return c.json(sessions);
+  const sessions = await db.select().from(workSessions)
+    .where(eq(workSessions.userId, userId))
+    .orderBy(desc(workSessions.createdAt));
+  return c.json(sessions.filter((s) => !s.deletedAt));
 });
 
 sessionsRoutes.post("/", async (c) => {
@@ -29,14 +31,20 @@ sessionsRoutes.get("/:id", async (c) => {
 
 sessionsRoutes.patch("/:id", async (c) => {
   const id = parseInt(c.req.param("id"));
-  const { title } = await c.req.json<{ title: string }>();
-  await db.update(workSessions).set({ title }).where(eq(workSessions.id, id));
+  const body = await c.req.json<{ title?: string; stateJson?: string }>();
+  const updates: Record<string, any> = {};
+  if (body.title !== undefined) updates.title = body.title;
+  if (body.stateJson !== undefined) updates.stateJson = body.stateJson;
+  if (Object.keys(updates).length > 0) {
+    updates.updatedAt = new Date().toISOString();
+    await db.update(workSessions).set(updates).where(eq(workSessions.id, id));
+  }
   return c.json({ ok: true });
 });
 
 sessionsRoutes.delete("/:id", async (c) => {
   const id = parseInt(c.req.param("id"));
-  await db.delete(workMessages).where(eq(workMessages.sessionId, id));
-  await db.delete(workSessions).where(eq(workSessions.id, id));
+  // 软删除：标记 deletedAt，不清除数据
+  await db.update(workSessions).set({ deletedAt: new Date().toISOString() }).where(eq(workSessions.id, id));
   return c.json({ ok: true });
 });

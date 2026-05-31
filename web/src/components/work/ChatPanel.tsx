@@ -1,4 +1,6 @@
 import { useState, useRef, useEffect, useCallback } from "react";
+import ReactMarkdown from "react-markdown";
+import remarkGfm from "remark-gfm";
 import { SessionBar } from "./SessionBar";
 import type { ChatMessage, WorkSession } from "@/types/work";
 
@@ -68,6 +70,17 @@ interface StreamStep {
   content: string;
 }
 
+function MarkdownContent({ content }: { content: string }) {
+  if (!content) return null;
+  return (
+    <div className="markdown-body">
+      <ReactMarkdown remarkPlugins={[remarkGfm]}>
+        {content}
+      </ReactMarkdown>
+    </div>
+  );
+}
+
 export function ChatPanel({
   sessionId, agents, sessions,
   onFirstMessage, onCreateSession, onSelectSession, onRenameSession, onDeleteSession,
@@ -84,7 +97,10 @@ export function ChatPanel({
   const [showMentions, setShowMentions] = useState(false);
   const [mentionFilter, setMentionFilter] = useState("");
   const [mentionIndex, setMentionIndex] = useState(0);
+  const [chatMode, setChatMode] = useState<string | null>(null); // null = Yumi, "AgentName" = agent mode
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  const messagesContainerRef = useRef<HTMLDivElement>(null);
+  const userScrolledUpRef = useRef(false);
   const inputRef = useRef<HTMLTextAreaElement>(null);
   const abortRef = useRef<AbortController | null>(null);
   const hasRichStepsRef = useRef(false);
@@ -99,20 +115,21 @@ export function ChatPanel({
       setMessages(msgs);
       if (restoreSteps) {
         try {
-          const key = `steps-${sessionId}`;
-          const saved = sessionStorage.getItem(key);
-          if (saved) {
-            const data = JSON.parse(saved);
-            if (data._v === 2 && data.rich && data.steps && data.steps.length > 0) {
-              setStreamSteps(data.steps);
-              streamStepsRef.current = data.steps;
-              setStreamText(data.text || "");
-              streamTextRef.current = data.text || "";
-              setStreamAgent(data.agent || null);
-              setHasRichSteps(true);
-              hasRichStepsRef.current = true;
-            } else {
-              sessionStorage.removeItem(key);
+          // 从服务器恢复 streaming state
+          const stateRes = await fetch(`/api/work/sessions/${sessionId}`);
+          if (stateRes.ok) {
+            const session = await stateRes.json();
+            if (session.stateJson) {
+              const data = JSON.parse(session.stateJson);
+              if (data._v === 2 && data.rich && data.steps && data.steps.length > 0) {
+                setStreamSteps(data.steps);
+                streamStepsRef.current = data.steps;
+                setStreamText(data.text || "");
+                streamTextRef.current = data.text || "";
+                setStreamAgent(data.agent || null);
+                setHasRichSteps(true);
+                hasRichStepsRef.current = true;
+              }
             }
           }
         } catch {}
@@ -131,15 +148,32 @@ export function ChatPanel({
     setHasRichSteps(false);
     hasRichStepsRef.current = false;
   }, [sessionId]);
-  useEffect(() => { messagesEndRef.current?.scrollIntoView({ behavior: "smooth" }); }, [messages, streamSteps]);
 
-  // Persist streaming steps to sessionStorage when stream completes
+  // R1: 滚动锁定 — 用户手动滚上去时不拉回底部
+  const scrollToBottom = (smooth = true) => {
+    userScrolledUpRef.current = false;
+    messagesEndRef.current?.scrollIntoView({ behavior: smooth ? "smooth" : "auto" });
+  };
+  useEffect(() => {
+    if (!userScrolledUpRef.current) {
+      messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
+    }
+  }, [messages, streamSteps]);
+  const handleScroll = (e: React.UIEvent<HTMLDivElement>) => {
+    const el = e.currentTarget;
+    const isNearBottom = el.scrollHeight - el.scrollTop - el.clientHeight < 100;
+    userScrolledUpRef.current = !isNearBottom;
+  };
+
+  // Persist streaming steps to server when stream completes
   useEffect(() => {
     if (!streamActive && hasRichSteps && streamSteps.length > 0) {
-      try {
-        const key = `steps-${sessionId}`;
-        sessionStorage.setItem(key, JSON.stringify({ _v: 2, steps: streamSteps, text: streamText, agent: streamAgent, rich: hasRichSteps }));
-      } catch {}
+      const data = JSON.stringify({ _v: 2, steps: streamSteps, text: streamText, agent: streamAgent, rich: hasRichSteps });
+      fetch(`/api/work/sessions/${sessionId}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ stateJson: data }),
+      }).catch(() => {});
     }
   }, [streamActive, hasRichSteps, streamSteps, streamText, streamAgent, sessionId]);
 
@@ -173,6 +207,10 @@ export function ChatPanel({
     setMessages((prev) => { preStreamMsgCountRef.current = prev.length + 1; return [...prev, optimisticMsg]; });
 
     const isDirectChat = !message.includes("@");
+    if (!isDirectChat) {
+      const atName = message.match(/@(\S+)/)?.[1] || null;
+      if (atName) setChatMode(atName);
+    }
     setStreamActive(true);
     setStreamSteps([]);
     streamStepsRef.current = [];
@@ -191,7 +229,6 @@ export function ChatPanel({
       setHasRichSteps(false);
       hasRichStepsRef.current = false;
     }
-    try { sessionStorage.removeItem(`steps-${sessionId}`); } catch {}
 
     const controller = new AbortController(); abortRef.current = controller;
     try {
@@ -283,7 +320,12 @@ export function ChatPanel({
     }
   };
 
-  const stopStreaming = () => { abortRef.current?.abort(); setStreamActive(false); };
+  const stopStreaming = () => {
+    abortRef.current?.abort();
+    setStreamActive(false);
+    // R2: 停止时触发保存
+    if (onStreamEnd) onStreamEnd();
+  };
 
   const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
     if (showMentions) {
@@ -294,7 +336,7 @@ export function ChatPanel({
       else if (e.key === "Escape") setShowMentions(false);
       return;
     }
-    if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); sendMessage(); }
+    if ((e.key === "Enter" && !e.shiftKey) || ((e.metaKey || e.ctrlKey) && e.key === "Enter")) { e.preventDefault(); sendMessage(); }
   };
 
   const filteredMentions = agents.filter((a) => a.toLowerCase().startsWith(mentionFilter.toLowerCase()));
@@ -304,7 +346,6 @@ export function ChatPanel({
   const visibleMessages = hasStreamContent
     ? messages.filter((m, i) => !(m.role === "assistant" && i >= preStreamMsgCountRef.current))
     : messages;
-
   return (
     <div className="flex flex-col h-full bg-[var(--app-bg)]">
       <SessionBar
@@ -313,8 +354,25 @@ export function ChatPanel({
         onRenameSession={onRenameSession} onDeleteSession={onDeleteSession}
       />
 
-      <div className="flex-1 overflow-auto px-4 py-3 space-y-3">
-        {/* Message bubbles (view-deduped: hide last assistant when steps are visible) */}
+      {/* 模式指示器 */}
+      <div className="px-3 pt-2 pb-0 flex items-center gap-2">
+        <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-[10px] font-bold uppercase tracking-wider"
+          style={{
+            background: chatMode ? "rgba(167,139,250,0.1)" : "var(--app-accent-bg)",
+            color: chatMode ? "#a78bfa" : "var(--app-accent)",
+          }}>
+          {chatMode ? `🤖 @${chatMode}` : "💬 Yumi"}
+        </div>
+        {chatMode && (
+          <button onClick={() => setChatMode(null)}
+            className="text-[10px] text-[var(--app-text-tertiary)] hover:text-[var(--app-text-secondary)] transition-colors"
+            title="切换回 Yumi 模式">
+            切换
+          </button>
+        )}
+      </div>
+
+      <div className="flex-1 overflow-auto px-4 py-3 space-y-3" ref={messagesContainerRef} onScroll={handleScroll}>
         {visibleMessages.map((msg) => (
           <div key={msg.id} className="animate-pageIn">
             <div className="flex items-center gap-2 mb-1">
@@ -331,7 +389,7 @@ export function ChatPanel({
             </div>
             <div className="text-sm leading-relaxed whitespace-pre-wrap rounded-xl px-4 py-3 text-[var(--app-text)]"
               style={{ background: msg.role === "user" ? "rgba(255,255,255,0.04)" : "transparent", border: msg.role === "user" ? "1px solid var(--app-border)" : "none" }}>
-              {msg.content}
+              <MarkdownContent content={msg.content} />
             </div>
           </div>
         ))}
@@ -346,7 +404,7 @@ export function ChatPanel({
               </span>
             </div>
             <div className="text-sm leading-relaxed whitespace-pre-wrap text-[var(--app-text)]">
-              {streamText || (streamActive ? "Thinking..." : "")}
+              {streamText ? <MarkdownContent content={streamText} /> : ""}
             </div>
           </div>
         )}
@@ -407,13 +465,23 @@ export function ChatPanel({
                 </div>
               )}
               <div className="text-sm leading-relaxed whitespace-pre-wrap text-[var(--app-text)]">
-                {step.content || (streamActive ? "Thinking..." : "")}
+                {step.content ? <MarkdownContent content={step.content} /> : (streamActive ? "Thinking..." : "")}
               </div>
             </div>
           );
         })}
 
         <div ref={messagesEndRef} />
+        {/* R1: 滚动到底部按钮 */}
+        {userScrolledUpRef.current && (
+          <div className="flex justify-center pb-2">
+            <button onClick={() => scrollToBottom(true)}
+              className="px-3 py-1.5 rounded-full text-[10px] font-bold shadow-lg transition-all hover:scale-105"
+              style={{ background: "var(--app-accent-bg)", color: "var(--app-accent)" }}>
+              ↓ 跳到底部
+            </button>
+          </div>
+        )}
       </div>
 
       <div className="border-t border-[var(--app-border)]">

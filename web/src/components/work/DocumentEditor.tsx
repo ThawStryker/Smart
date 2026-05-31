@@ -22,6 +22,7 @@ export function DocumentEditor({
   const sourceRef = useRef<HTMLTextAreaElement>(null);
   const [sourceView, setSourceView] = useState(false);
   const [ready, setReady] = useState(false);
+  const [lastSaved, setLastSaved] = useState<number>(Date.now());
 
   const onSaveRef = useRef(onSave); onSaveRef.current = onSave;
   const onContentChangeRef = useRef(onContentChange); onContentChangeRef.current = onContentChange;
@@ -39,7 +40,10 @@ export function DocumentEditor({
           isInternalChangeRef.current = true;
           onContentChangeRef.current(md);
           const fp = filePathRef.current;
-          if (fp) onSaveRef.current(fp, md);
+          if (fp) {
+            onSaveRef.current(fp, md);
+            setLastSaved(Date.now());
+          }
         });
       });
       setReady(true);
@@ -48,31 +52,29 @@ export function DocumentEditor({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // When switching files: save old, load new
+  // 文件切换时保存旧文件（新文件由 key 强制 remount 加载）
   useEffect(() => {
     const prev = prevPathRef.current;
     prevPathRef.current = filePath;
     if (!ready || !crepeRef.current) return;
-    // Save previous file before loading new one
     if (prev && prev !== filePath) {
       const md = crepeRef.current.editor.action(getMarkdown());
       if (md) onSaveRef.current(prev, md);
     }
-    // Load new file content or clear if closed
-    crepeRef.current.editor.action(replaceAll(filePath ? (content || "") : ""));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [filePath]);
 
   // Sync external content (streaming updates)
+  // 流式写入时：content 通过 appendContent 在前端异步叠加
+  // 此时不应 replaceAll（会覆盖用户正在编辑的内容）
+  // 非流式切换时：用 replaceAll 加载完整内容
   useEffect(() => {
     if (!ready || !crepeRef.current || !filePath) return;
     if (isInternalChangeRef.current) { isInternalChangeRef.current = false; return; }
+    if (isStreaming) return; // 流式写入不覆盖编辑器
     const currentMd = crepeRef.current.editor.action(getMarkdown());
     if (content !== currentMd) {
       crepeRef.current.editor.action(replaceAll(content));
-    }
-    if (isStreaming && content) {
-      onSave(filePath, content);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [content, isStreaming]);
@@ -101,6 +103,10 @@ export function DocumentEditor({
     if (filePath) onSave(filePath, md);
   };
 
+  // ── 空状态：无文件打开时显示引导 ──
+
+  const showEmptyState = !filePath;
+
   return (
     <div className="flex flex-col h-full bg-[var(--app-bg)]">
       {/* File header */}
@@ -109,11 +115,16 @@ export function DocumentEditor({
           <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" /><polyline points="14 2 14 8 20 8" />
         </svg>
         <span className="text-xs font-medium truncate text-[var(--app-text-secondary)]">{filePath}</span>
+        <div className="flex items-center gap-2 ml-auto">
         {isStreaming && (
           <span className="flex items-center gap-1 text-[10px] text-[var(--app-accent)] shrink-0">
             <span className="w-1 h-1 rounded-full bg-[var(--app-accent)] animate-pulse" /> writing
           </span>
         )}
+        {!isStreaming && filePath && Date.now() - lastSaved < 2000 && (
+          <span className="text-[10px] text-[var(--app-text-tertiary)] shrink-0">✓ 已保存</span>
+        )}
+        </div>
         <div className="flex-1" />
         <button onClick={toggleSource}
           className="w-6 h-6 rounded flex items-center justify-center hover:bg-[var(--app-accent-bg)] transition-colors shrink-0"
@@ -132,7 +143,7 @@ export function DocumentEditor({
       </div>)}
 
       {/* Source view */}
-      <div className="flex-1 overflow-auto" style={{ display: sourceView ? "block" : "none", background: "var(--app-bg)" }}>
+      <div className="flex-1 overflow-auto" style={{ display: sourceView && !showEmptyState ? "block" : "none", background: "var(--app-bg)" }}>
         <div className="max-w-3xl mx-auto my-6 rounded-xl shadow-2xl overflow-hidden" style={{ height: "calc(100% - 3rem)", background: "var(--app-surface)" }}>
           <textarea ref={sourceRef} defaultValue={content}
             onChange={handleSourceEdit}
@@ -143,10 +154,30 @@ export function DocumentEditor({
       </div>
 
       {/* Preview view */}
-      <div className="flex-1 overflow-auto" style={{ display: sourceView ? "none" : "block" }}>
-        <div className="max-w-3xl mx-auto my-6 rounded-xl shadow-2xl overflow-hidden flex flex-col" style={{ minHeight: "calc(100% - 3rem)", width: "100%", background: "var(--app-surface)", color: "var(--app-text)" }}>
-          <div ref={containerRef} className="milkdown px-0 py-0 flex-1" style={{ display: filePath ? "block" : "none" }} />
-        </div>
+      <div className="flex-1 overflow-auto" style={{ display: sourceView && !showEmptyState ? "none" : "block" }}>
+        {showEmptyState ? (
+          <div className="flex items-center justify-center h-full">
+            <div className="text-center space-y-4 max-w-sm px-8">
+              <div className="text-4xl">📄</div>
+              <p className="text-sm text-[var(--app-text-tertiary)] leading-relaxed">
+                选择一个文件开始编辑，<br />
+                或在聊天框输入 <code className="px-1 py-0.5 rounded bg-[var(--app-surface)] text-[var(--app-text-secondary)] text-xs">@Agent名 帮我写一份文档</code>
+              </p>
+              <div className="flex justify-center gap-4 text-xs text-[var(--app-text-tertiary)]">
+                <span className="flex items-center gap-1">
+                  <span className="w-1.5 h-1.5 rounded-full bg-[var(--app-accent)]" /> 左侧点文件打开
+                </span>
+                <span className="flex items-center gap-1">
+                  <span className="w-1.5 h-1.5 rounded-full bg-[var(--app-accent)]" /> Agent 自动生成
+                </span>
+              </div>
+            </div>
+          </div>
+        ) : (
+          <div className="max-w-3xl mx-auto my-6 rounded-xl shadow-2xl overflow-hidden flex flex-col" style={{ minHeight: "calc(100% - 3rem)", width: "100%", background: "var(--app-surface)", color: "var(--app-text)" }}>
+            <div ref={containerRef} className="milkdown px-0 py-0 flex-1" />
+          </div>
+        )}
       </div>
     </div>
   );

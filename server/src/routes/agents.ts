@@ -1,10 +1,27 @@
 import { Hono } from "hono";
 import { db } from "edgespark";
 import { auth } from "edgespark/http";
-import { eq, and, like, asc } from "drizzle-orm";
+import { eq, and, like, asc, sql } from "drizzle-orm";
 import { userAgents, agentFiles } from "@defs";
 
 export const userAgentRoutes = new Hono();
+
+// 批量获取多个 agent 的文件（解决 N+1 问题）
+userAgentRoutes.get("/files/batch", async (c) => {
+  const userId = auth.user!.id;
+  const namesParam = c.req.query("names") || "";
+  const names = namesParam.split(",").filter(Boolean);
+  if (names.length === 0) return c.json([]);
+
+  const results: Array<{ agentName: string; files: Array<Record<string, unknown>> }> = [];
+  for (const name of names) {
+    const files = await db.select().from(agentFiles)
+      .where(and(eq(agentFiles.userId, userId), eq(agentFiles.agentName, name)))
+      .orderBy(asc(agentFiles.createdAt));
+    results.push({ agentName: name, files });
+  }
+  return c.json(results);
+});
 
 // List all agents for current user
 userAgentRoutes.get("/", async (c) => {
@@ -86,6 +103,28 @@ userAgentRoutes.delete("/:name", async (c) => {
   const name = c.req.param("name");
   await db.delete(userAgents).where(and(eq(userAgents.userId, userId), eq(userAgents.name, name)));
   await db.delete(agentFiles).where(and(eq(agentFiles.userId, userId), eq(agentFiles.agentName, name)));
+  return c.json({ ok: true });
+});
+
+// 原子化重命名 agent 文件
+userAgentRoutes.post("/:name/files/rename", async (c) => {
+  const userId = auth.user!.id;
+  const name = c.req.param("name");
+  const { oldPath, newPath } = await c.req.json<{ oldPath: string; newPath: string }>();
+  if (!oldPath || !newPath) return c.json({ error: "oldPath and newPath required" }, 400);
+  if (oldPath === newPath) return c.json({ ok: true });
+
+  const existing = await db.select({ id: agentFiles.id }).from(agentFiles)
+    .where(and(eq(agentFiles.userId, userId), eq(agentFiles.agentName, name), eq(agentFiles.path, newPath))).limit(1);
+  if (existing[0]) return c.json({ error: "Target path already exists" }, 409);
+
+  await db.update(agentFiles).set({ path: newPath, updatedAt: new Date().toISOString() })
+    .where(and(eq(agentFiles.userId, userId), eq(agentFiles.agentName, name), eq(agentFiles.path, oldPath)));
+  await db.update(agentFiles).set({
+    path: sql`REPLACE(${agentFiles.path}, ${oldPath + "/"}, ${newPath + "/"})`,
+    updatedAt: new Date().toISOString(),
+  }).where(and(eq(agentFiles.userId, userId), eq(agentFiles.agentName, name), like(agentFiles.path, `${oldPath}/%`)));
+
   return c.json({ ok: true });
 });
 

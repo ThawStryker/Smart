@@ -45,6 +45,7 @@ Generate the complete document following the selected format EXACTLY:
 ### Step 5: SUMMARIZE IN CONVERSATION
 - In conversation, output only a brief completion summary
 - Include: what was created, document structure, key decisions
+- Use single line breaks between paragraphs — do NOT insert multiple consecutive blank lines
 - Do NOT repeat the document content in conversation`;
 
 // ── Guidance constants ──

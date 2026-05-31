@@ -540,3 +540,134 @@ body {
 [data-theme="dark"] textarea {
   caret-color: #e8e4dd !important;
 }
+
+/* === Markdown Body (ChatPanel ReactMarkdown) === */
+.markdown-body {
+  font-size: 14px;
+  line-height: 1.7;
+  color: var(--app-text);
+}
+
+.markdown-body h1,
+.markdown-body h2,
+.markdown-body h3,
+.markdown-body h4,
+.markdown-body h5,
+.markdown-body h6 {
+  font-weight: 600;
+  margin-top: 1.2em;
+  margin-bottom: 0.5em;
+  line-height: 1.35;
+}
+.markdown-body h1 { font-size: 1.5em; }
+.markdown-body h2 { font-size: 1.3em; }
+.markdown-body h3 { font-size: 1.15em; }
+.markdown-body h4 { font-size: 1em; }
+.markdown-body h5 { font-size: 0.9em; }
+.markdown-body h6 { font-size: 0.85em; color: var(--app-text-secondary); }
+
+.markdown-body p {
+  margin: 0.5em 0;
+}
+.markdown-body p:first-child { margin-top: 0; }
+.markdown-body p:last-child { margin-bottom: 0; }
+
+.markdown-body code {
+  font-family: 'Fira Code', 'JetBrains Mono', Menlo, monospace;
+  font-size: 87.5%;
+  padding: 0.15em 0.4em;
+  border-radius: 4px;
+  background: rgba(0,0,0,0.06);
+}
+[data-theme="dark"] .markdown-body code {
+  background: rgba(255,255,255,0.08);
+  color: #f87171;
+}
+
+.markdown-body pre {
+  margin: 0.6em 0;
+  padding: 12px 16px;
+  border-radius: 8px;
+  background: rgba(0,0,0,0.04);
+  overflow-x: auto;
+}
+.markdown-body pre code {
+  padding: 0;
+  background: transparent;
+  color: inherit;
+  font-size: 85%;
+}
+[data-theme="dark"] .markdown-body pre {
+  background: #1e1e1e;
+}
+[data-theme="dark"] .markdown-body pre code {
+  color: #d4d4d4;
+}
+
+.markdown-body blockquote {
+  margin: 0.6em 0;
+  padding: 4px 0 4px 16px;
+  border-left: 3px solid #d4d4d4;
+  color: var(--app-text-secondary);
+}
+[data-theme="dark"] .markdown-body blockquote {
+  border-left-color: var(--app-border);
+}
+
+.markdown-body a {
+  color: var(--app-accent);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+.markdown-body a:hover {
+  color: var(--app-accent-deep);
+}
+
+.markdown-body ul,
+.markdown-body ol {
+  padding-left: 1.5em;
+  margin: 0.4em 0;
+}
+.markdown-body li {
+  margin: 0.15em 0;
+}
+
+.markdown-body table {
+  border-collapse: collapse;
+  width: 100%;
+  margin: 0.6em 0;
+}
+.markdown-body th,
+.markdown-body td {
+  border: 1px solid rgba(0,0,0,0.1);
+  padding: 6px 12px;
+  text-align: left;
+}
+.markdown-body th {
+  background: rgba(0,0,0,0.03);
+  font-weight: 600;
+}
+[data-theme="dark"] .markdown-body th,
+[data-theme="dark"] .markdown-body td {
+  border-color: var(--app-border);
+}
+[data-theme="dark"] .markdown-body th {
+  background: rgba(255,255,255,0.04);
+}
+
+.markdown-body hr {
+  border: none;
+  height: 1px;
+  background: var(--app-border);
+  margin: 1em 0;
+}
+
+.markdown-body img {
+  max-width: 100%;
+  border-radius: 8px;
+}
+
+.markdown-body strong {
+  font-weight: 600;
+  color: var(--app-text);
+}

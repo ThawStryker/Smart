@@ -44,9 +44,25 @@ export function useActiveFile() {
   }, [activeFile]);
 
   const updateContent = useCallback((content: string) => {
-    setActiveFile((prev) => prev ? { ...prev, content } : null);
-    if (activeFile) savedContent.current[activeFile.path] = content;
-  }, [activeFile]);
+    setActiveFile((prev) => {
+      if (!prev) return null;
+      savedContent.current[prev.path] = content;
+      return { ...prev, content };
+    });
+  }, []);
+
+  /**
+   * 在活跃文件末尾追加内容（用于 SSE doc 事件流式写入）
+   * 使用函数式 setState，不依赖闭包中的 activeFile，避免竞争条件
+   */
+  const appendContent = useCallback((delta: string) => {
+    setActiveFile((prev) => {
+      if (!prev) return null;
+      const newContent = (prev.content || "") + delta;
+      savedContent.current[prev.path] = newContent;
+      return { ...prev, content: newContent };
+    });
+  }, []);
 
   const rename = useCallback((oldPath: string, newPath: string) => {
     const content = savedContent.current[oldPath] || activeFile?.content || "";
@@ -69,5 +85,5 @@ export function useActiveFile() {
     await fetch(url, { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ content }) });
   }, []);
 
-  return { activeFile, isStreaming, setIsStreaming, open, openExisting, close, updateContent, rename, save };
+  return { activeFile, isStreaming, setIsStreaming, open, openExisting, close, updateContent, appendContent, rename, save };
 }

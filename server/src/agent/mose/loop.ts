@@ -14,6 +14,11 @@ export async function moseLoop(params: MoseLoopParams): Promise<string> {
   const { sessionId, userId, userMessage, targetAgent, modelConfig, eventQueue } = params;
   let fullResponse = "";
 
+  // 去掉文本中多余的空行（3个以上连续\n压缩为2个）
+  function normalizeNewlines(t: string): string {
+    return t.replace(/\n{3,}/g, "\n\n");
+  }
+
   if (targetAgent) {
     // ── Sub-agent mode ──
     if (!params.suppressAgentCard) {
@@ -170,7 +175,7 @@ export async function moseLoop(params: MoseLoopParams): Promise<string> {
       sessionId,
       agentName: targetAgent,
       role: "assistant",
-      content: fullResponse,
+      content: normalizeNewlines(fullResponse),
     });
 
     if (!params.suppressAgentCard) {
@@ -229,10 +234,16 @@ export async function moseLoop(params: MoseLoopParams): Promise<string> {
         const data = line.slice(6).trim();
         if (!data || data === "[DONE]") continue;
         try {
-          const content = JSON.parse(data).choices?.[0]?.delta?.content;
-          if (content) {
-            fullResponse += content;
-            emit(eventQueue, { type: "text", delta: content });
+          const json = JSON.parse(data);
+          const delta = json.choices?.[0]?.delta;
+
+          if (delta?.reasoning_content) {
+            emit(eventQueue, { type: "thinking", delta: delta.reasoning_content });
+          }
+
+          if (delta?.content) {
+            fullResponse += delta.content;
+            emit(eventQueue, { type: "text", delta: delta.content });
           }
         } catch { /* skip malformed JSON lines */ }
       }
@@ -242,7 +253,7 @@ export async function moseLoop(params: MoseLoopParams): Promise<string> {
       sessionId,
       agentName: null,
       role: "assistant",
-      content: fullResponse,
+      content: normalizeNewlines(fullResponse),
     });
   }
 

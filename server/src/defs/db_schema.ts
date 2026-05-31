@@ -202,6 +202,8 @@ export const workSessions = sqliteTable("work_sessions", {
   userId: text("user_id").notNull(),
   title: text("title").notNull().default("New Work"),
   summary: text("summary").default(""),
+  stateJson: text("state_json"), // JSON: streaming step 缓存
+  deletedAt: text("deleted_at"), // 软删除标记
   createdAt: text("created_at").default(sql`(datetime('now'))`),
   updatedAt: text("updated_at").default(sql`(datetime('now'))`),
 });

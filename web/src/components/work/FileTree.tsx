@@ -74,9 +74,11 @@ export function renderFileChildren(
   }
   if (!node.__kids) return [];
   const entries = Object.entries(node.__kids) as Array<[string, any]>;
-  // Fixed folder order: context → memory → skills → heartbeat, then other folders, then files
-  const folderOrder = ["context", "memory", "skills", "heartbeat"];
-  entries.sort(([aName, a], [bName, b]) => {
+  // 过滤：隐藏 heartbeat 文件夹（对普通用户无意义）
+  const filtered = entries.filter(([name]) => name !== "heartbeat");
+  // Fixed folder order: context → memory → skills, then other folders, then files
+  const folderOrder = ["context", "memory", "skills"];
+  filtered.sort(([aName, a], [bName, b]) => {
     const aIsFolder = a && typeof a === "object" && a.__kids !== undefined;
     const bIsFolder = b && typeof b === "object" && b.__kids !== undefined;
     if (aIsFolder && !bIsFolder) return -1;
@@ -90,7 +92,7 @@ export function renderFileChildren(
     }
     return aName.localeCompare(bName, undefined, { numeric: true });
   });
-  return entries.map(([name, child]) => {
+  return filtered.map(([name, child]) => {
     const cp = `${prefix}/${name}`;
     const isFolder = child && typeof child === "object" && child.__kids !== undefined;
     const isOpen = expanded.has(cp);
@@ -136,6 +138,7 @@ export function renderFileChildren(
 
     const file = child as FileEntry;
     const isActive = selectedFile === cp;
+    const isSystemFile = name === "AGENTS.md" || name === "USER.md" || name === "MEMORY.md";
     const FileIcon = getFileIcon(name);
     return (
       <div key={cp}
@@ -159,7 +162,14 @@ export function renderFileChildren(
             onClick={(e) => e.stopPropagation()}
           />
         ) : (
-          <span className="text-xs truncate ml-1.5 flex-1" style={{ color: isActive ? "var(--app-accent)" : "var(--app-text-secondary)" }}>{name}</span>
+          <span className="text-xs truncate ml-1.5 flex-1"
+            style={{
+              color: isActive ? "var(--app-accent)" : isSystemFile ? "var(--app-text-tertiary)" : "var(--app-text-secondary)",
+              fontStyle: isSystemFile ? "italic" : "normal",
+              fontSize: isSystemFile ? "11px" : "12px",
+            }}>
+            {isSystemFile ? `⚙ ${name}` : name}
+          </span>
         )}
         <span className="opacity-0 group-hover:opacity-100 transition-opacity ml-1">
           <FileMenu

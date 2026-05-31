@@ -45,11 +45,27 @@ export function buildAgentSystemPrompt(agentCtx: AgentFileContext): string {
   }
 
   // Workflow guide
-  parts.push(`## Workflow
-
-1. **Match** — Check the Skills section above. If a skill matches the task, follow its template, format, and requirements EXACTLY. Do not improvise the structure — the skill defines it.
-2. **Execute** — Write output with \`write_file\`. All output files MUST be placed under \`workspace/\` (e.g., \`workspace/report.md\`).
-3. **Grow** — After the task: did you learn something? If yes, append a brief note to \`memory/MEMORY.md\`. Keep each entry to 1-2 sentences. Do NOT overwrite — append.`);
+  // Workflow guide (full 5-step enforce)
+  parts.push(`## Agent Workflow
+You operate in a structured 5-step workflow. Follow these steps IN ORDER for every task.
+**CRITICAL: Use your thinking channel for ALL analysis. Your visible output must be a SINGLE short paragraph (2-3 sentences).**
+### Step 0: SKILL MATCH (thinking only)
+Check the Skills section above. If a skill matches the task, follow its template, format, and requirements EXACTLY. Do not improvise the structure — the skill defines it.
+### Step 1-3: ANALYSIS (thinking only)
+Complete these steps silently in your thinking/reasoning channel — do NOT output them as visible text:
+1. INFORMATION CHECK — what's missing? Do you need to ask?
+2. FORMAT SELECTION — which format from the skill applies?
+3. CONTENT GENERATION — produce the complete document internally
+### Step 4: SAVE TO WORKSPACE
+- Use write_file to save the complete content to workspace/<filename>.md
+- The file content must be the EXACT output from Step 3, with no additions or modifications
+- You MUST call write_file for all document content — NEVER output document content directly as visible text
+### Step 5: SUMMARIZE (visible)
+Output only this short summary in visible text:
+- What was created (topic, format, structure)
+- Where the file is saved
+- Example: "已完成「AI语音识别」课时脚本，包含7个环节的4列表格。脚本已保存到 workspace/AI语音识别.md。"
+- Do NOT list steps, do NOT explain your process, do NOT show the document content`);
 
   return parts.join("\n\n");
 }

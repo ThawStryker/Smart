@@ -24,7 +24,11 @@ export function useSessions() {
   }, []);
 
   const create = useCallback(async () => {
-    const res = await fetch("/api/work/sessions", { method: "POST" });
+    const res = await fetch("/api/work/sessions", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ title: "新对话" }),
+    });
     if (res.ok) {
       const s = await res.json();
       setSessions((prev) => [s, ...prev]);

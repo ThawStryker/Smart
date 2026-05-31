@@ -1,4 +1,8 @@
 {
   "name": "smart-temp",
-  "private": true
+  "private": true,
+  "dependencies": {
+    "react-markdown": "^10.1.0",
+    "remark-gfm": "^4.0.1"
+  }
 }

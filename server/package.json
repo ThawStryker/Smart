@@ -4,7 +4,9 @@
   "description": "EdgeSpark user code template for AI coding agents",
   "type": "module",
   "scripts": {
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "test:watch": "vitest"
   },
   "dependencies": {
     "@zip.js/zip.js": "^2.8.26",
@@ -16,6 +18,7 @@
     "@edgespark/devkit": ">=0.0.1 <1.0.0",
     "@types/node": "^22.0.0",
     "drizzle-kit": "^0.30.6",
-    "typescript": "^5.9.3"
+    "typescript": "^5.9.3",
+    "vitest": "^3.1.3"
   }
 }

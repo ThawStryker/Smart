@@ -1,6 +1,6 @@
 import { Hono } from "hono";
 import { db } from "edgespark";
-import { eq, and, like, asc } from "drizzle-orm";
+import { eq, and, like, asc, sql } from "drizzle-orm";
 import { workFiles } from "@defs";
 
 export const filesRoutes = new Hono();
@@ -57,6 +57,31 @@ filesRoutes.post("/batch", async (c) => {
   });
 
   if (ops.length > 0) for (const op of ops) await op;
+  return c.json({ ok: true });
+});
+
+// 原子化重命名（单次操作，避免 PUT+DELETE 两步的不一致性）
+filesRoutes.post("/rename", async (c) => {
+  const sessionId = parseInt(c.req.param("id") || "0");
+  const { oldPath, newPath } = await c.req.json<{ oldPath: string; newPath: string }>();
+  if (!oldPath || !newPath) return c.json({ error: "oldPath and newPath required" }, 400);
+  if (oldPath === newPath) return c.json({ ok: true });
+
+  // 检查新路径是否已存在
+  const existing = await db.select({ id: workFiles.id }).from(workFiles)
+    .where(and(eq(workFiles.sessionId, sessionId), eq(workFiles.path, newPath))).limit(1);
+  if (existing[0]) return c.json({ error: "Target path already exists" }, 409);
+
+  // 更新文件本身
+  await db.update(workFiles).set({ path: newPath, updatedAt: new Date().toISOString() })
+    .where(and(eq(workFiles.sessionId, sessionId), eq(workFiles.path, oldPath)));
+
+  // 更新子文件（文件夹重命名时）
+  await db.update(workFiles).set({
+    path: sql`REPLACE(${workFiles.path}, ${oldPath + "/"}, ${newPath + "/"})`,
+    updatedAt: new Date().toISOString(),
+  }).where(and(eq(workFiles.sessionId, sessionId), like(workFiles.path, `${oldPath}/%`)));
+
   return c.json({ ok: true });
 });
 

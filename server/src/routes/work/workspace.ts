@@ -1,10 +1,31 @@
 import { Hono } from "hono";
 import { db } from "edgespark";
 import { auth } from "edgespark/http";
-import { eq, and, like, asc } from "drizzle-orm";
+import { eq, and, like, asc, sql } from "drizzle-orm";
 import { workspaceFiles } from "@defs";
 
 export const workspaceRoutes = new Hono();
+
+// 原子化重命名
+workspaceRoutes.post("/rename", async (c) => {
+  const userId = auth.user!.id;
+  const { oldPath, newPath } = await c.req.json<{ oldPath: string; newPath: string }>();
+  if (!oldPath || !newPath) return c.json({ error: "oldPath and newPath required" }, 400);
+  if (oldPath === newPath) return c.json({ ok: true });
+
+  const existing = await db.select({ id: workspaceFiles.id }).from(workspaceFiles)
+    .where(and(eq(workspaceFiles.userId, userId), eq(workspaceFiles.path, newPath))).limit(1);
+  if (existing[0]) return c.json({ error: "Target path already exists" }, 409);
+
+  await db.update(workspaceFiles).set({ path: newPath, updatedAt: new Date().toISOString() })
+    .where(and(eq(workspaceFiles.userId, userId), eq(workspaceFiles.path, oldPath)));
+  await db.update(workspaceFiles).set({
+    path: sql`REPLACE(${workspaceFiles.path}, ${oldPath + "/"}, ${newPath + "/"})`,
+    updatedAt: new Date().toISOString(),
+  }).where(and(eq(workspaceFiles.userId, userId), like(workspaceFiles.path, `${oldPath}/%`)));
+
+  return c.json({ ok: true });
+});
 
 // List workspace files
 workspaceRoutes.get("/", async (c) => {
