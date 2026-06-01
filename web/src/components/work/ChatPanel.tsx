@@ -103,6 +103,9 @@ export function ChatPanel({
   const userScrolledUpRef = useRef(false);
   const inputRef = useRef<HTMLTextAreaElement>(null);
   const abortRef = useRef<AbortController | null>(null);
+  const onStreamEndRef = useRef(onStreamEnd);
+  onStreamEndRef.current = onStreamEnd;
+  const mountedRef = useRef(false);
   const hasRichStepsRef = useRef(false);
   const streamTextRef = useRef("");
   const streamStepsRef = useRef<StreamStep[]>([]);
@@ -138,6 +141,14 @@ export function ChatPanel({
   }, [sessionId]);
 
   useEffect(() => { if (sessionId) loadMessages(true); }, [sessionId, loadMessages]);
+
+  // 兜底：streamActive 从 true 变 false 时确保 onStreamEnd 触发
+  // 处理 SSE 异常断开等 try-catch 未覆盖的路径
+  useEffect(() => {
+    if (!mountedRef.current) { mountedRef.current = true; return; }
+    if (!streamActive) onStreamEndRef.current?.();
+  }, [streamActive]);
+
   // Reset session-scoped state when switching sessions
   useEffect(() => {
     setMessages([]);
