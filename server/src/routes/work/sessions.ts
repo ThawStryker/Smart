@@ -2,7 +2,7 @@ import { Hono } from "hono";
 import { db } from "edgespark";
 import { auth } from "edgespark/http";
 import { eq, desc } from "drizzle-orm";
-import { workSessions, workFiles, workMessages } from "@defs";
+import { workSessions, workMessages } from "@defs";
 
 export const sessionsRoutes = new Hono();
 

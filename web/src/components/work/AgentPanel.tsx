@@ -48,16 +48,10 @@ export function AgentPanel({ sessionId, onFileSelect, selectedFile, onAgentListC
 
   const loadFiles = useCallback(async () => {
     try {
-      const [sessionRes, workspaceRes] = await Promise.all([
-        fetch(`/api/work/sessions/${sessionId}/files`).catch(() => ({ ok: false } as Response)),
+      const [workspaceRes] = await Promise.all([
         fetch("/api/work/workspace").catch(() => ({ ok: false } as Response)),
       ]);
       let allFiles: FileEntry[] = [];
-      // Session files — exclude workspace/ and agents/ (now in their own tables)
-      if (sessionRes.ok) {
-        const sf = await sessionRes.json();
-        allFiles = sf.filter((f: FileEntry) => !f.path.startsWith("workspace/") && !f.path.startsWith("agents/"));
-      }
       // Workspace files — prefix with "workspace/" for tree display
       if (workspaceRes.ok) {
         const wsFiles = await workspaceRes.json();

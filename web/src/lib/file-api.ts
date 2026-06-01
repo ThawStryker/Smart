@@ -2,8 +2,7 @@
  * file-api.ts — 文件路径解析工具
  *
  * AgentPanel.tsx 和 useFiles.ts 共享的路径解析逻辑。
- * 三套文件系统 REST API 路由：
- *   - session files:   /api/work/sessions/:id/files/:path
+ * 两套文件系统 REST API 路由：
  *   - workspace files: /api/work/workspace/:path
  *   - agent files:     /api/agents/:name/files/:path
  */
@@ -25,9 +24,8 @@ export function encodeFilePath(p: string): string {
  * 树路径格式:
  *   "agents/小明/AGENTS.md" → PUT /api/agents/小明/files/AGENTS.md
  *   "workspace/doc.md"     → PUT /api/work/workspace/doc.md
- *   "notes/todo.md"        → PUT /api/work/sessions/:sessionId/files/notes/todo.md
  */
-export function resolveApiUrl(treePath: string, sessionId: number): { url: string; method: string } | null {
+export function resolveApiUrl(treePath: string, _sessionId: number): { url: string; method: string } | null {
   const agentMatch = treePath.match(/^agents\/([^/]+)\/(.+)$/);
   if (agentMatch) {
     return {
@@ -41,20 +39,21 @@ export function resolveApiUrl(treePath: string, sessionId: number): { url: strin
       method: "PUT",
     };
   }
+  // Default to workspace
   return {
-    url: `/api/work/sessions/${sessionId}/files/${encodeFilePath(treePath)}`,
+    url: `/api/work/workspace/${encodeFilePath(treePath)}`,
     method: "PUT",
   };
 }
 
 /** 解析 DELETE URL */
-export function resolveDeleteUrl(treePath: string, sessionId: number): string {
+export function resolveDeleteUrl(treePath: string, _sessionId: number): string {
   const m = treePath.match(/^agents\/([^/]+)\/(.+)$/);
   if (m) return `/api/agents/${encodeURIComponent(m[1])}/files/${encodeFilePath(m[2])}`;
   if (treePath.startsWith("workspace/")) {
     return `/api/work/workspace/${encodeFilePath(treePath.slice("workspace/".length))}`;
   }
-  return `/api/work/sessions/${sessionId}/files/${encodeFilePath(treePath)}`;
+  return `/api/work/workspace/${encodeFilePath(treePath)}`;
 }
 
 /**
@@ -87,9 +86,9 @@ export async function loadAllAgentFiles(): Promise<Map<string, FileEntry[]>> {
 }
 
 /** 解析原子化重命名 POST URL */
-export function resolveRenameUrl(treePath: string, sessionId: number): string | null {
+export function resolveRenameUrl(treePath: string, _sessionId: number): string | null {
   const m = treePath.match(/^agents\/([^/]+)\/(.+)$/);
   if (m) return `/api/agents/${encodeURIComponent(m[1])}/files/rename`;
   if (treePath.startsWith("workspace/")) return "/api/work/workspace/rename";
-  return `/api/work/sessions/${sessionId}/files/rename`;
+  return "/api/work/workspace/rename";
 }

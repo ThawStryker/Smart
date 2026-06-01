@@ -162,6 +162,13 @@
       "when": 1780223526422,
       "tag": "0021_steep_annihilus",
       "breakpoints": true
+    },
+    {
+      "idx": 22,
+      "version": "6",
+      "when": 1780327640128,
+      "tag": "0022_chemical_chimera",
+      "breakpoints": true
     }
   ]
 }

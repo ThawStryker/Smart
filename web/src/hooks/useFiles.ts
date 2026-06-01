@@ -23,15 +23,10 @@ export function useFiles(sessionId: number) {
 
   const load = useCallback(async () => {
     try {
-      const [sessionRes, workspaceRes] = await Promise.all([
-        fetch(`/api/work/sessions/${sessionId}/files`).catch(() => ({ ok: false } as Response)),
+      const [workspaceRes] = await Promise.all([
         fetch("/api/work/workspace").catch(() => ({ ok: false } as Response)),
       ]);
       const all: FileEntry[] = [];
-      if (sessionRes.ok) {
-        const sf = await sessionRes.json();
-        all.push(...sf.filter((f: FileEntry) => !f.path.startsWith("workspace/") && !f.path.startsWith("agents/")));
-      }
       if (workspaceRes.ok) {
         const ws = await workspaceRes.json();
         for (const f of ws) all.push({ ...f, path: `workspace/${f.path}` });

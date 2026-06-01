@@ -209,17 +209,7 @@ export const workSessions = sqliteTable("work_sessions", {
 });
 
 // 工作文件树（代理配置 + 工作区文档）
-export const workFiles = sqliteTable("work_files", {
-  id: integer("id").primaryKey({ autoIncrement: true }),
-  sessionId: integer("session_id").notNull(),
-  path: text("path").notNull(),
-  content: text("content").default(""),
-  isFolder: integer("is_folder").default(0),
-  createdAt: text("created_at").default(sql`(datetime('now'))`),
-  updatedAt: text("updated_at").default(sql`(datetime('now'))`),
-}, (table) => ({
-  sessionPathUnique: uniqueIndex("work_files_session_path_unique").on(table.sessionId, table.path),
-}));
+// work_files 表已废弃删除（P1-1），使用 workspace_files 替代
 
 // Agent 文件（独立于会话）
 export const agentFiles = sqliteTable("agent_files", {

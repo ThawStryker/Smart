@@ -18,11 +18,11 @@ export function useActiveFile() {
     setIsStreaming(false);
   }, []);
 
-  const openExisting = useCallback(async (path: string, sessionId: number) => {
+  const openExisting = useCallback(async (path: string, _sessionId: number) => {
     const apiPath = path.startsWith("workspace/") ? path.slice("workspace/".length) : path;
     const url = path.startsWith("workspace/")
       ? `/api/work/workspace/${apiPath.split("/").map(encodeURIComponent).join("/")}`
-      : `/api/work/sessions/${sessionId}/files/${apiPath.split("/").map(encodeURIComponent).join("/")}`;
+      : `/api/agents/${path.split("/").slice(1, 2).map(encodeURIComponent).join("/")}/files/${path.split("/").slice(2).join("/")}`;
     try {
       const r = await fetch(url);
       if (r.ok) {
@@ -71,7 +71,7 @@ export function useActiveFile() {
     setActiveFile((prev) => prev && prev.path === oldPath ? { path: newPath, content } : prev);
   }, [activeFile]);
 
-  const save = useCallback(async (path: string, content: string, sessionId: number) => {
+  const save = useCallback(async (path: string, content: string, _sessionId: number) => {
     let url: string;
     const m = path.match(/^agents\/([^/]+)\/(.+)$/);
     if (m) {
@@ -79,7 +79,8 @@ export function useActiveFile() {
     } else if (path.startsWith("workspace/")) {
       url = `/api/work/workspace/${path.slice("workspace/".length).split("/").map(encodeURIComponent).join("/")}`;
     } else {
-      url = `/api/work/sessions/${sessionId}/files/${path.split("/").map(encodeURIComponent).join("/")}`;
+      // files without prefix go to workspace
+      url = `/api/work/workspace/${path.split("/").map(encodeURIComponent).join("/")}`;
     }
     savedContent.current[path] = content;
     await fetch(url, { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ content }) });
