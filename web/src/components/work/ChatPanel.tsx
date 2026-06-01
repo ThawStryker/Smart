@@ -18,7 +18,7 @@ interface ChatPanelProps {
   onStreamEnd?: () => void;
 }
 
-// ── Agent avatar (same hash as AgentPanel) ──
+// ── Agent avatar ──
 
 const agentAvatars = ["🐱","🐶","🦊","🐼","🐨","🐯","🦁","🐸","🐵","🐰","🐻","🦄","🐙","🦋","🐞","🐣","🦉","🐳","🦀","🐲"];
 function getAvatar(name: string): string {
@@ -27,48 +27,48 @@ function getAvatar(name: string): string {
   return agentAvatars[Math.abs(hash) % agentAvatars.length];
 }
 
-// ── Tool icon + label mapping ──
+// ── Phase display mapping ──
 
-const toolMeta: Record<string, { icon: string; label: string }> = {
-  read_file: { icon: "📖", label: "Read" },
-  write_file: { icon: "✍️", label: "Writing" },
-  edit_file: { icon: "✏️", label: "Edit" },
-  web_search: { icon: "🔍", label: "Search" },
-  list_files: { icon: "📂", label: "List" },
-  call_agent: { icon: "🤖", label: "Agent" },
-  use_skill: { icon: "🎯", label: "Skill" },
-};
+type PhaseName = "thinking" | "agent_start" | "agent_done" | "read" | "memory" | "skill" | "search" | "write" | "text";
 
-function getToolLabel(name: string, args?: Record<string, unknown>): string {
-  const meta = toolMeta[name];
-  if (!meta) return name;
-  if (name === "read_file" || name === "write_file" || name === "edit_file") {
-    const path = (args?.path as string) || "";
-    const file = path.split("/").pop() || path;
-    return `${meta.label} ${file}`;
-  }
-  if (name === "use_skill") {
-    return `${meta.label} ${(args?.name as string) || ""}`;
-  }
-  if (name === "web_search") {
-    return `${meta.label} ${(args?.query as string) || ""}`;
-  }
-  if (name === "list_files") {
-    return `${meta.label} ${(args?.prefix as string) || "/"}`;
-  }
-  return meta.label;
-}
-
-// ── Streaming step type ──
-
-interface StreamStep {
+interface PhaseCard {
   key: string;
-  type: "thinking" | "agent_card" | "tool" | "text";
-  agentName?: string;
-  toolName?: string;
-  args?: Record<string, unknown>;
+  phase: PhaseName;
+  meta?: Record<string, unknown>;
   content: string;
 }
+
+const phaseDisplay: Record<string, { icon: string; label: string }> = {
+  thinking: { icon: "💭", label: "Thinking" },
+  agent_start: { icon: "🤖", label: "" },
+  read: { icon: "📖", label: "Read" },
+  memory: { icon: "🧠", label: "Memory" },
+  skill: { icon: "🎯", label: "Skill" },
+  search: { icon: "🔍", label: "Search" },
+  write: { icon: "✍️", label: "Writing" },
+};
+
+function getPhaseLabel(phase: PhaseName, meta?: Record<string, unknown>): string {
+  const display = phaseDisplay[phase];
+  if (!display) return phase;
+
+  if (phase === "agent_start" && meta?.agentName) return `🤖 ${meta.agentName}`;
+  if (phase === "read" && meta?.path) {
+    const file = (meta.path as string).split("/").pop() || meta.path;
+    return `📖 Read ${file}`;
+  }
+  if (phase === "write" && meta?.path) {
+    const file = (meta.path as string).split("/").pop() || meta.path;
+    return `✍️ Write ${file}`;
+  }
+  if (phase === "search" && meta?.query) return `🔍 ${meta.query}`;
+  if (phase === "skill" && meta?.name) return `🎯 ${meta.name}`;
+  if (phase === "memory" && meta?.entry) return `🧠 ${meta.entry}`;
+
+  return `${display.icon} ${display.label}`;
+}
+
+// ── Markdown component ──
 
 function MarkdownContent({ content }: { content: string }) {
   if (!content) return null;
@@ -88,16 +88,17 @@ export function ChatPanel({
 }: ChatPanelProps) {
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [input, setInput] = useState("");
-  const [streamSteps, setStreamSteps] = useState<StreamStep[]>([]);
+  const [phaseCards, setPhaseCards] = useState<PhaseCard[]>([]);
   const [streamActive, setStreamActive] = useState(false);
   const [streamText, setStreamText] = useState("");
   const [streamAgent, setStreamAgent] = useState<string | null>(null);
-  const [hasRichSteps, setHasRichSteps] = useState(false);
   const [thinkingOpen, setThinkingOpen] = useState<Set<number>>(new Set());
   const [showMentions, setShowMentions] = useState(false);
   const [mentionFilter, setMentionFilter] = useState("");
   const [mentionIndex, setMentionIndex] = useState(0);
-  const [chatMode, setChatMode] = useState<string | null>(null); // null = Yumi, "AgentName" = agent mode
+  const [chatMode, setChatMode] = useState<string | null>(null);
+  const [hasCards, setHasCards] = useState(false);
+
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const messagesContainerRef = useRef<HTMLDivElement>(null);
   const userScrolledUpRef = useRef(false);
@@ -106,61 +107,37 @@ export function ChatPanel({
   const onStreamEndRef = useRef(onStreamEnd);
   onStreamEndRef.current = onStreamEnd;
   const mountedRef = useRef(false);
-  const hasRichStepsRef = useRef(false);
   const streamTextRef = useRef("");
-  const streamStepsRef = useRef<StreamStep[]>([]);
+  const phaseCardsRef = useRef<PhaseCard[]>([]);
   const preStreamMsgCountRef = useRef(0);
 
-  const loadMessages = useCallback(async (restoreSteps?: boolean) => {
+  const loadMessages = useCallback(async () => {
     const res = await fetch(`/api/work/sessions/${sessionId}/messages`);
     if (res.ok) {
       const msgs: ChatMessage[] = await res.json();
       setMessages(msgs);
-      if (restoreSteps) {
-        try {
-          // 从服务器恢复 streaming state
-          const stateRes = await fetch(`/api/work/sessions/${sessionId}`);
-          if (stateRes.ok) {
-            const session = await stateRes.json();
-            if (session.stateJson) {
-              const data = JSON.parse(session.stateJson);
-              if (data._v === 2 && data.rich && data.steps && data.steps.length > 0) {
-                setStreamSteps(data.steps);
-                streamStepsRef.current = data.steps;
-                setStreamText(data.text || "");
-                streamTextRef.current = data.text || "";
-                setStreamAgent(data.agent || null);
-                setHasRichSteps(true);
-                hasRichStepsRef.current = true;
-              }
-            }
-          }
-        } catch {}
-      }
     }
   }, [sessionId]);
 
-  useEffect(() => { if (sessionId) loadMessages(true); }, [sessionId, loadMessages]);
+  useEffect(() => { if (sessionId) loadMessages(); }, [sessionId, loadMessages]);
 
-  // 兜底：streamActive 从 true 变 false 时确保 onStreamEnd 触发
-  // 处理 SSE 异常断开等 try-catch 未覆盖的路径
   useEffect(() => {
     if (!mountedRef.current) { mountedRef.current = true; return; }
     if (!streamActive) onStreamEndRef.current?.();
   }, [streamActive]);
 
-  // Reset session-scoped state when switching sessions
+  // Reset session-scoped state
   useEffect(() => {
     setMessages([]);
-    setStreamSteps([]);
+    setPhaseCards([]);
+    phaseCardsRef.current = [];
     setStreamText("");
     streamTextRef.current = "";
     setStreamAgent(null);
-    setHasRichSteps(false);
-    hasRichStepsRef.current = false;
+    setHasCards(false);
   }, [sessionId]);
 
-  // R1: 滚动锁定 — 用户手动滚上去时不拉回底部
+  // Scroll lock
   const scrollToBottom = (smooth = true) => {
     userScrolledUpRef.current = false;
     messagesEndRef.current?.scrollIntoView({ behavior: smooth ? "smooth" : "auto" });
@@ -169,24 +146,12 @@ export function ChatPanel({
     if (!userScrolledUpRef.current) {
       messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
     }
-  }, [messages, streamSteps]);
+  }, [messages, phaseCards]);
   const handleScroll = (e: React.UIEvent<HTMLDivElement>) => {
     const el = e.currentTarget;
     const isNearBottom = el.scrollHeight - el.scrollTop - el.clientHeight < 100;
     userScrolledUpRef.current = !isNearBottom;
   };
-
-  // Persist streaming steps to server when stream completes
-  useEffect(() => {
-    if (!streamActive && hasRichSteps && streamSteps.length > 0) {
-      const data = JSON.stringify({ _v: 2, steps: streamSteps, text: streamText, agent: streamAgent, rich: hasRichSteps });
-      fetch(`/api/work/sessions/${sessionId}`, {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ stateJson: data }),
-      }).catch(() => {});
-    }
-  }, [streamActive, hasRichSteps, streamSteps, streamText, streamAgent, sessionId]);
 
   const handleInput = (value: string) => {
     setInput(value);
@@ -212,7 +177,6 @@ export function ChatPanel({
     const message = input.trim(); setInput("");
     if (messages.length === 0 && onFirstMessage) onFirstMessage(message);
 
-    // Optimistic user message — appears immediately
     const tempId = -(Date.now());
     const optimisticMsg: ChatMessage = { id: tempId, role: "user", content: message, agentName: null, createdAt: new Date().toISOString() };
     setMessages((prev) => { preStreamMsgCountRef.current = prev.length + 1; return [...prev, optimisticMsg]; });
@@ -223,23 +187,13 @@ export function ChatPanel({
       if (atName) setChatMode(atName);
     }
     setStreamActive(true);
-    setStreamSteps([]);
-    streamStepsRef.current = [];
+    setPhaseCards([]);
+    phaseCardsRef.current = [];
     setStreamText("");
     streamTextRef.current = "";
     setStreamAgent(null);
     setThinkingOpen(new Set());
-    if (isDirectChat) {
-      // Simple chat — use same step-card style as agent mode
-      setHasRichSteps(true);
-      hasRichStepsRef.current = true;
-      const initStep: StreamStep = { key: "yumi-init", type: "text" as const, content: "" };
-      setStreamSteps([initStep]);
-      streamStepsRef.current = [initStep];
-    } else {
-      setHasRichSteps(false);
-      hasRichStepsRef.current = false;
-    }
+    setHasCards(true);
 
     const controller = new AbortController(); abortRef.current = controller;
     try {
@@ -266,75 +220,91 @@ export function ChatPanel({
       }
     } catch (err: any) {
       if (err.name !== "AbortError") {
-        setStreamSteps((p) => { const next: StreamStep[] = [...p, { key: `err-${Date.now()}`, type: "text" as const, content: `Error: ${err.message}` }]; streamStepsRef.current = next; return next; });
+        const errCard: PhaseCard = { key: `err-${Date.now()}`, phase: "text", content: `Error: ${err.message}` };
+        setPhaseCards((p) => { const next = [...p, errCard]; phaseCardsRef.current = next; return next; });
       }
     }
     if (onStreamEnd) onStreamEnd();
     setStreamActive(false); abortRef.current = null;
-    // loadMessages will dedup (streamStepsRef has the steps)
     loadMessages();
   };
 
   const handleSSE = (event: any) => {
     const t = event.type;
-    if (t === "thinking") {
-      if (!hasRichStepsRef.current) { hasRichStepsRef.current = true; setHasRichSteps(true); }
-      setStreamSteps((p) => {
-        const last = p[p.length - 1];
-        let next: StreamStep[];
-        if (last?.type === "thinking") {
-          const updated = [...p];
-          updated[p.length - 1] = { ...last, content: last.content + (event.delta || "") };
-          next = updated;
-        } else {
-          next = [...p, { key: `think-${p.length}`, type: "thinking" as const, content: event.delta || "" }];
-        }
-        streamStepsRef.current = next;
-        return next;
-      });
-    } else if (t === "agent_start") {
-      if (!hasRichStepsRef.current) { hasRichStepsRef.current = true; setHasRichSteps(true); }
-      setStreamSteps((p) => { const next: StreamStep[] = [...p, { key: `agent-${p.length}`, type: "agent_card" as const, agentName: event.agentName, content: "" }]; streamStepsRef.current = next; return next; });
-    } else if (t === "tool_exec") {
-      if (!hasRichStepsRef.current) { hasRichStepsRef.current = true; setHasRichSteps(true); }
-      const toolName = event.toolName;
-      if ((toolName === "write_file" || toolName === "edit_file") && onOpenFile) {
-        const path = event.args?.path as string;
-        if (path) onOpenFile(path);
+    const p = event.phase as PhaseName | undefined;
+
+    if (t === "phase") {
+      // 新 phase 开始 → 创建卡片
+      if (p === "agent_start") {
+        setStreamAgent(event.meta?.agentName as string || null);
       }
-      setStreamSteps((p) => { const next: StreamStep[] = [...p, { key: `tool-${p.length}`, type: "tool" as const, toolName, args: event.args, content: "" }]; streamStepsRef.current = next; return next; });
-    } else if (t === "agent_done") {
-      // mark completion — no visual change needed
-    } else if (t === "text") {
-      if (hasRichStepsRef.current) {
-        setStreamSteps((p) => {
-          const last = p[p.length - 1];
-          const delta = event.delta || "";
-          let next: StreamStep[];
-          if (last?.type === "text" && last.agentName === event.agentName) {
-            const updated = [...p];
-            updated[p.length - 1] = { ...last, content: last.content + delta };
-            next = updated;
-          } else {
-            next = [...p, { key: `txt-${p.length}`, type: "text" as const, agentName: event.agentName, content: delta }];
+      if (p === "agent_done") {
+        setStreamAgent(null);
+        // 标记最后一个 agent_start 卡片为 done
+        setPhaseCards((prev) => {
+          const next = [...prev];
+          for (let i = next.length - 1; i >= 0; i--) {
+            if (next[i].phase === "agent_start") {
+              next[i] = { ...next[i], content: "✓" };
+              break;
+            }
           }
-          streamStepsRef.current = next;
+          phaseCardsRef.current = next;
           return next;
         });
-      } else {
-        setStreamText((p) => p + (event.delta || ""));
-        streamTextRef.current += (event.delta || "");
-        if (event.agentName) setStreamAgent(event.agentName);
+        return;
       }
-    } else if (t === "doc") {
-      if (onDocDelta) onDocDelta(event.path, event.delta);
+      // write phase → 打开文件编辑器
+      if (p === "write" && event.meta?.path && onOpenFile) {
+        onOpenFile(event.meta.path as string);
+      }
+      const card: PhaseCard = {
+        key: `card-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+        phase: p || "text",
+        meta: event.meta,
+        content: "",
+      };
+      setPhaseCards((prev) => { const next = [...prev, card]; phaseCardsRef.current = next; return next; });
+    } else if (t === "delta") {
+      if (p === "text") {
+        // 文本增量 → 追加到对话区
+        setStreamText((prev) => prev + (event.text || ""));
+        streamTextRef.current += (event.text || "");
+      } else if (p === "write") {
+        // write delta → 追加到编辑器
+        if (event.meta?.path && onDocDelta) {
+          onDocDelta(event.meta.path as string, event.text || "");
+        } else if (event.text && onDocDelta) {
+          // fallback: 从最后一个 write card 的 meta 中取 path
+          const lastWrite = phaseCardsRef.current.filter(c => c.phase === "write").pop();
+          if (lastWrite?.meta?.path) {
+            onDocDelta(lastWrite.meta.path as string, event.text);
+          }
+        }
+      } else if (p) {
+        // 其他 delta → 追加到最后一个同 phase 的卡片
+        setPhaseCards((prev) => {
+          const next = [...prev];
+          for (let i = next.length - 1; i >= 0; i--) {
+            if (next[i].phase === p) {
+              next[i] = { ...next[i], content: next[i].content + (event.text || "") };
+              break;
+            }
+          }
+          phaseCardsRef.current = next;
+          return next;
+        });
+      }
+    } else if (t === "error") {
+      const errCard: PhaseCard = { key: `err-${Date.now()}`, phase: "text", content: `⚠️ ${event.message || "Unknown error"}` };
+      setPhaseCards((prev) => { const next = [...prev, errCard]; phaseCardsRef.current = next; return next; });
     }
+    // "done" 事件不在这里处理——由 while 循环结束自然触发
   };
 
   const stopStreaming = () => {
     abortRef.current?.abort();
     setStreamActive(false);
-    // R2: 停止时触发保存
     if (onStreamEnd) onStreamEnd();
   };
 
@@ -352,11 +322,11 @@ export function ChatPanel({
 
   const filteredMentions = agents.filter((a) => a.toLowerCase().startsWith(mentionFilter.toLowerCase()));
 
-  // View-level dedup: hide assistant msgs added by the CURRENT stream (not previous ones)
-  const hasStreamContent = streamSteps.length > 0 || (streamText !== "" && !hasRichSteps);
+  const hasStreamContent = phaseCards.length > 0 || streamText !== "";
   const visibleMessages = hasStreamContent
     ? messages.filter((m, i) => !(m.role === "assistant" && i >= preStreamMsgCountRef.current))
     : messages;
+
   return (
     <div className="flex flex-col h-full bg-[var(--app-bg)]">
       <SessionBar
@@ -405,27 +375,13 @@ export function ChatPanel({
           </div>
         ))}
 
-        {/* Simple text streaming fallback (legacy) */}
-        {(streamActive || streamText !== "") && !hasRichSteps && (
-          <div className="animate-pageIn">
-            <div className="flex items-center gap-2 mb-1">
-              <span className="w-1.5 h-1.5 rounded-full" style={{ background: "var(--app-text-secondary)" }} />
-              <span className="text-xs font-bold uppercase tracking-wider text-[var(--app-text-secondary)]">
-                {streamAgent || "Yumi"}
-              </span>
-            </div>
-            <div className="text-sm leading-relaxed whitespace-pre-wrap text-[var(--app-text)]">
-              {streamText ? <MarkdownContent content={streamText} /> : ""}
-            </div>
-          </div>
-        )}
-
-        {/* Rich step cards (agent mode) */}
-        {(streamActive || streamSteps.length > 0) && hasRichSteps && streamSteps.map((step, i) => {
-          if (step.type === "thinking") {
+        {/* Phase cards */}
+        {(streamActive || phaseCards.length > 0) && hasCards && phaseCards.map((card, i) => {
+          // thinking → 折叠卡片
+          if (card.phase === "thinking") {
             const open = thinkingOpen.has(i);
             return (
-              <div key={step.key} className="animate-pageIn">
+              <div key={card.key} className="animate-pageIn">
                 <div className="flex items-center gap-2 cursor-pointer" onClick={() => {
                   setThinkingOpen((p) => { const n = new Set(p); if (n.has(i)) n.delete(i); else n.add(i); return n; });
                 }}>
@@ -436,54 +392,50 @@ export function ChatPanel({
                   </svg>
                 </div>
                 {open && (
-                  <div className="mt-1 ml-5 text-xs leading-relaxed whitespace-pre-wrap text-[var(--app-text-secondary)]">{step.content}</div>
+                  <div className="mt-1 ml-5 text-xs leading-relaxed whitespace-pre-wrap text-[var(--app-text-secondary)]">{card.content}</div>
                 )}
               </div>
             );
           }
 
-          if (step.type === "agent_card") {
-            const name = step.agentName || "Agent";
+          // agent_start → 子 agent 卡片
+          if (card.phase === "agent_start") {
+            const name = (card.meta?.agentName as string) || "Agent";
             const avatar = getAvatar(name);
             return (
-              <div key={step.key} className="animate-pageIn flex items-center gap-2 py-1">
+              <div key={card.key} className="animate-pageIn flex items-center gap-2 py-1">
                 <span className="text-sm leading-none">{avatar}</span>
                 <span className="text-xs font-bold uppercase tracking-wider text-[var(--app-text-secondary)]">{name}</span>
               </div>
             );
           }
 
-          if (step.type === "tool") {
-            const label = getToolLabel(step.toolName || "", step.args);
-            const meta = toolMeta[step.toolName || ""];
-            const icon = meta?.icon || "🔧";
-            return (
-              <div key={step.key} className="animate-pageIn flex items-center gap-2 py-1 pl-1">
-                <span className="text-xs">{icon}</span>
-                <span className="text-xs text-[var(--app-text-secondary)]">{label}</span>
-              </div>
-            );
-          }
-
-          // type === "text" — final answer text
-          const isDirect = !step.agentName;
+          // 普通 phase 卡片（read/memory/skill/search/write）
+          const label = getPhaseLabel(card.phase, card.meta);
           return (
-            <div key={step.key} className="animate-pageIn">
-              {isDirect && (
-                <div className="flex items-center gap-2 mb-1">
-                  <span className="w-1.5 h-1.5 rounded-full" style={{ background: "var(--app-text-secondary)" }} />
-                  <span className="text-xs font-bold uppercase tracking-wider text-[var(--app-text-secondary)]">Yumi</span>
-                </div>
-              )}
-              <div className="text-sm leading-relaxed whitespace-pre-wrap text-[var(--app-text)]">
-                {step.content ? <MarkdownContent content={step.content} /> : (streamActive ? "Thinking..." : "")}
-              </div>
+            <div key={card.key} className="animate-pageIn flex items-center gap-2 py-1 pl-1">
+              <span className="text-xs">{phaseDisplay[card.phase]?.icon || "🔧"}</span>
+              <span className="text-xs text-[var(--app-text-secondary)]">{label}</span>
             </div>
           );
         })}
 
+        {/* 流式文本（text phase delta） */}
+        {(streamActive || streamText !== "") && (
+          <div className="animate-pageIn">
+            <div className="flex items-center gap-2 mb-1">
+              <span className="w-1.5 h-1.5 rounded-full" style={{ background: streamAgent ? "#a78bfa" : "var(--app-text-secondary)" }} />
+              <span className="text-xs font-bold uppercase tracking-wider" style={{ color: streamAgent ? "#a78bfa" : "var(--app-text-secondary)" }}>
+                {streamAgent || "Yumi"}
+              </span>
+            </div>
+            <div className="text-sm leading-relaxed whitespace-pre-wrap text-[var(--app-text)]">
+              {streamText ? <MarkdownContent content={streamText} /> : (streamActive ? "" : "")}
+            </div>
+          </div>
+        )}
+
         <div ref={messagesEndRef} />
-        {/* R1: 滚动到底部按钮 */}
         {userScrolledUpRef.current && (
           <div className="flex justify-center pb-2">
             <button onClick={() => scrollToBottom(true)}

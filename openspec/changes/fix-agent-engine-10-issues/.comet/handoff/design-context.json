@@ -1,0 +1,13 @@
+{
+  "change": "fix-agent-engine-10-issues",
+  "phase": "design",
+  "mode": "compact",
+  "canonical_spec": "openspec",
+  "generated_by": "comet-handoff.sh",
+  "context_hash": "10e08afd72864d0a8097ee61b2f75cc07554352662327a625e2becfbda547bb8",
+  "files": [
+    { "path": "openspec/changes/fix-agent-engine-10-issues/proposal.md", "sha256": "9a6e57aa3bbee7b9e9e187e3e6d16b77aee27be2f3e53250b312559acd755361" },
+    { "path": "openspec/changes/fix-agent-engine-10-issues/design.md", "sha256": "6392e815bfc4033f1d7a553ded24fd3c97d9e1bd9878cf08ebab80151b59957a" },
+    { "path": "openspec/changes/fix-agent-engine-10-issues/tasks.md", "sha256": "605c76341f8b7607724bac0b3e0aeca0ff579a0f0713a2e00f55bd0830ce2e7c" }
+  ]
+}

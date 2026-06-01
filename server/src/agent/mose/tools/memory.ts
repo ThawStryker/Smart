@@ -43,6 +43,8 @@ register({
     properties: { entry: { type: "string", description: "Memory entry to save" } },
     required: ["entry"],
   },
+  phase: "memory",
+  meta: (args) => ({ entry: (args.entry as string)?.slice(0, 40) }),
   handler: memorySave,
 });
 
@@ -50,5 +52,6 @@ register({
   name: "memory_recall",
   description: "Recall all stored memories for the current agent.",
   parameters: { type: "object", properties: {}, required: [] },
+  phase: "memory",
   handler: memoryRecall,
 });

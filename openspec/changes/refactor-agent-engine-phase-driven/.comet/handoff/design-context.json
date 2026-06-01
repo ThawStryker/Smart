@@ -1,0 +1,16 @@
+{
+  "change": "refactor-agent-engine-phase-driven",
+  "phase": "design",
+  "mode": "compact",
+  "canonical_spec": "openspec",
+  "generated_by": "comet-handoff.sh",
+  "context_hash": "7aadc7c8482d7b139161b2500416b6147ca77fc6add8d0e08f5ccbf9d208d063",
+  "files": [
+    { "path": "openspec/changes/refactor-agent-engine-phase-driven/proposal.md", "sha256": "4beab7288b19a524fafb7c2e29231bbfcaf7d3d605e4a6b5efe37e1193dd8782" },
+    { "path": "openspec/changes/refactor-agent-engine-phase-driven/design.md", "sha256": "afb1158f0e0a1a011eb498df3ca6838ade5e1e99cafcdb101ba8baf7ab41c967" },
+    { "path": "openspec/changes/refactor-agent-engine-phase-driven/tasks.md", "sha256": "1f39cb10e873c83c55924523ffdba643088e6fd965d4084896fca932beaeec1f" },
+    { "path": "openspec/changes/refactor-agent-engine-phase-driven/specs/agent-engine-phase-protocol/spec.md", "sha256": "1ea970c7b11a1fe48d16a4e872d30840bdd5be190f4c87bbf89b3d5fe4021dfc" },
+    { "path": "openspec/changes/refactor-agent-engine-phase-driven/specs/async-generator-stream/spec.md", "sha256": "4c091d07767f2e4b7a4b4c353c7aafa38e744e81f1113e8b827cc68f0f82dfb1" },
+    { "path": "openspec/changes/refactor-agent-engine-phase-driven/specs/tool-handler-injection/spec.md", "sha256": "1682d4b58b380a8618db6a0fc47bd2b6abee100fcd3d4563dd1d475194847088" }
+  ]
+}

@@ -46,6 +46,7 @@ register({
   name: "skill_list",
   description: "List all available skills for the current agent. Returns name + summary for each.",
   parameters: { type: "object", properties: {}, required: [] },
+  phase: "skill",
   handler: skillList,
 });
 
@@ -57,5 +58,7 @@ register({
     properties: { name: { type: "string", description: "Skill name (from skill_list)" } },
     required: ["name"],
   },
+  phase: "skill",
+  meta: (args) => ({ name: args.name as string }),
   handler: skillView,
 });

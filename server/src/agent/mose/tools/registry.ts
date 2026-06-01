@@ -1,18 +1,17 @@
-import type { MoseLoopParams } from "../types";
+import type { PhaseName } from "../phases";
 
 export interface ToolContext {
   sessionId: number;
   userId: string;
   agentName: string | null;
-  params: MoseLoopParams;
-  emit: (event: Record<string, unknown>) => void;
-  moseLoop: (params: MoseLoopParams) => Promise<string>;
 }
 
 export interface ToolDef {
   name: string;
   description: string;
   parameters: Record<string, unknown>;
+  phase: PhaseName;
+  meta?: (args: Record<string, unknown>) => Record<string, unknown>;
   handler: (args: Record<string, unknown>, ctx: ToolContext) => Promise<string>;
 }
 
@@ -24,6 +23,10 @@ export function register(tool: ToolDef): void {
 
 export function get(name: string): ToolDef | undefined {
   return _tools.get(name);
+}
+
+export function getAll(): ToolDef[] {
+  return Array.from(_tools.values());
 }
 
 export function getOpenAITools(): Array<Record<string, unknown>> {

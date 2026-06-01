@@ -1,87 +1,113 @@
 import { db } from "edgespark";
 import { eq, and, like, asc } from "drizzle-orm";
 import { agentFiles, workspaceFiles } from "@defs";
-import { emit } from "../../stream";
+import { register } from "./registry";
+import type { ToolContext } from "./registry";
 
-export async function writeFile(
-  args: Record<string, unknown>,
-  _sessionId: number,
-  eventQueue: Array<Record<string, unknown>>,
+// ── 底层方法：创建文件（不写内容） ──
+export async function createFile(
+  rawPath: string,
   userId: string,
   agentName?: string | null,
-): Promise<string> {
-  const rawPath = args.path as string | undefined;
-  const content = args.content as string | undefined;
-  if (!rawPath || content === undefined) return "Error: path and content required";
-
+): Promise<{ table: "workspace" | "agent"; fileId?: number }> {
   if (rawPath.startsWith("workspace/")) {
-    // Workspace file
     const filePath = rawPath.slice("workspace/".length);
-    const rows = await db.select().from(workspaceFiles).where(and(eq(workspaceFiles.userId, userId), eq(workspaceFiles.path, filePath)));
+    const rows = await db.select().from(workspaceFiles).where(
+      and(eq(workspaceFiles.userId, userId), eq(workspaceFiles.path, filePath)),
+    );
+    const existing = rows[0];
+    if (existing) return { table: "workspace", fileId: existing.id };
+    const inserted = await db.insert(workspaceFiles).values({ userId, path: filePath, content: "" }).returning({ id: workspaceFiles.id });
+    return { table: "workspace", fileId: inserted[0]?.id };
+  }
+
+  if (!agentName) throw new Error("agent name required for non-workspace files");
+  const rows = await db.select().from(agentFiles).where(
+    and(eq(agentFiles.userId, userId), eq(agentFiles.agentName, agentName), eq(agentFiles.path, rawPath)),
+  );
+  const existing = rows[0];
+  if (existing) return { table: "agent", fileId: existing.id };
+  const inserted = await db.insert(agentFiles).values({ userId, agentName, path: rawPath, content: "" }).returning({ id: agentFiles.id });
+  return { table: "agent", fileId: inserted[0]?.id };
+}
+
+// ── 底层方法：写入内容 ──
+export async function writeContent(
+  rawPath: string,
+  content: string,
+  userId: string,
+  agentName?: string | null,
+): Promise<void> {
+  if (rawPath.startsWith("workspace/")) {
+    const filePath = rawPath.slice("workspace/".length);
+    const rows = await db.select().from(workspaceFiles).where(
+      and(eq(workspaceFiles.userId, userId), eq(workspaceFiles.path, filePath)),
+    );
     const existing = rows[0];
     if (existing) {
       await db.update(workspaceFiles).set({ content, updatedAt: new Date().toISOString() }).where(eq(workspaceFiles.id, existing.id));
     } else {
       await db.insert(workspaceFiles).values({ userId, path: filePath, content });
     }
-    emit(eventQueue, { type: "doc", path: rawPath, delta: content });
-    return `File written: ${rawPath}`;
+    return;
   }
 
-  // Agent file
-  if (!agentName) return "Error: agent name required for non-workspace files";
-  const rows = await db.select().from(agentFiles).where(and(eq(agentFiles.userId, userId), eq(agentFiles.agentName, agentName), eq(agentFiles.path, rawPath)));
+  if (!agentName) throw new Error("agent name required for non-workspace files");
+  const rows = await db.select().from(agentFiles).where(
+    and(eq(agentFiles.userId, userId), eq(agentFiles.agentName, agentName), eq(agentFiles.path, rawPath)),
+  );
   const existing = rows[0];
   if (existing) {
     await db.update(agentFiles).set({ content, updatedAt: new Date().toISOString() }).where(eq(agentFiles.id, existing.id));
   } else {
     await db.insert(agentFiles).values({ userId, agentName, path: rawPath, content });
   }
-  emit(eventQueue, { type: "doc", path: rawPath, delta: content });
+}
+
+// ── write_file 工具处理器 ──
+async function writeFileHandler(args: Record<string, unknown>, ctx: ToolContext): Promise<string> {
+  const rawPath = args.path as string | undefined;
+  const content = args.content as string | undefined;
+  if (!rawPath || content === undefined) return "Error: path and content required";
+
+  await createFile(rawPath, ctx.userId, ctx.agentName);
+  await writeContent(rawPath, content, ctx.userId, ctx.agentName);
   return `File written: ${rawPath}`;
 }
 
-export async function readFile(
-  args: Record<string, unknown>,
-  _sessionId: number,
-  userId: string,
-  agentName?: string | null,
-): Promise<string> {
+// ── read_file 工具处理器 ──
+async function readFileHandler(args: Record<string, unknown>, ctx: ToolContext): Promise<string> {
   const rawPath = args.path as string | undefined;
   if (!rawPath) return "Error: path required";
 
   if (rawPath.startsWith("workspace/")) {
     const filePath = rawPath.slice("workspace/".length);
-    const rows = await db.select().from(workspaceFiles).where(and(eq(workspaceFiles.userId, userId), eq(workspaceFiles.path, filePath)));
+    const rows = await db.select().from(workspaceFiles).where(and(eq(workspaceFiles.userId, ctx.userId), eq(workspaceFiles.path, filePath)));
     return rows[0]?.content || `File not found: ${rawPath}`;
   }
 
-  if (!agentName) return "Error: agent name required for non-workspace files";
-  const rows = await db.select().from(agentFiles).where(and(eq(agentFiles.userId, userId), eq(agentFiles.agentName, agentName), eq(agentFiles.path, rawPath)));
+  if (!ctx.agentName) return "Error: agent name required for non-workspace files";
+  const rows = await db.select().from(agentFiles).where(and(eq(agentFiles.userId, ctx.userId), eq(agentFiles.agentName, ctx.agentName), eq(agentFiles.path, rawPath)));
   return rows[0]?.content || `File not found: ${rawPath}`;
 }
 
-export async function listFiles(
-  args: Record<string, unknown>,
-  _sessionId: number,
-  userId: string,
-  agentName?: string | null,
-): Promise<string> {
+// ── list_files 工具处理器 ──
+async function listFilesHandler(args: Record<string, unknown>, ctx: ToolContext): Promise<string> {
   const rawPrefix = args.prefix as string | undefined;
 
   if (rawPrefix && rawPrefix.startsWith("workspace/")) {
     const prefix = rawPrefix.slice("workspace/".length);
     const condition = prefix
-      ? and(eq(workspaceFiles.userId, userId), like(workspaceFiles.path, `${prefix}%`))
-      : eq(workspaceFiles.userId, userId);
+      ? and(eq(workspaceFiles.userId, ctx.userId), like(workspaceFiles.path, `${prefix}%`))
+      : eq(workspaceFiles.userId, ctx.userId);
     const files = await db.select().from(workspaceFiles).where(condition).orderBy(asc(workspaceFiles.createdAt));
     return formatFileList(files, "workspace/");
   }
 
-  if (!agentName) return "Error: agent name required for non-workspace files";
+  if (!ctx.agentName) return "Error: agent name required for non-workspace files";
   const condition = rawPrefix
-    ? and(eq(agentFiles.userId, userId), eq(agentFiles.agentName, agentName), like(agentFiles.path, `${rawPrefix}%`))
-    : and(eq(agentFiles.userId, userId), eq(agentFiles.agentName, agentName));
+    ? and(eq(agentFiles.userId, ctx.userId), eq(agentFiles.agentName, ctx.agentName), like(agentFiles.path, `${rawPrefix}%`))
+    : and(eq(agentFiles.userId, ctx.userId), eq(agentFiles.agentName, ctx.agentName));
   const files = await db.select().from(agentFiles).where(condition).orderBy(asc(agentFiles.createdAt));
   return formatFileList(files, "");
 }
@@ -98,3 +124,50 @@ function formatFileList(files: Array<{ path: string; isFolder: number | null; co
     })
     .join("\n");
 }
+
+// ── 注册 ──
+register({
+  name: "write_file",
+  description: "Write content to a workspace file",
+  parameters: {
+    type: "object",
+    properties: {
+      path: { type: "string", description: "File path" },
+      content: { type: "string", description: "File content (markdown)" },
+    },
+    required: ["path", "content"],
+  },
+  phase: "write",
+  meta: (args) => ({ path: args.path as string }),
+  handler: writeFileHandler,
+});
+
+register({
+  name: "read_file",
+  description: "Read a workspace file",
+  parameters: {
+    type: "object",
+    properties: {
+      path: { type: "string", description: "File path" },
+    },
+    required: ["path"],
+  },
+  phase: "read",
+  meta: (args) => ({ path: args.path as string }),
+  handler: readFileHandler,
+});
+
+register({
+  name: "list_files",
+  description: "List workspace files",
+  parameters: {
+    type: "object",
+    properties: {
+      prefix: { type: "string", description: "Path prefix filter" },
+    },
+    required: [],
+  },
+  phase: "read",
+  meta: (args) => ({ prefix: args.prefix as string || "/" }),
+  handler: listFilesHandler,
+});
