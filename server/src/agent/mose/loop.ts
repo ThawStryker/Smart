@@ -40,133 +40,154 @@ export async function moseLoop(params: MoseLoopParams): Promise<string> {
 
     // Run agent loop (max 15 rounds)
     for (let step = 0; step < 15; step++) {
-      const res = await fetch(`${modelConfig.baseURL}${modelConfig.apiPath}`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${modelConfig.apiKey}`,
-        },
-        body: JSON.stringify({
-          model: modelConfig.modelName,
-          messages,
-          tools: AGENT_TOOLS,
-          tool_choice: "auto",
-          temperature: 0.5,
-          max_tokens: 8192,
-          stream: true,
-        }),
-      });
-
-      if (!res.ok || !res.body) {
-        emit(eventQueue, { type: "error", message: `API error: ${res.status}` });
-        break;
-      }
-
-      // Parse SSE stream — same pattern as existing loop.ts
-      const reader = res.body.getReader();
-      const decoder = new TextDecoder();
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 30000);
       let textContent = "";
+      let reasoningContent = "";
       const toolCallMap = new Map<number, { id: string; name: string; args: string }>();
       const toolCalls: Array<{ id: string; function: { name: string; arguments: string } }> = [];
-      let buffer = "";
 
-      while (true) {
-        const { done, value } = await reader.read();
-        if (done) break;
-        buffer += decoder.decode(value, { stream: true });
-        const lines = buffer.split("\n");
-        buffer = lines.pop() || "";
+      try {
+        const res = await fetch(`${modelConfig.baseURL}${modelConfig.apiPath}`, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${modelConfig.apiKey}`,
+          },
+          body: JSON.stringify({
+            model: modelConfig.modelName,
+            messages,
+            tools: AGENT_TOOLS,
+            tool_choice: "auto",
+            temperature: 0.5,
+            stream: true,
+          }),
+          signal: controller.signal,
+        });
 
-        for (const line of lines) {
-          if (!line.startsWith("data: ")) continue;
-          const data = line.slice(6).trim();
-          if (!data || data === "[DONE]") continue;
+        clearTimeout(timeoutId);
 
-          try {
-            const json = JSON.parse(data);
-            const delta = json.choices?.[0]?.delta;
+        if (!res.ok || !res.body) {
+          emit(eventQueue, { type: "error", message: `API error: ${res.status}` });
+          break;
+        }
 
-            if (delta?.reasoning_content) {
-              emit(eventQueue, { type: "thinking", delta: delta.reasoning_content });
-            }
+        // Parse SSE stream — same pattern as existing loop.ts
+        const reader = res.body.getReader();
+        const decoder = new TextDecoder();
+        let buffer = "";
 
-            if (delta?.content) {
-              textContent += delta.content;
-              emit(eventQueue, { type: "text", agentName: targetAgent, delta: delta.content });
-            }
+        while (true) {
+          const { done, value } = await reader.read();
+          if (done) break;
+          buffer += decoder.decode(value, { stream: true });
+          const lines = buffer.split("\n");
+          buffer = lines.pop() || "";
 
-            if (delta?.tool_calls) {
-              for (const tc of delta.tool_calls) {
-                if (tc.index != null) {
-                  if (tc.id) {
-                    toolCallMap.set(tc.index, {
-                      id: tc.id,
-                      name: tc.function?.name || "",
-                      args: tc.function?.arguments || "",
-                    });
-                  } else if (tc.function?.arguments) {
-                    const existing = toolCallMap.get(tc.index);
-                    if (existing) existing.args += tc.function.arguments;
+          for (const line of lines) {
+            if (!line.startsWith("data: ")) continue;
+            const data = line.slice(6).trim();
+            if (!data || data === "[DONE]") continue;
+
+            try {
+              const json = JSON.parse(data);
+              const delta = json.choices?.[0]?.delta;
+
+              if (delta?.reasoning_content) {
+                reasoningContent += delta.reasoning_content;
+                emit(eventQueue, { type: "thinking", delta: delta.reasoning_content });
+              }
+
+              if (delta?.content) {
+                textContent += delta.content;
+                emit(eventQueue, { type: "text", agentName: targetAgent, delta: delta.content });
+              }
+
+              if (delta?.tool_calls) {
+                for (const tc of delta.tool_calls) {
+                  if (tc.index != null) {
+                    if (tc.id) {
+                      toolCallMap.set(tc.index, {
+                        id: tc.id,
+                        name: tc.function?.name || "",
+                        args: tc.function?.arguments || "",
+                      });
+                    } else if (tc.function?.arguments) {
+                      const existing = toolCallMap.get(tc.index);
+                      if (existing) existing.args += tc.function.arguments;
+                    }
                   }
                 }
               }
-            }
-          } catch { /* skip malformed JSON lines */ }
+            } catch { /* skip malformed JSON lines */ }
+          }
         }
-      }
 
-      fullResponse += textContent;
+        fullResponse += textContent;
 
-      // Collect tool calls from map
-      for (const [, tc] of toolCallMap) {
-        toolCalls.push({
-          id: tc.id,
-          function: { name: tc.name, arguments: tc.args },
-        });
-      }
+        // Collect tool calls from map
+        for (const [, tc] of toolCallMap) {
+          toolCalls.push({
+            id: tc.id,
+            function: { name: tc.name, arguments: tc.args },
+          });
+        }
 
-      // If no tool calls, we're done
-      if (toolCalls.length === 0) {
-        messages.push({ role: "assistant", content: textContent });
+        // If no tool calls, we're done
+        if (toolCalls.length === 0) {
+          const msg: Record<string, unknown> = { role: "assistant", content: textContent };
+          if (reasoningContent) msg.reasoning_content = reasoningContent;
+          messages.push(msg);
+          break;
+        }
+
+        // Push assistant message with tool calls
+        const assistantMsg: Record<string, unknown> = {
+          role: "assistant",
+          content: textContent || "",
+          tool_calls: toolCalls.map((tc) => ({
+            id: tc.id,
+            type: "function",
+            function: { name: tc.function.name, arguments: tc.function.arguments },
+          })),
+        };
+        if (reasoningContent) assistantMsg.reasoning_content = reasoningContent;
+        messages.push(assistantMsg);
+
+        // Execute tools and push results
+        for (const tc of toolCalls) {
+          let parsedArgs: Record<string, unknown> | undefined;
+          try { parsedArgs = JSON.parse(tc.function.arguments); } catch {}
+
+          emit(eventQueue, {
+            type: "tool_exec",
+            toolName: tc.function.name,
+            agentName: targetAgent,
+            args: parsedArgs,
+          });
+
+          let result: string;
+          try {
+            const args = JSON.parse(tc.function.arguments);
+            result = await executeAgentTool(tc.function.name, args, sessionId, params, eventQueue, moseLoop);
+          } catch (err: unknown) {
+            result = `Error: ${err instanceof Error ? err.message : String(err)}`;
+          }
+
+          messages.push({
+            role: "tool",
+            tool_call_id: tc.id,
+            content: result,
+          });
+        }
+      } catch (err: unknown) {
+        clearTimeout(timeoutId);
+        if (err instanceof DOMException && err.name === "AbortError") {
+          emit(eventQueue, { type: "error", message: "Request timeout after 30s" });
+        } else {
+          emit(eventQueue, { type: "error", message: `Request error: ${err instanceof Error ? err.message : String(err)}` });
+        }
         break;
-      }
-
-      // Push assistant message with tool calls
-      messages.push({
-        role: "assistant",
-        content: textContent || "",
-        tool_calls: toolCalls.map((tc) => ({
-          id: tc.id,
-          type: "function",
-          function: { name: tc.function.name, arguments: tc.function.arguments },
-        })),
-      });
-
-      // Execute tools and push results
-      for (const tc of toolCalls) {
-        let parsedArgs: Record<string, unknown> | undefined;
-        try { parsedArgs = JSON.parse(tc.function.arguments); } catch {}
-
-        emit(eventQueue, {
-          type: "tool_exec",
-          toolName: tc.function.name,
-          agentName: targetAgent,
-          args: parsedArgs,
-        });
-
-        let result: string;
-        try {
-          const args = JSON.parse(tc.function.arguments);
-          result = await executeAgentTool(tc.function.name, args, sessionId, params, eventQueue, moseLoop);
-        } catch (err: unknown) {
-          result = `Error: ${err instanceof Error ? err.message : String(err)}`;
-        }
-
-        messages.push({
-          role: "tool",
-          tool_call_id: tc.id,
-          content: result,
-        });
       }
     }
 
@@ -198,55 +219,70 @@ export async function moseLoop(params: MoseLoopParams): Promise<string> {
     }
     messages.push({ role: "user", content: userMessage });
 
-    const res = await fetch(`${modelConfig.baseURL}${modelConfig.apiPath}`, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${modelConfig.apiKey}`,
-      },
-      body: JSON.stringify({
-        model: modelConfig.modelName,
-        messages,
-        temperature: 0.5,
-        max_tokens: 4096,
-        stream: true,
-      }),
-    });
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 30000);
 
-    if (!res.ok || !res.body) {
-      emit(eventQueue, { type: "error", message: `API error: ${res.status}` });
-      return "";
-    }
+    try {
+      const res = await fetch(`${modelConfig.baseURL}${modelConfig.apiPath}`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${modelConfig.apiKey}`,
+        },
+        body: JSON.stringify({
+          model: modelConfig.modelName,
+          messages,
+          temperature: 0.5,
+          stream: true,
+        }),
+        signal: controller.signal,
+      });
 
-    const reader = res.body.getReader();
-    const decoder = new TextDecoder();
-    let buffer = "";
+      clearTimeout(timeoutId);
 
-    while (true) {
-      const { done, value } = await reader.read();
-      if (done) break;
-      buffer += decoder.decode(value, { stream: true });
-      const lines = buffer.split("\n");
-      buffer = lines.pop() || "";
-
-      for (const line of lines) {
-        if (!line.startsWith("data: ")) continue;
-        const data = line.slice(6).trim();
-        if (!data || data === "[DONE]") continue;
-        try {
-          const json = JSON.parse(data);
-          const delta = json.choices?.[0]?.delta;
-
-          if (delta?.reasoning_content) {
-            emit(eventQueue, { type: "thinking", delta: delta.reasoning_content });
-          }
-
-          if (delta?.content) {
-            fullResponse += delta.content;
-            emit(eventQueue, { type: "text", delta: delta.content });
-          }
-        } catch { /* skip malformed JSON lines */ }
+      if (!res.ok || !res.body) {
+        emit(eventQueue, { type: "error", message: `API error: ${res.status}` });
+        return "";
       }
+
+      const reader = res.body.getReader();
+      const decoder = new TextDecoder();
+      let buffer = "";
+
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        buffer += decoder.decode(value, { stream: true });
+        const lines = buffer.split("\n");
+        buffer = lines.pop() || "";
+
+        for (const line of lines) {
+          if (!line.startsWith("data: ")) continue;
+          const data = line.slice(6).trim();
+          if (!data || data === "[DONE]") continue;
+          try {
+            const json = JSON.parse(data);
+            const delta = json.choices?.[0]?.delta;
+
+            if (delta?.reasoning_content) {
+              emit(eventQueue, { type: "thinking", delta: delta.reasoning_content });
+            }
+
+            if (delta?.content) {
+              fullResponse += delta.content;
+              emit(eventQueue, { type: "text", delta: delta.content });
+            }
+          } catch { /* skip malformed JSON lines */ }
+        }
+      }
+    } catch (err: unknown) {
+      clearTimeout(timeoutId);
+      if (err instanceof DOMException && err.name === "AbortError") {
+        emit(eventQueue, { type: "error", message: "Request timeout after 30s" });
+      } else {
+        emit(eventQueue, { type: "error", message: `Request error: ${err instanceof Error ? err.message : String(err)}` });
+      }
+      return "";
     }
 
     await db.insert(workMessages).values({
