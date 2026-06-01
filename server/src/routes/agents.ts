@@ -2,7 +2,7 @@ import { Hono } from "hono";
 import { db } from "edgespark";
 import { auth } from "edgespark/http";
 import { eq, and, like, asc, sql } from "drizzle-orm";
-import { userAgents, agentFiles } from "@defs";
+import { userAgents, agentFiles, agentFileVersions } from "@defs";
 
 export const userAgentRoutes = new Hono();
 
@@ -168,6 +168,12 @@ userAgentRoutes.put("/:name/files/:path{.+}", async (c) => {
   const existing = rows[0];
 
   if (existing) {
+    // 保存旧版本
+    await db.insert(agentFileVersions).values({
+      fileId: existing.id,
+      path: filePath,
+      content: existing.content || "",
+    });
     await db.update(agentFiles).set({
       content: content !== undefined ? content : existing.content,
       updatedAt: new Date().toISOString(),

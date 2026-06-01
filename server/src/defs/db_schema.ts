@@ -263,3 +263,12 @@ export const userAgents = sqliteTable("user_agents", {
   userNameUnique: uniqueIndex("user_agents_user_name_unique").on(table.userId, table.name),
 }));
 
+// Agent 文件版本追踪
+export const agentFileVersions = sqliteTable("agent_file_versions", {
+  id: integer("id").primaryKey({ autoIncrement: true }),
+  fileId: integer("file_id").notNull(),
+  path: text("path").notNull(),
+  content: text("content").notNull(),
+  createdAt: text("created_at").default(sql`(datetime('now'))`),
+});
+
