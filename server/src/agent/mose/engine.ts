@@ -13,15 +13,64 @@ interface ParsedStream {
   toolCalls: Array<{ id: string; name: string; args: string }>;
 }
 
+interface SSELineState {
+  textContent: string;
+  reasoningContent: string;
+  toolCallMap: Map<number, { id: string; name: string; args: string }>;
+}
+
+interface SSELineResult {
+  hasReasoning: boolean;
+  reasoningText: string;
+}
+
+function parseSSELine(data: string, state: SSELineState): SSELineResult {
+  try {
+    const json = JSON.parse(data);
+    const delta = json.choices?.[0]?.delta;
+    let hasReasoning = false;
+    let reasoningText = "";
+
+    if (delta?.reasoning_content) {
+      state.reasoningContent += delta.reasoning_content;
+      hasReasoning = true;
+      reasoningText = delta.reasoning_content;
+    }
+
+    if (delta?.content) {
+      state.textContent += delta.content;
+    }
+
+    if (delta?.tool_calls) {
+      for (const tc of delta.tool_calls) {
+        if (tc.index != null) {
+          if (tc.id) {
+            state.toolCallMap.set(tc.index, {
+              id: tc.id,
+              name: tc.function?.name || "",
+              args: tc.function?.arguments || "",
+            });
+          } else if (tc.function?.arguments) {
+            const existing = state.toolCallMap.get(tc.index);
+            if (existing) existing.args += tc.function.arguments;
+          }
+        }
+      }
+    }
+
+    return { hasReasoning, reasoningText };
+  } catch {
+    return { hasReasoning: false, reasoningText: "" };
+  }
+}
+
 async function parseSSEStream(
   body: ReadableStream<Uint8Array>,
 ): Promise<ParsedStream> {
   const reader = body.getReader();
   const decoder = new TextDecoder();
   let buffer = "";
-  let textContent = "";
-  let reasoningContent = "";
-  const toolCallMap = new Map<number, { id: string; name: string; args: string }>();
+  const state: SSELineState = { textContent: "", reasoningContent: "", toolCallMap: new Map() };
 
   while (true) {
     const { done, value } = await reader.read();
@@ -35,44 +84,16 @@ async function parseSSEStream(
       const data = line.slice(6).trim();
       if (!data || data === "[DONE]") continue;
 
-      try {
-        const json = JSON.parse(data);
-        const delta = json.choices?.[0]?.delta;
-
-        if (delta?.reasoning_content) {
-          reasoningContent += delta.reasoning_content;
-        }
-
-        if (delta?.content) {
-          textContent += delta.content;
-        }
-
-        if (delta?.tool_calls) {
-          for (const tc of delta.tool_calls) {
-            if (tc.index != null) {
-              if (tc.id) {
-                toolCallMap.set(tc.index, {
-                  id: tc.id,
-                  name: tc.function?.name || "",
-                  args: tc.function?.arguments || "",
-                });
-              } else if (tc.function?.arguments) {
-                const existing = toolCallMap.get(tc.index);
-                if (existing) existing.args += tc.function.arguments;
-              }
-            }
-          }
-        }
-      } catch { /* skip malformed JSON */ }
+      parseSSELine(data, state);
     }
   }
 
   const toolCalls: Array<{ id: string; name: string; args: string }> = [];
-  for (const [, tc] of toolCallMap) {
+  for (const [, tc] of state.toolCallMap) {
     toolCalls.push({ id: tc.id, name: tc.name, args: tc.args });
   }
 
-  return { textContent, reasoningContent, toolCalls };
+  return { textContent: state.textContent, reasoningContent: state.reasoningContent, toolCalls };
 }
 
 // ── LLM 调用 + 流式解析 + phase 事件发射 ──
@@ -117,9 +138,7 @@ async function* callLLM(
     const reader = res.body.getReader();
     const decoder = new TextDecoder();
     let buffer = "";
-    let textContent = "";
-    let reasoningContent = "";
-    const toolCallMap = new Map<number, { id: string; name: string; args: string }>();
+    const state: SSELineState = { textContent: "", reasoningContent: "", toolCallMap: new Map() };
 
     while (true) {
       const { done, value } = await reader.read();
@@ -133,45 +152,19 @@ async function* callLLM(
         const data = line.slice(6).trim();
         if (!data || data === "[DONE]") continue;
 
-        try {
-          const json = JSON.parse(data);
-          const delta = json.choices?.[0]?.delta;
-
-          if (delta?.reasoning_content) {
-            reasoningContent += delta.reasoning_content;
-            yield { type: "delta", phase: "thinking" as PhaseName, text: delta.reasoning_content };
-          }
-
-          if (delta?.content) {
-            textContent += delta.content;
-          }
-
-          if (delta?.tool_calls) {
-            for (const tc of delta.tool_calls) {
-              if (tc.index != null) {
-                if (tc.id) {
-                  toolCallMap.set(tc.index, {
-                    id: tc.id,
-                    name: tc.function?.name || "",
-                    args: tc.function?.arguments || "",
-                  });
-                } else if (tc.function?.arguments) {
-                  const existing = toolCallMap.get(tc.index);
-                  if (existing) existing.args += tc.function.arguments;
-                }
-              }
-            }
-          }
-        } catch { /* skip malformed JSON */ }
+        const result = parseSSELine(data, state);
+        if (result.hasReasoning) {
+          yield { type: "delta", phase: "thinking" as PhaseName, text: result.reasoningText };
+        }
       }
     }
 
     const toolCalls: Array<{ id: string; name: string; args: string }> = [];
-    for (const [, tc] of toolCallMap) {
+    for (const [, tc] of state.toolCallMap) {
       toolCalls.push({ id: tc.id, name: tc.name, args: tc.args });
     }
 
-    return { textContent, reasoningContent, toolCalls };
+    return { textContent: state.textContent, reasoningContent: state.reasoningContent, toolCalls };
   } catch (err: unknown) {
     clearTimeout(timeoutId);
     if (err instanceof DOMException && err.name === "AbortError") {
@@ -228,7 +221,7 @@ async function* executeTools(
 
     // 3. write_file 额外 yield delta 让前端流式写入编辑器
     if (phase === "write" && parsedArgs.content) {
-      yield { type: "delta", phase: "write", text: parsedArgs.content as string };
+      yield { type: "delta", phase: "write", text: parsedArgs.content as string, meta };
     }
 
     results.push({ tool_call_id: tc.id, content: result });
@@ -398,6 +391,10 @@ async function* runAgent(input: EngineInput): EngineOutput {
         messages.push({ role: "tool", tool_call_id: tr.tool_call_id, content: tr.content });
       }
     }
+  }
+
+  if (fullResponse.trim().length === 0) {
+    yield { type: "delta", phase: "text", text: "⚠️ Agent stopped after max steps with no output." };
   }
 
   if (!suppressSave && input.onSaveMessage) {

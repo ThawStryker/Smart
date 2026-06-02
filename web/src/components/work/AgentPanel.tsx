@@ -1,8 +1,8 @@
-import { useState, useEffect, useCallback, useRef } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { getAgentAvatar } from "./icons";
 import { buildTree, renderFileChildren } from "./FileTree";
-import { useConfirm } from "@/components/shared/useConfirm";
-import { resolveApiUrl, resolveDeleteUrl, resolveRenameUrl, loadAllAgentFiles } from "@/lib/file-api";
+import { useFileTreeActions } from "@/hooks/useFileTreeActions";
+import { loadAllAgentFiles } from "@/lib/file-api";
 import type { FileEntry } from "@/types/work";
 
 interface AgentPanelProps {
@@ -17,33 +17,8 @@ interface AgentPanelProps {
 export function AgentPanel({ sessionId, onFileSelect, selectedFile, onAgentListChange, reloadTrigger, onCloseFile }: AgentPanelProps) {
   const [files, setFiles] = useState<FileEntry[]>([]);
   const [expanded, setExpanded] = useState<Set<string>>(new Set(["agents"]));
-  const [renaming, setRenaming] = useState<string | null>(null);
-  const [renameValue, setRenameValue] = useState("");
-  const [renamingPath, setRenamingPath] = useState<string | null>(null);
   const [agentNames, setAgentNames] = useState<string[]>([]);
-  const [toast, setToast] = useState<string | null>(null);
-  const { confirm, ConfirmDialog } = useConfirm();
-  useEffect(() => { if (toast) { const t = setTimeout(() => setToast(null), 3000); return () => clearTimeout(t); } }, [toast]);
-  const pendingDeletesRef = useRef<Set<string>>(new Set());
-
-  const startFileRename = (path: string, name: string) => { setRenamingPath(path); setRenameValue(name); };
-  const finishFileRename = (path: string, oldName: string) => {
-    if (renameValue.trim() && renameValue.trim() !== oldName) {
-      if (path.includes(`/${oldName}`)) {
-        const tree = buildTree(files);
-        const isFolder = (() => {
-          const parts = path.split("/");
-          let node: any = tree;
-          for (const p of parts) { if (!node?.__kids?.[p]) return false; node = node.__kids[p]; }
-          return node && typeof node === "object" && "__kids" in node;
-        })();
-        if (isFolder) renameFolder(path, renameValue.trim());
-        else renameFile(path, renameValue.trim());
-      }
-    }
-    setRenamingPath(null);
-    setRenameValue("");
-  };
+  const [renaming, setRenaming] = useState<string | null>(null);
 
   const loadFiles = useCallback(async () => {
     try {
@@ -58,7 +33,6 @@ export function AgentPanel({ sessionId, onFileSelect, selectedFile, onAgentListC
       const seen = new Set<string>();
       setFiles(allFiles.filter((f: FileEntry) => {
         if (deletedFiles.includes(f.path)) return false;
-        if (pendingDeletesRef.current.has(f.path)) return false;
         if (seen.has(f.path)) return false;
         seen.add(f.path);
         return true;
@@ -97,6 +71,12 @@ export function AgentPanel({ sessionId, onFileSelect, selectedFile, onAgentListC
       return next;
     });
   };
+
+  const {
+    createFile, createFolder, renameFile, renameFolder, deleteFile, deleteFolder,
+    startFileRename, finishFileRename, renamingPath, renameValue, setRenameValue,
+    toast, setToast, confirm, ConfirmDialog,
+  } = useFileTreeActions({ sessionId, urlPrefix: "agents", files, reloadFiles: loadFiles, selectedFile, onCloseFile });
 
   const [showCreateDialog, setShowCreateDialog] = useState(false);
   const [newAgentName, setNewAgentName] = useState("");
@@ -197,102 +177,6 @@ export function AgentPanel({ sessionId, onFileSelect, selectedFile, onAgentListC
       await fetch(`/api/agents/${name}`, { method: "DELETE" });
     } catch { loadFiles(); loadUserAgents(); }
   };
-
-  const createFile = useCallback(async (parentPath: string) => {
-    const prefix = parentPath.endsWith("/") ? parentPath : `${parentPath}/`;
-    const name = `新文件.md`;
-    let path = `${prefix}${name}`;
-    let idx = 1;
-    while (files.some((f) => f.path === path)) { idx++; path = `${prefix}新文件 ${idx}.md`; }
-    const api = resolveApi(path);
-    if (api) await fetch(api.url, { method: api.method, headers: { "Content-Type": "application/json" }, body: JSON.stringify({ content: "" }) });
-    loadFiles();
-  }, [sessionId, files, loadFiles]);
-
-  const createFolder = useCallback(async (parentPath: string) => {
-    const prefix = parentPath.endsWith("/") ? parentPath : `${parentPath}/`;
-    const name = "新文件夹";
-    let path = `${prefix}${name}`;
-    let idx = 1;
-    while (files.some((f) => f.path === path)) { idx++; path = `${prefix}新文件夹 ${idx}`; }
-    const api = resolveApi(path);
-    if (api) await fetch(api.url, { method: api.method, headers: { "Content-Type": "application/json" }, body: JSON.stringify({ isFolder: true }) });
-    loadFiles();
-  }, [sessionId, files, loadFiles]);
-
-  const renameFolder = useCallback(async (folderPath: string, newName: string) => {
-    if (!newName.trim()) return;
-    const parentPath = folderPath.split("/").slice(0, -1).join("/");
-    const newPath = parentPath ? `${parentPath}/${newName.trim()}` : newName.trim();
-    if (newPath === folderPath) return;
-    const renameUrl = resolveRenameUrl(folderPath, sessionId);
-    if (!renameUrl) { loadFiles(); return; }
-    try {
-      const res = await fetch(renameUrl, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ oldPath: folderPath, newPath }),
-      });
-      if (!res.ok) throw new Error(`Rename failed: ${res.status}`);
-    } catch { /* fallback */ }
-    loadFiles();
-  }, [files, sessionId, loadFiles]);
-
-  // 路径解析已提取到 @/lib/file-api.ts
-
-  const resolveApi = (treePath: string) => resolveApiUrl(treePath, sessionId);
-  const resolveApiDelete = (treePath: string) => resolveDeleteUrl(treePath, sessionId);
-
-  const deleteFolder = useCallback(async (folderPath: string) => {
-    if (!await confirm(`确定删除「${folderPath}」及其所有内容？`)) return;
-    pendingDeletesRef.current.add(folderPath);
-    setFiles((prev) => prev.filter((f) => f.path !== folderPath && !f.path.startsWith(`${folderPath}/`)));
-    try {
-      const res = await fetch(resolveApiDelete(folderPath), { method: "DELETE" });
-      if (!res.ok) throw new Error(`Delete failed: ${res.status}`);
-    } catch { loadFiles(); }
-    pendingDeletesRef.current.delete(folderPath);
-  }, [loadFiles]);
-
-  // 重命名 URL 映射（原子化 rename endpoint，从共享模块引用）
-  // resolveRenameUrl 已通过 file-api.ts 提供
-
-  const renameFile = useCallback(async (filePath: string, newName: string) => {
-    if (!newName.trim()) return;
-    const parentPath = filePath.split("/").slice(0, -1).join("/");
-    const newPath = parentPath ? `${parentPath}/${newName.trim()}` : newName.trim();
-    if (newPath === filePath) return;
-    const renameUrl = resolveRenameUrl(filePath, sessionId);
-    if (!renameUrl) { loadFiles(); return; }
-    try {
-      const res = await fetch(renameUrl, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ oldPath: filePath, newPath }),
-      });
-      if (!res.ok) throw new Error(`Rename failed: ${res.status}`);
-    } catch { /* fallback */ }
-    loadFiles();
-  }, [sessionId, loadFiles]);
-
-  const deleteFile = useCallback(async (filePath: string) => {
-    if (!await confirm(`确定删除「${filePath}」？`)) return;
-    try {
-      const res = await fetch(resolveApiDelete(filePath), { method: "DELETE" });
-      if (!res.ok) throw new Error(`Delete failed: ${res.status}`);
-      // 服务器确认删除成功后再关编辑器
-      if (selectedFile === filePath && onCloseFile) onCloseFile();
-      const deletedFiles: string[] = JSON.parse(localStorage.getItem("deletedFiles") || "[]");
-      deletedFiles.push(filePath);
-      localStorage.setItem("deletedFiles", JSON.stringify(deletedFiles));
-      // Remove from local state immediately — D1 is eventually consistent,
-      // so reloading would likely return stale data and "resurrect" the file.
-      setFiles((prev) => prev.filter((f) => f.path !== filePath));
-    } catch {
-      setToast(`删除失败：${filePath}`);
-      loadFiles(); // fallback: reload to sync
-    }
-  }, [selectedFile, onCloseFile, loadFiles]);
 
   const tree = buildTree(files);
   const agents = agentNames;

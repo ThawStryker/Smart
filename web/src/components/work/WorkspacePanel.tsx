@@ -1,8 +1,7 @@
-import { useState, useEffect, useCallback, useRef } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { buildTree, renderFileChildren } from "./FileTree";
 import { WorkspaceActions } from "./ContextMenu";
-import { useConfirm } from "@/components/shared/useConfirm";
-import { resolveApiUrl, resolveDeleteUrl, resolveRenameUrl } from "@/lib/file-api";
+import { useFileTreeActions } from "@/hooks/useFileTreeActions";
 import type { FileEntry } from "@/types/work";
 
 interface WorkspacePanelProps {
@@ -16,31 +15,6 @@ interface WorkspacePanelProps {
 export function WorkspacePanel({ sessionId, onFileSelect, selectedFile, reloadTrigger, onCloseFile }: WorkspacePanelProps) {
   const [files, setFiles] = useState<FileEntry[]>([]);
   const [expanded, setExpanded] = useState<Set<string>>(new Set(["workspace"]));
-  const [renamingPath, setRenamingPath] = useState<string | null>(null);
-  const [renameValue, setRenameValue] = useState("");
-  const [toast, setToast] = useState<string | null>(null);
-  const { confirm, ConfirmDialog } = useConfirm();
-  useEffect(() => { if (toast) { const t = setTimeout(() => setToast(null), 3000); return () => clearTimeout(t); } }, [toast]);
-  const pendingDeletesRef = useRef<Set<string>>(new Set());
-
-  const startFileRename = (path: string, name: string) => { setRenamingPath(path); setRenameValue(name); };
-  const finishFileRename = (path: string, oldName: string) => {
-    if (renameValue.trim() && renameValue.trim() !== oldName) {
-      if (path.includes(`/${oldName}`)) {
-        const tree = buildTree(files);
-        const isFolder = (() => {
-          const parts = path.split("/");
-          let node: any = tree;
-          for (const p of parts) { if (!node?.__kids?.[p]) return false; node = node.__kids[p]; }
-          return node && typeof node === "object" && "__kids" in node;
-        })();
-        if (isFolder) renameFolder(path, renameValue.trim());
-        else renameFile(path, renameValue.trim());
-      }
-    }
-    setRenamingPath(null);
-    setRenameValue("");
-  };
 
   const loadFiles = useCallback(async () => {
     try {
@@ -52,7 +26,6 @@ export function WorkspacePanel({ sessionId, onFileSelect, selectedFile, reloadTr
         const seen = new Set<string>();
         setFiles(allFiles.filter((f: FileEntry) => {
           if (deletedFiles.includes(f.path)) return false;
-          if (pendingDeletesRef.current.has(f.path)) return false;
           if (seen.has(f.path)) return false;
           seen.add(f.path);
           return true;
@@ -80,97 +53,11 @@ export function WorkspacePanel({ sessionId, onFileSelect, selectedFile, reloadTr
     });
   };
 
-  const resolveApi = (treePath: string) => resolveApiUrl(treePath, sessionId);
-  const resolveApiDelete = (treePath: string) => resolveDeleteUrl(treePath, sessionId);
-
-  const createFile = useCallback(async (parentPath: string) => {
-    const prefix = parentPath.endsWith("/") ? parentPath : `${parentPath}/`;
-    const name = `新文件.md`;
-    let path = `${prefix}${name}`;
-    let idx = 1;
-    while (files.some((f) => f.path === path)) { idx++; path = `${prefix}新文件 ${idx}.md`; }
-    const api = resolveApi(path);
-    if (api) await fetch(api.url, { method: api.method, headers: { "Content-Type": "application/json" }, body: JSON.stringify({ content: "" }) });
-    loadFiles();
-  }, [sessionId, files, loadFiles]);
-
-  const createFolder = useCallback(async (parentPath: string) => {
-    const prefix = parentPath.endsWith("/") ? parentPath : `${parentPath}/`;
-    const name = "新文件夹";
-    let path = `${prefix}${name}`;
-    let idx = 1;
-    while (files.some((f) => f.path === path)) { idx++; path = `${prefix}新文件夹 ${idx}`; }
-    const api = resolveApi(path);
-    if (api) await fetch(api.url, { method: api.method, headers: { "Content-Type": "application/json" }, body: JSON.stringify({ isFolder: true }) });
-    loadFiles();
-  }, [sessionId, files, loadFiles]);
-
-  const renameFolder = useCallback(async (folderPath: string, newName: string) => {
-    if (!newName.trim()) return;
-    const parentPath = folderPath.split("/").slice(0, -1).join("/");
-    const newPath = parentPath ? `${parentPath}/${newName.trim()}` : newName.trim();
-    if (newPath === folderPath) return;
-    const renameUrl = resolveRenameUrl(folderPath, sessionId);
-    if (!renameUrl) { loadFiles(); return; }
-    try {
-      const res = await fetch(renameUrl, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ oldPath: folderPath, newPath }),
-      });
-      if (!res.ok) throw new Error(`Rename failed: ${res.status}`);
-    } catch { /* fallback */ }
-    loadFiles();
-  }, [files, sessionId, loadFiles]);
-
-  const deleteFolder = useCallback(async (folderPath: string) => {
-    if (!await confirm(`确定删除「${folderPath}」及其所有内容？`)) return;
-    pendingDeletesRef.current.add(folderPath);
-    setFiles((prev) => prev.filter((f) => f.path !== folderPath && !f.path.startsWith(`${folderPath}/`)));
-    try {
-      const url = resolveApiDelete(folderPath);
-      if (!url) return;
-      const res = await fetch(url, { method: "DELETE" });
-      if (!res.ok) throw new Error(`Delete failed: ${res.status}`);
-    } catch { loadFiles(); }
-    pendingDeletesRef.current.delete(folderPath);
-  }, [loadFiles]);
-
-  const renameFile = useCallback(async (filePath: string, newName: string) => {
-    if (!newName.trim()) return;
-    const parentPath = filePath.split("/").slice(0, -1).join("/");
-    const newPath = parentPath ? `${parentPath}/${newName.trim()}` : newName.trim();
-    if (newPath === filePath) return;
-    const renameUrl = resolveRenameUrl(filePath, sessionId);
-    if (!renameUrl) { loadFiles(); return; }
-    try {
-      const res = await fetch(renameUrl, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ oldPath: filePath, newPath }),
-      });
-      if (!res.ok) throw new Error(`Rename failed: ${res.status}`);
-    } catch { /* fallback */ }
-    loadFiles();
-  }, [sessionId, loadFiles]);
-
-  const deleteFile = useCallback(async (filePath: string) => {
-    if (!await confirm(`确定删除「${filePath}」？`)) return;
-    try {
-      const url = resolveApiDelete(filePath);
-      if (!url) return;
-      const res = await fetch(url, { method: "DELETE" });
-      if (!res.ok) throw new Error(`Delete failed: ${res.status}`);
-      if (selectedFile === filePath && onCloseFile) onCloseFile();
-      const deletedFiles: string[] = JSON.parse(localStorage.getItem("deletedFiles") || "[]");
-      deletedFiles.push(filePath);
-      localStorage.setItem("deletedFiles", JSON.stringify(deletedFiles));
-      setFiles((prev) => prev.filter((f) => f.path !== filePath));
-    } catch {
-      setToast(`删除失败：${filePath}`);
-      loadFiles();
-    }
-  }, [selectedFile, onCloseFile, loadFiles]);
+  const {
+    createFile, createFolder, renameFile, renameFolder, deleteFile, deleteFolder,
+    startFileRename, finishFileRename, renamingPath, renameValue, setRenameValue,
+    toast, ConfirmDialog,
+  } = useFileTreeActions({ sessionId, urlPrefix: "workspace", files, reloadFiles: loadFiles, selectedFile, onCloseFile });
 
   const tree = buildTree(files);
 

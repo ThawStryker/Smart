@@ -114,7 +114,7 @@ export function ChatPanel({
   const mountedRef = useRef(false);
   const streamTextRef = useRef("");
   const phaseCardsRef = useRef<PhaseCard[]>([]);
-  const preStreamMsgCountRef = useRef(0);
+  const preStreamMaxIdRef = useRef(0);
 
   const loadMessages = useCallback(async () => {
     const res = await fetch(`/api/work/sessions/${sessionId}/messages`);
@@ -184,7 +184,7 @@ export function ChatPanel({
 
     const tempId = -(Date.now());
     const optimisticMsg: ChatMessage = { id: tempId, role: "user", content: message, agentName: null, createdAt: new Date().toISOString() };
-    setMessages((prev) => { preStreamMsgCountRef.current = prev.length + 1; return [...prev, optimisticMsg]; });
+    setMessages((prev) => { preStreamMaxIdRef.current = prev.length > 0 ? Math.max(...prev.map(m => m.id)) : 0; return [...prev, optimisticMsg]; });
 
     const isDirectChat = !message.includes("@");
     if (!isDirectChat) {
@@ -277,15 +277,8 @@ export function ChatPanel({
         streamTextRef.current += (event.text || "");
       } else if (p === "write") {
         // write delta → 通知上层追加到编辑器
-        if (onPhase) {
-          if (event.meta?.path) {
-            onPhase({ phase: "write", meta: event.meta, text: event.text });
-          } else if (event.text) {
-            const lastWrite = phaseCardsRef.current.filter(c => c.phase === "write").pop();
-            if (lastWrite?.meta?.path) {
-              onPhase({ phase: "write", meta: lastWrite.meta, text: event.text });
-            }
-          }
+        if (onPhase && event.meta?.path) {
+          onPhase({ phase: "write", meta: event.meta, text: event.text });
         }
       } else if (p) {
         // 其他 delta → 追加到最后一个同 phase 的卡片
@@ -330,7 +323,7 @@ export function ChatPanel({
 
   const hasStreamContent = phaseCards.length > 0 || streamText !== "";
   const visibleMessages = hasStreamContent
-    ? messages.filter((m, i) => !(m.role === "assistant" && i >= preStreamMsgCountRef.current))
+    ? messages.filter((m) => !(m.role === "assistant" && m.id > preStreamMaxIdRef.current && m.id < 0))
     : messages;
 
   return (

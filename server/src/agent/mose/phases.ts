@@ -27,7 +27,7 @@ export const DEFAULT_TOOL_PHASE: Record<string, PhaseName> = {
 // ── Phase 事件类型 ──
 export type PhaseEvent =
   | { type: "phase"; phase: PhaseName; meta?: Record<string, unknown> }
-  | { type: "delta"; phase: PhaseName; text: string }
+  | { type: "delta"; phase: PhaseName; text: string; meta?: Record<string, unknown> }
   | { type: "done" }
   | { type: "error"; message: string };
 
