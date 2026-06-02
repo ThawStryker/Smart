@@ -23,15 +23,6 @@ interface ChatPanelProps {
   onStreamEnd?: () => void;
 }
 
-// ── Agent avatar ──
-
-const agentAvatars = ["🐱","🐶","🦊","🐼","🐨","🐯","🦁","🐸","🐵","🐰","🐻","🦄","🐙","🦋","🐞","🐣","🦉","🐳","🦀","🐲"];
-function getAvatar(name: string): string {
-  let hash = 0;
-  for (let i = 0; i < name.length; i++) hash = ((hash << 5) - hash + name.charCodeAt(i)) | 0;
-  return agentAvatars[Math.abs(hash) % agentAvatars.length];
-}
-
 // ── Phase display mapping ──
 
 type PhaseName = "thinking" | "agent_start" | "agent_done" | "read" | "memory" | "skill" | "search" | "write" | "text";
@@ -60,17 +51,17 @@ function getPhaseLabel(phase: PhaseName, meta?: Record<string, unknown>): string
   if (phase === "agent_start" && meta?.agentName) return `🤖 ${meta.agentName}`;
   if (phase === "read" && meta?.path) {
     const file = (meta.path as string).split("/").pop() || meta.path;
-    return `📖 Read ${file}`;
+    return `Read ${file}`;
   }
   if (phase === "write" && meta?.path) {
     const file = (meta.path as string).split("/").pop() || meta.path;
-    return `✍️ Write ${file}`;
+    return `Write ${file}`;
   }
-  if (phase === "search" && meta?.query) return `🔍 ${meta.query}`;
-  if (phase === "skill" && meta?.name) return `🎯 ${meta.name}`;
-  if (phase === "memory" && meta?.entry) return `🧠 ${meta.entry}`;
+  if (phase === "search" && meta?.query) return `${meta.query}`;
+  if (phase === "skill" && meta?.name) return `${meta.name}`;
+  if (phase === "memory" && meta?.entry) return `${meta.entry}`;
 
-  return `${display.icon} ${display.label}`;
+  return display.label;
 }
 
 // ── Markdown component ──
@@ -253,21 +244,9 @@ export function ChatPanel({
 
       if (p === "agent_start") {
         setStreamAgent(event.meta?.agentName as string || null);
+        return; // 不在卡片区显示——由 streaming 消息 header 展示
       }
       if (p === "agent_done") {
-        setStreamAgent(null);
-        // 标记最后一个 agent_start 卡片为 done
-        setPhaseCards((prev) => {
-          const next = [...prev];
-          for (let i = next.length - 1; i >= 0; i--) {
-            if (next[i].phase === "agent_start") {
-              next[i] = { ...next[i], content: "✓" };
-              break;
-            }
-          }
-          phaseCardsRef.current = next;
-          return next;
-        });
         return;
       }
       // write phase → 通知上层打开文件
@@ -393,16 +372,6 @@ export function ChatPanel({
         {/* 非 thinking 的 phase 卡片（read/memory/skill/search/write） */}
         {(streamActive || phaseCards.length > 0) && hasCards && phaseCards.map((card) => {
           if (card.phase === "thinking") return null;
-          if (card.phase === "agent_start") {
-            const name = (card.meta?.agentName as string) || "Agent";
-            const avatar = getAvatar(name);
-            return (
-              <div key={card.key} className="animate-pageIn flex items-center gap-2 py-1">
-                <span className="text-sm leading-none">{avatar}</span>
-                <span className="text-xs font-bold uppercase tracking-wider text-[var(--app-text-secondary)]">{name}</span>
-              </div>
-            );
-          }
           const label = getPhaseLabel(card.phase, card.meta);
           return (
             <div key={card.key} className="animate-pageIn flex items-center gap-2 py-1 pl-1">
@@ -413,7 +382,7 @@ export function ChatPanel({
         })}
 
         {/* 流式 assistant 消息（统一块：角色 + thinking折叠 + 文本） */}
-        {(streamActive || streamText !== "") && (
+        {(streamActive || streamText !== "" || streamThinking !== "") && (
           <div className="animate-pageIn">
             {/* 角色标签 */}
             <div className="flex items-center gap-2 mb-1">

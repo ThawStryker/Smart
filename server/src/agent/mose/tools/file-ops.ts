@@ -74,15 +74,32 @@ export async function writeContent(
   }
 }
 
-// ── write_file 工具处理器 ──
+// ── write_file 工具处理器（单次 upsert，避免 D1 最终一致性导致内容丢失）──
 async function writeFileHandler(args: Record<string, unknown>, ctx: ToolContext): Promise<string> {
   const rawPath = args.path as string | undefined;
   const content = args.content as string | undefined;
   if (!rawPath || content === undefined) return "Error: path and content required";
 
+  // 只对 workspace 文件做表格换行规范化
   const normalized = rawPath.startsWith("workspace/") ? normalizeTableCellBreaks(content) : content;
-  await createFile(rawPath, ctx.userId, ctx.agentName);
-  await writeContent(rawPath, normalized, ctx.userId, ctx.agentName);
+
+  if (rawPath.startsWith("workspace/")) {
+    const filePath = rawPath.slice("workspace/".length);
+    await db.insert(workspaceFiles).values({
+      userId: ctx.userId, path: filePath, content: normalized, updatedAt: new Date().toISOString(),
+    }).onConflictDoUpdate({
+      target: [workspaceFiles.userId, workspaceFiles.path],
+      set: { content: normalized, updatedAt: new Date().toISOString() },
+    });
+  } else {
+    if (!ctx.agentName) return "Error: agent name required for non-workspace files";
+    await db.insert(agentFiles).values({
+      userId: ctx.userId, agentName: ctx.agentName, path: rawPath, content: normalized, updatedAt: new Date().toISOString(),
+    }).onConflictDoUpdate({
+      target: [agentFiles.userId, agentFiles.agentName, agentFiles.path],
+      set: { content: normalized, updatedAt: new Date().toISOString() },
+    });
+  }
   return `File written: ${rawPath}`;
 }
 
