@@ -1,6 +1,5 @@
 import { useState, useEffect, useCallback, useRef } from "react";
 import { getAgentAvatar } from "./icons";
-import { WorkspacePanel } from "./WorkspacePanel";
 import { buildTree, renderFileChildren } from "./FileTree";
 import { useConfirm } from "@/components/shared/useConfirm";
 import { resolveApiUrl, resolveDeleteUrl, resolveRenameUrl, loadAllAgentFiles } from "@/lib/file-api";
@@ -48,25 +47,13 @@ export function AgentPanel({ sessionId, onFileSelect, selectedFile, onAgentListC
 
   const loadFiles = useCallback(async () => {
     try {
-      const [workspaceRes] = await Promise.all([
-        fetch("/api/work/workspace").catch(() => ({ ok: false } as Response)),
-      ]);
-      let allFiles: FileEntry[] = [];
-      // Workspace files — prefix with "workspace/" for tree display
-      if (workspaceRes.ok) {
-        const wsFiles = await workspaceRes.json();
-        for (const f of wsFiles) {
-          allFiles.push({ ...f, path: `workspace/${f.path}` });
-        }
-      }
-      // Agent files — 批量加载（N+1 → 1 请求）
       const agentFileMap = await loadAllAgentFiles();
+      const allFiles: FileEntry[] = [];
       for (const [agentName, files] of agentFileMap) {
         for (const f of files) {
           allFiles.push({ ...f, path: `agents/${agentName}/${f.path}` });
         }
       }
-      // Deduplicate by path + skip pending deletes + skip sessionStorage deleted
       const deletedFiles: string[] = JSON.parse(localStorage.getItem("deletedFiles") || "[]");
       const seen = new Set<string>();
       setFiles(allFiles.filter((f: FileEntry) => {
@@ -373,25 +360,6 @@ export function AgentPanel({ sessionId, onFileSelect, selectedFile, onAgentListC
           </div>
         )}
       </div>
-
-      <WorkspacePanel
-        expanded={expanded}
-        toggleExpand={toggleExpand}
-        tree={tree}
-        onFileSelect={onFileSelect}
-        selectedFile={selectedFile}
-        createFile={createFile}
-        createFolder={createFolder}
-        renameFolder={renameFolder}
-        deleteFolder={deleteFolder}
-        renameFile={renameFile}
-        deleteFile={deleteFile}
-        renamingPath={renamingPath}
-        renameValue={renameValue}
-        onStartRename={startFileRename}
-        onRenameChange={setRenameValue}
-        onFinishRename={finishFileRename}
-      />
 
       {ConfirmDialog}
 

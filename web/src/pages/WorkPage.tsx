@@ -2,8 +2,9 @@ import { useState, useEffect } from "react";
 import { useSearchParams } from "react-router-dom";
 import { useSessions, useAgents, useFiles, useActiveFile } from "@/hooks";
 import { AgentPanel } from "@/components/work/AgentPanel";
+import { WorkspacePanel } from "@/components/work/WorkspacePanel";
 import { DocumentEditor } from "@/components/work/DocumentEditor";
-import { ChatPanel } from "@/components/work/ChatPanel";
+import { ChatPanel, type PhaseEvent } from "@/components/work/ChatPanel";
 
 function useMediaQuery(query: string): boolean {
   const [match, setMatch] = useState(false);
@@ -141,13 +142,25 @@ export function WorkPage() {
 
       {showLeft && (
       <div className="w-64 flex-shrink-0 flex flex-col overflow-hidden border-r border-[var(--app-border)]">
-        <AgentPanel
-          sessionId={sessionId}
-          onFileSelect={openFile}
-          selectedFile={activeFile?.path || null}
-          onAgentListChange={loadAgents}
-          reloadTrigger={reloadCounter}
-        />
+        <div className="flex flex-col" style={{ flex: "1 1 0", minHeight: 0 }}>
+          <div className="overflow-auto" style={{ flex: "1 1 0", minHeight: 0 }}>
+            <AgentPanel
+              sessionId={sessionId}
+              onFileSelect={openFile}
+              selectedFile={activeFile?.path || null}
+              onAgentListChange={loadAgents}
+              reloadTrigger={reloadCounter}
+              onCloseFile={closeFile}
+            />
+          </div>
+          <WorkspacePanel
+            sessionId={sessionId}
+            onFileSelect={openFile}
+            selectedFile={activeFile?.path || null}
+            reloadTrigger={reloadCounter}
+            onCloseFile={closeFile}
+          />
+        </div>
       </div>
       )}
       <div className="flex-1 overflow-hidden">
@@ -182,8 +195,19 @@ export function WorkPage() {
               else { const s = await createSession(); if (s) setSearchParams({ session: String(s.id) }); }
             }
           }}
-          onOpenFile={(path: string) => { openFile(path, ""); setIsStreaming(true); }}
-          onDocDelta={(path: string, delta: string) => { if (activeFile && activeFile.path === path) appendContent(delta); }}
+          onPhase={(event: PhaseEvent) => {
+            if (event.phase === "write" && event.meta?.path) {
+              const path = event.meta.path as string;
+              if (event.text !== undefined) {
+                // delta — 追加到编辑器
+                if (activeFile && activeFile.path === path) appendContent(event.text);
+              } else {
+                // phase 开始 — 打开文件
+                openFile(path, "");
+                setIsStreaming(true);
+              }
+            }
+          }}
           onStreamEnd={() => {
             // R2: 停止时自动保存当前文件到服务器
             if (activeFile) save(activeFile.path, activeFile.content, sessionId);

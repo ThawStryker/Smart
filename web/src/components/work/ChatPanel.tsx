@@ -4,6 +4,12 @@ import remarkGfm from "remark-gfm";
 import { SessionBar } from "./SessionBar";
 import type { ChatMessage, WorkSession } from "@/types/work";
 
+export interface PhaseEvent {
+  phase: PhaseName;
+  meta?: Record<string, unknown>;
+  text?: string;
+}
+
 interface ChatPanelProps {
   sessionId: number;
   agents: string[];
@@ -13,8 +19,7 @@ interface ChatPanelProps {
   onSelectSession: (id: number) => void;
   onRenameSession: (id: number, title: string) => void;
   onDeleteSession: (id: number) => void;
-  onOpenFile?: (path: string) => void;
-  onDocDelta?: (path: string, delta: string) => void;
+  onPhase?: (event: PhaseEvent) => void;
   onStreamEnd?: () => void;
 }
 
@@ -84,7 +89,7 @@ function MarkdownContent({ content }: { content: string }) {
 export function ChatPanel({
   sessionId, agents, sessions,
   onFirstMessage, onCreateSession, onSelectSession, onRenameSession, onDeleteSession,
-  onOpenFile, onDocDelta, onStreamEnd,
+  onPhase, onStreamEnd,
 }: ChatPanelProps) {
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [input, setInput] = useState("");
@@ -254,9 +259,9 @@ export function ChatPanel({
         });
         return;
       }
-      // write phase → 打开文件编辑器
-      if (p === "write" && event.meta?.path && onOpenFile) {
-        onOpenFile(event.meta.path as string);
+      // write phase → 通知上层打开文件
+      if (p === "write" && event.meta?.path && onPhase) {
+        onPhase({ phase: "write", meta: event.meta });
       }
       const card: PhaseCard = {
         key: `card-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
@@ -271,14 +276,15 @@ export function ChatPanel({
         setStreamText((prev) => prev + (event.text || ""));
         streamTextRef.current += (event.text || "");
       } else if (p === "write") {
-        // write delta → 追加到编辑器
-        if (event.meta?.path && onDocDelta) {
-          onDocDelta(event.meta.path as string, event.text || "");
-        } else if (event.text && onDocDelta) {
-          // fallback: 从最后一个 write card 的 meta 中取 path
-          const lastWrite = phaseCardsRef.current.filter(c => c.phase === "write").pop();
-          if (lastWrite?.meta?.path) {
-            onDocDelta(lastWrite.meta.path as string, event.text);
+        // write delta → 通知上层追加到编辑器
+        if (onPhase) {
+          if (event.meta?.path) {
+            onPhase({ phase: "write", meta: event.meta, text: event.text });
+          } else if (event.text) {
+            const lastWrite = phaseCardsRef.current.filter(c => c.phase === "write").pop();
+            if (lastWrite?.meta?.path) {
+              onPhase({ phase: "write", meta: lastWrite.meta, text: event.text });
+            }
           }
         }
       } else if (p) {

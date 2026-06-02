@@ -39,11 +39,8 @@ export function resolveApiUrl(treePath: string, _sessionId: number): { url: stri
       method: "PUT",
     };
   }
-  // Default to workspace
-  return {
-    url: `/api/work/workspace/${encodeFilePath(treePath)}`,
-    method: "PUT",
-  };
+  // 不支持的前缀，返回 null
+  return null;
 }
 
 /** 解析 DELETE URL */
@@ -53,7 +50,8 @@ export function resolveDeleteUrl(treePath: string, _sessionId: number): string {
   if (treePath.startsWith("workspace/")) {
     return `/api/work/workspace/${encodeFilePath(treePath.slice("workspace/".length))}`;
   }
-  return `/api/work/workspace/${encodeFilePath(treePath)}`;
+  // 不支持的前缀
+  return "";
 }
 
 /**
@@ -90,5 +88,5 @@ export function resolveRenameUrl(treePath: string, _sessionId: number): string |
   const m = treePath.match(/^agents\/([^/]+)\/(.+)$/);
   if (m) return `/api/agents/${encodeURIComponent(m[1])}/files/rename`;
   if (treePath.startsWith("workspace/")) return "/api/work/workspace/rename";
-  return "/api/work/workspace/rename";
+  return null;
 }
