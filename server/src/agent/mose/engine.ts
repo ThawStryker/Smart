@@ -98,7 +98,8 @@ async function* callLLM(
     clearTimeout(timeoutId);
 
     if (!res.ok || !res.body) {
-      yield { type: "error", message: `API error: ${res.status}` };
+      const body = await res.text().catch(() => "(no body)");
+      yield { type: "error", message: `API ${res.status} model=${modelConfig.modelName} url=${modelConfig.baseURL}${modelConfig.apiPath} body=${body.slice(0, 200)}` };
       return { textContent: "", reasoningContent: "", toolCalls: [] };
     }
 
