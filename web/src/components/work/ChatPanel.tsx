@@ -23,6 +23,13 @@ interface ChatPanelProps {
   onStreamEnd?: () => void;
 }
 
+const agentAvatars = ["🐱","🐶","🦊","🐼","🐨","🐯","🦁","🐸","🐵","🐰","🐻","🦄","🐙","🦋","🐞","🐣","🦉","🐳","🦀","🐲"];
+function getAvatar(name: string): string {
+  let hash = 0;
+  for (let i = 0; i < name.length; i++) hash = ((hash << 5) - hash + name.charCodeAt(i)) | 0;
+  return agentAvatars[Math.abs(hash) % agentAvatars.length];
+}
+
 // ── Phase display mapping ──
 
 type PhaseName = "thinking" | "agent_start" | "agent_done" | "read" | "memory" | "skill" | "search" | "write" | "text";
@@ -369,23 +376,12 @@ export function ChatPanel({
           </div>
         ))}
 
-        {/* 非 thinking 的 phase 卡片（read/memory/skill/search/write） */}
-        {(streamActive || phaseCards.length > 0) && hasCards && phaseCards.map((card) => {
-          if (card.phase === "thinking") return null;
-          const label = getPhaseLabel(card.phase, card.meta);
-          return (
-            <div key={card.key} className="animate-pageIn flex items-center gap-2 py-1 pl-1">
-              <span className="text-xs">{phaseDisplay[card.phase]?.icon || "🔧"}</span>
-              <span className="text-xs text-[var(--app-text-secondary)]">{label}</span>
-            </div>
-          );
-        })}
-
-        {/* 流式 assistant 消息（统一块：角色 + thinking折叠 + 文本） */}
+        {/* 流式 assistant 消息（统一块：角色 + thinking + 卡片 + 文本） */}
         {(streamActive || streamText !== "" || streamThinking !== "") && (
           <div className="animate-pageIn">
             {/* 角色标签 */}
             <div className="flex items-center gap-2 mb-1">
+              {streamAgent && <span className="text-sm leading-none">{getAvatar(streamAgent)}</span>}
               <span className="w-1.5 h-1.5 rounded-full" style={{ background: streamAgent ? "#a78bfa" : "var(--app-text-secondary)" }} />
               <span className="text-xs font-bold uppercase tracking-wider" style={{ color: streamAgent ? "#a78bfa" : "var(--app-text-secondary)" }}>
                 {streamAgent || "Yumi"}
@@ -408,6 +404,17 @@ export function ChatPanel({
                 )}
               </div>
             )}
+            {/* Phase 卡片（read/memory/skill/search/write） */}
+            {(streamActive || phaseCards.length > 0) && hasCards && phaseCards.map((card) => {
+              if (card.phase === "thinking") return null;
+              const label = getPhaseLabel(card.phase, card.meta);
+              return (
+                <div key={card.key} className="animate-pageIn flex items-center gap-2 py-1 pl-1 ml-3">
+                  <span className="text-xs">{phaseDisplay[card.phase]?.icon || "🔧"}</span>
+                  <span className="text-xs text-[var(--app-text-secondary)]">{label}</span>
+                </div>
+              );
+            })}
             {/* 文本内容 */}
             <div className="text-sm leading-relaxed whitespace-pre-wrap text-[var(--app-text)]">
               {streamText ? <MarkdownContent content={streamText} /> : (streamActive ? <span className="text-[var(--app-text-tertiary)]">...</span> : "")}
