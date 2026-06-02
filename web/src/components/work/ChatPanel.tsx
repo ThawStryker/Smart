@@ -232,6 +232,9 @@ export function ChatPanel({
     if (onStreamEnd) onStreamEnd();
     setStreamActive(false); abortRef.current = null;
     loadMessages();
+    // 清除流式文本，避免与 DB 加载的消息重复
+    setStreamText("");
+    streamTextRef.current = "";
   };
 
   const handleSSE = (event: any) => {
