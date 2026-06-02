@@ -235,7 +235,6 @@ export function ChatPanel({
     }
     if (onStreamEnd) onStreamEnd();
     setStreamActive(false); abortRef.current = null;
-    loadMessages();
   };
 
   const handleSSE = (event: any) => {
