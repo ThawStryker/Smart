@@ -52,6 +52,9 @@ chatRoutes.post("/", async (c) => {
     modelConfig,
     toolHandlers,
     toolDefs: getOpenAITools(),
+    onSaveMessage: async (msg) => {
+      await db.insert(workMessages).values(msg);
+    },
   };
 
   const events = run(input);

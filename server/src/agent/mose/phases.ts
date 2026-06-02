@@ -54,6 +54,8 @@ export interface EngineInput {
   };
   toolHandlers: Record<string, ToolHandler>;
   toolDefs: Array<Record<string, unknown>>;
+  /** 保存消息回调（由上层注入，engine 不直接操作 DB） */
+  onSaveMessage?: (msg: { sessionId: number; agentName: string | null; role: string; content: string }) => Promise<void>;
 }
 
 // ── Engine 输出类型 ──

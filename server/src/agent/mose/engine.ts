@@ -1,5 +1,3 @@
-import { db } from "edgespark";
-import { workMessages } from "@defs";
 import { loadAgentFiles, loadSessionMessages, listAgentNames } from "./loader";
 import { buildAgentSystemPrompt, buildConversationSummary } from "./context";
 import type { EngineInput, EngineOutput, PhaseEvent, PhaseName } from "./phases";
@@ -216,20 +214,21 @@ async function* executeTools(
     let parsedArgs: Record<string, unknown> = {};
     try { parsedArgs = JSON.parse(tc.args); } catch {}
 
-    // yield phase 事件（前端据此渲染卡片）
-    const meta = handler?.meta ? handler.meta(parsedArgs) : undefined;
-    yield { type: "phase", phase, meta };
-
-    // write_file 额外 yield delta 让前端流式写入编辑器
-    if (phase === "write" && parsedArgs.content) {
-      yield { type: "delta", phase: "write", text: parsedArgs.content as string };
-    }
-
+    // 1. 先执行工具（write_file 创建文件+写内容）
     let result: string;
     try {
       result = await handler!.execute(parsedArgs);
     } catch (err: unknown) {
       result = `Error: ${err instanceof Error ? err.message : String(err)}`;
+    }
+
+    // 2. yield phase 事件（前端据此渲染卡片、刷新文件树、自动打开）
+    const meta = handler?.meta ? handler.meta(parsedArgs) : undefined;
+    yield { type: "phase", phase, meta };
+
+    // 3. write_file 额外 yield delta 让前端流式写入编辑器
+    if (phase === "write" && parsedArgs.content) {
+      yield { type: "delta", phase: "write", text: parsedArgs.content as string };
     }
 
     results.push({ tool_call_id: tc.id, content: result });
@@ -275,13 +274,10 @@ async function* runAgent(input: EngineInput): EngineOutput {
 
   // 如果 Phase 1 没有 tool_calls，直接返回
   if (p1Result.toolCalls.length === 0) {
-    if (p1Result.textContent && !p1Result.reasoningContent && p1Result.textContent) {
-      // 纯文本回复，已经 yield 了 text delta
-    }
     const fullResponse = p1Result.textContent;
 
-    if (!suppressSave) {
-      await db.insert(workMessages).values({
+    if (!suppressSave && input.onSaveMessage) {
+      await input.onSaveMessage({
         sessionId,
         agentName,
         role: "assistant",
@@ -404,8 +400,8 @@ async function* runAgent(input: EngineInput): EngineOutput {
     }
   }
 
-  if (!suppressSave) {
-    await db.insert(workMessages).values({
+  if (!suppressSave && input.onSaveMessage) {
+    await input.onSaveMessage({
       sessionId,
       agentName,
       role: "assistant",
@@ -448,12 +444,14 @@ async function* runDirect(input: EngineInput): EngineOutput {
     yield { type: "delta", phase: "text", text: result.textContent };
   }
 
-  await db.insert(workMessages).values({
-    sessionId,
-    agentName: null,
-    role: "assistant",
-    content: normalizeNewlines(result.textContent),
-  });
+  if (input.onSaveMessage) {
+    await input.onSaveMessage({
+      sessionId,
+      agentName: null,
+      role: "assistant",
+      content: normalizeNewlines(result.textContent),
+    });
+  }
 
   yield { type: "done" };
 }
