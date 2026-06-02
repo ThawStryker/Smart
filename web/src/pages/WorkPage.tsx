@@ -4,7 +4,7 @@ import { useSessions, useAgents, useFiles, useActiveFile } from "@/hooks";
 import { AgentPanel } from "@/components/work/AgentPanel";
 import { WorkspacePanel } from "@/components/work/WorkspacePanel";
 import { DocumentEditor } from "@/components/work/DocumentEditor";
-import { ChatPanel, type PhaseEvent } from "@/components/work/ChatPanel";
+import { RawStreamPanel } from "@/components/work/RawStreamPanel";
 
 function useMediaQuery(query: string): boolean {
   const [match, setMatch] = useState(false);
@@ -16,10 +16,6 @@ function useMediaQuery(query: string): boolean {
     return () => mq.removeEventListener("change", handler);
   }, [query]);
   return match;
-}
-
-function truncateTitle(text: string, max = 60): string {
-  return text.length > max ? text.slice(0, max) + "..." : text;
 }
 
 function WelcomePage({ onStart }: { onStart: () => void }) {
@@ -60,12 +56,12 @@ export function WorkPage() {
   const [searchParams, setSearchParams] = useSearchParams();
   const sessionId = parseInt(searchParams.get("session") || "0");
 
-  const { sessions, loading, load: loadSessions, create: createSession, rename: renameSession, remove: deleteSession } = useSessions();
-  const { agents, load: loadAgents } = useAgents();
+  const { sessions, loading, load: loadSessions, create: createSession } = useSessions();
+  const { load: loadAgents } = useAgents();
   const { load: loadFiles } = useFiles(sessionId);
-  const { activeFile, isStreaming, setIsStreaming, open: openFile, close: closeFile, updateContent, appendContent, save } = useActiveFile();
+  const { activeFile, isStreaming, open: openFile, close: closeFile, updateContent, save } = useActiveFile();
 
-  const [reloadCounter, setReloadCounter] = useState(0);
+  const [reloadCounter] = useState(0);
   const [loadingTimeout, setLoadingTimeout] = useState(false);
   const isSmallScreen = useMediaQuery("(max-width: 1024px)");
   const [showLeft, setShowLeft] = useState(!isSmallScreen);
@@ -175,45 +171,10 @@ export function WorkPage() {
         />
       </div>
       {showRight && (
-      <div className="w-80 flex-shrink-0 overflow-hidden border-l border-[var(--app-border)]">
-        <ChatPanel
+      <div className="w-96 flex-shrink-0 overflow-hidden border-l border-[var(--app-border)]">
+        <RawStreamPanel
           key={sessionId}
           sessionId={sessionId}
-          agents={agents}
-          sessions={sessions}
-          onFirstMessage={async (msg: string) => { const s = sessions.find((s: any) => s.id === sessionId); if (s?.title === "新对话") renameSession(sessionId, truncateTitle(msg)); }}
-          onCreateSession={handleCreateSession}
-          onSelectSession={(id: number) => setSearchParams({ session: String(id) })}
-          onRenameSession={renameSession}
-          onDeleteSession={async (id: number) => {
-            const s = sessions.find((s) => s.id === id);
-            if (!window.confirm(`确定删除对话「${s?.title || id}」？`)) return;
-            await deleteSession(id);
-            const remaining = sessions.filter((s) => s.id !== id);
-            if (id === sessionId) {
-              if (remaining.length > 0) setSearchParams({ session: String(remaining[0].id) });
-              else { const s = await createSession(); if (s) setSearchParams({ session: String(s.id) }); }
-            }
-          }}
-          onPhase={(event: PhaseEvent) => {
-            if (event.phase === "write" && event.meta?.path) {
-              const path = event.meta.path as string;
-              if (event.text !== undefined) {
-                // delta — 追加到编辑器
-                if (activeFile && activeFile.path === path) appendContent(event.text);
-              } else {
-                // phase 开始 — 打开文件
-                openFile(path, "");
-                setIsStreaming(true);
-              }
-            }
-          }}
-          onStreamEnd={() => {
-            // R2: 停止时自动保存当前文件到服务器
-            if (activeFile) save(activeFile.path, activeFile.content, sessionId);
-            setIsStreaming(false);
-            setReloadCounter((c) => c + 1);
-          }}
         />
       </div>
       )}
