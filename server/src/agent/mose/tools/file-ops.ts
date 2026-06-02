@@ -4,6 +4,16 @@ import { agentFiles, workspaceFiles } from "@defs";
 import { register } from "./registry";
 import type { ToolContext } from "./registry";
 
+/** 规范化 markdown 表格 Cell 内的换行：\\ + 换行 或 \\| 连续序列 → <br>（不留换行，保持表格单行） */
+function normalizeTableCellBreaks(content: string): string {
+  let result = content;
+  // 旧模式：\\ + 换行 → <br>（不留换行，保持表格行在一行内）
+  result = result.split("\\\\\n").join("<br>");
+  // 新模式：\| 连续 2+ → <br>（模型用 \|\|\|\| 分隔对话）
+  result = result.replace(/(?:\\\|){2,}/g, "<br>");
+  return result;
+}
+
 // ── 底层方法：创建文件（不写内容） ──
 export async function createFile(
   rawPath: string,
@@ -70,8 +80,9 @@ async function writeFileHandler(args: Record<string, unknown>, ctx: ToolContext)
   const content = args.content as string | undefined;
   if (!rawPath || content === undefined) return "Error: path and content required";
 
+  const normalized = rawPath.startsWith("workspace/") ? normalizeTableCellBreaks(content) : content;
   await createFile(rawPath, ctx.userId, ctx.agentName);
-  await writeContent(rawPath, content, ctx.userId, ctx.agentName);
+  await writeContent(rawPath, normalized, ctx.userId, ctx.agentName);
   return `File written: ${rawPath}`;
 }
 
