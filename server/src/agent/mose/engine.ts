@@ -219,6 +219,19 @@ async function* runAgent(input: EngineInput): EngineOutput {
   // yield agent_start
   yield { type: "phase", phase: "agent_start", meta: { agentName, depth } };
 
+  // Emit 加载阶段（context → memory → skills → generate → write）
+  for (const _ctx of agentCtx.contexts) {
+    yield { type: "phase", phase: "read", meta: { label: "加载背景" } };
+  }
+  if (agentCtx.memoryMd) {
+    yield { type: "phase", phase: "memory", meta: { label: "加载记忆" } };
+  }
+  if (agentCtx.skills.length > 0) {
+    for (const sk of agentCtx.skills) {
+      yield { type: "phase", phase: "skill", meta: { name: sk.name } };
+    }
+  }
+
   // 工具循环（max 15 rounds）
   for (let step = 0; step < 15; step++) {
     const result = yield* callLLM(messages, toolDefs, modelConfig);
