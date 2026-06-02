@@ -138,9 +138,9 @@ describe('getModel', () => {
 
 describe('DEFAULTS', () => {
   it('has all required default models', () => {
-    expect(DEFAULTS.agent).toBe('deepseek-v4-pro-260425');
-    expect(DEFAULTS.chat).toBe('seed-pro');
-    expect(DEFAULTS.coding).toBe('seed-code');
+    expect(DEFAULTS.agent).toBe('deepseek-v4-pro');
+    expect(DEFAULTS.chat).toBe('deepseek-v4-pro');
+    expect(DEFAULTS.coding).toBe('deepseek-v4-pro');
   });
 
   it('all default model keys exist in _models', () => {
