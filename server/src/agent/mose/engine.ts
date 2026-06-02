@@ -1,5 +1,5 @@
 import { loadAgentFiles, loadSessionMessages, listAgentNames } from "./loader";
-import { buildAgentSystemPrompt, buildConversationSummary } from "./context";
+import { buildConversationSummary } from "./context";
 import type { EngineInput, EngineOutput, PhaseEvent, PhaseName } from "./phases";
 
 function normalizeNewlines(t: string): string {
@@ -176,22 +176,36 @@ async function* callLLM(
   }
 }
 
-// ── 过滤 Phase 1 工具（排除 write_file） ──
-function filterPhase1Tools(
-  toolDefs: Array<Record<string, unknown>>,
-  toolHandlers: Record<string, EngineInput["toolHandlers"][string]>,
-) {
-  const filteredDefs = toolDefs.filter((t) => {
-    const name = (t as any).function?.name;
-    return name !== "write_file" && name !== "edit_file";
-  });
-  const filteredHandlers: Record<string, EngineInput["toolHandlers"][string]> = {};
-  for (const [name, handler] of Object.entries(toolHandlers)) {
-    if (name !== "write_file" && name !== "edit_file") {
-      filteredHandlers[name] = handler;
+// ── 从对话历史检测已完成的步骤 ──
+interface StepOutput {
+  step: number;
+  content: string;
+  needsInfo: boolean;
+}
+
+function detectCompletedSteps(
+  messages: Array<{ agentName: string | null; content: string }>,
+): StepOutput[] {
+  const steps: StepOutput[] = [];
+  for (const msg of messages) {
+    const match = msg.content?.match(/^## Step (\d+):/m);
+    if (match) {
+      steps.push({
+        step: parseInt(match[1]),
+        content: msg.content,
+        needsInfo: msg.content.includes("[NEED_INFO]"),
+      });
     }
   }
-  return { toolDefs: filteredDefs, toolHandlers: filteredHandlers };
+  return steps;
+}
+
+/** 从 Step 3 输出中解析选中的 skill 名 */
+function parseSelectedSkill(step3Output: string, skills: Array<{ name: string }>): string | null {
+  for (const s of skills) {
+    if (step3Output.includes(s.name)) return s.name;
+  }
+  return null;
 }
 
 // ── 执行工具并 yield phase 事件 ──
@@ -230,186 +244,245 @@ async function* executeTools(
   return results;
 }
 
-// ── Agent 模式主循环 ──
+// ── Agent 模式：6 步流程 ──
+// 每步调一次 LLM，上下文精简，按 agent 目录结构（context/ → memory/ → skills/ → 生成）
+// 每步输出存为 message，供下次请求检测进度
 async function* runAgent(input: EngineInput): EngineOutput {
   const { sessionId, userId, userMessage, targetAgent, modelConfig, toolHandlers, toolDefs, suppressSave, depth } = input;
   const agentName = targetAgent!;
 
-  // 加载 agent 上下文
+  // 加载 agent 文件 + 对话历史
   const agentCtx = await loadAgentFiles(userId, agentName);
-  const agentSystemPrompt = buildAgentSystemPrompt(agentCtx);
   const msgs = await loadSessionMessages(sessionId);
-  const summary = buildConversationSummary(msgs);
 
-  const messages: Array<Record<string, unknown>> = [
-    { role: "system", content: agentSystemPrompt },
-  ];
-  if (summary) {
-    messages.push({ role: "system", content: `## Conversation Context\n\n${summary}` });
-  }
-  messages.push({ role: "user", content: userMessage });
+  // 检测已完成进度
+  const completed = detectCompletedSteps(msgs);
+  const currentStep = completed.length > 0 ? completed[completed.length - 1].step + 1 : 1;
+  const lastStep = completed[completed.length - 1];
+  const ctx: Record<number, string> = {};
+  for (const s of completed) ctx[s.step] = s.content;
 
-  // ── Phase 1: Thinking（无 write_file） ──
-  yield { type: "phase", phase: "thinking", meta: { label: "Analyzing" } };
+  // 全局上下文（供各步使用）
+  const contextMd = agentCtx.contexts.length > 0
+    ? agentCtx.contexts.join("\n\n---\n\n")
+    : "(暂无背景文件)";
+  const memoryMd = agentCtx.memoryMd || "(暂无记忆)";
 
-  const phase1Tools = filterPhase1Tools(toolDefs, toolHandlers);
-  const p1Result = yield* callLLM(messages, phase1Tools.toolDefs, modelConfig);
+  // ══════════════════════════════════════════════════════════════
+  // Step 1: 需求分析 — 读 context，理解任务，可能问用户
+  // ══════════════════════════════════════════════════════════════
+  if (currentStep <= 1) {
+    yield { type: "phase", phase: "thinking", meta: { label: "分析需求" } };
 
-  // thinking 阶段的 reasoning_content 已经实时 yield 了
-  // content 如果有 tool_calls → thinking delta；否则 → text delta
-  if (p1Result.textContent) {
-    if (p1Result.toolCalls.length > 0) {
-      yield { type: "delta", phase: "thinking", text: p1Result.textContent };
+    const isReRun = lastStep?.step === 1 && lastStep.needsInfo;
+
+    const prompt = `你是 ${agentName}。
+
+## 你的角色
+
+${agentCtx.agentsMd || "你是一个有用的助手。"}
+
+## 背景知识
+
+${contextMd}
+
+## 指令
+
+分析用户的需求。
+- 如果缺少关键信息，第一行写「[NEED_INFO]」，然后列出你需要补充的问题。
+- 如果信息足够，直接输出你对任务的理解摘要。`;
+
+    const stepMsgs: Array<Record<string, unknown>> = [{ role: "system", content: prompt }];
+
+    if (isReRun && ctx[1]) {
+      stepMsgs.push({ role: "assistant", content: ctx[1] });
+      stepMsgs.push({ role: "user", content: userMessage });
     } else {
-      yield { type: "delta", phase: "text", text: p1Result.textContent };
+      stepMsgs.push({ role: "user", content: userMessage });
     }
-  }
 
-  // 如果 Phase 1 没有 tool_calls，直接返回
-  if (p1Result.toolCalls.length === 0) {
-    const fullResponse = p1Result.textContent;
+    const result = yield* callLLM(stepMsgs, null, modelConfig);
+    const output = result.textContent || "(空)";
+    const saved = `## Step 1: 需求分析\n\n${output}`;
 
     if (!suppressSave && input.onSaveMessage) {
-      await input.onSaveMessage({
-        sessionId,
-        agentName,
-        role: "assistant",
-        content: normalizeNewlines(fullResponse),
-      });
+      await input.onSaveMessage({ sessionId, agentName, role: "assistant", content: normalizeNewlines(saved) });
     }
 
-    yield { type: "done" };
-    return;
+    yield { type: "delta", phase: "text", text: normalizeNewlines(output) };
+
+    if (output.includes("[NEED_INFO]")) {
+      yield { type: "done" };
+      return;
+    }
+    ctx[1] = saved;
   }
 
-  // 执行 Phase 1 工具
-  const p1ToolResults = yield* executeTools(p1Result.toolCalls, phase1Tools.toolHandlers);
+  // ══════════════════════════════════════════════════════════════
+  // Step 2: 记忆加载 — 读 MEMORY.md，选相关片段
+  // ══════════════════════════════════════════════════════════════
+  if (currentStep <= 2) {
+    yield { type: "phase", phase: "memory", meta: { label: "加载记忆" } };
 
-  // 推送 assistant message + tool results
-  const p1AssistantMsg: Record<string, unknown> = {
-    role: "assistant",
-    content: p1Result.textContent || "",
-    tool_calls: p1Result.toolCalls.map((tc) => ({
-      id: tc.id,
-      type: "function",
-      function: { name: tc.name, arguments: tc.args },
-    })),
-  };
-  if (p1Result.reasoningContent) p1AssistantMsg.reasoning_content = p1Result.reasoningContent;
-  messages.push(p1AssistantMsg);
+    const prompt = `你是 ${agentName}。
 
-  for (const tr of p1ToolResults) {
-    messages.push({ role: "tool", tool_call_id: tr.tool_call_id, content: tr.content });
+## 当前任务
+
+${ctx[1] || userMessage}
+
+## 你的历史记忆
+
+${memoryMd}
+
+## 指令
+
+阅读你的历史记忆，选择与当前任务最相关的部分。输出选中的记忆摘要（如果不相关，输出「无相关记忆」）。`;
+
+    const result = yield* callLLM([{ role: "system", content: prompt }], null, modelConfig);
+    const output = result.textContent || "(空)";
+    const saved = `## Step 2: 记忆加载\n\n${output}`;
+
+    if (!suppressSave && input.onSaveMessage) {
+      await input.onSaveMessage({ sessionId, agentName, role: "assistant", content: normalizeNewlines(saved) });
+    }
+    ctx[2] = saved;
   }
 
-  // ── Phase 2: 标准循环（全部工具可用） ──
-  let fullResponse = p1Result.textContent;
+  // ══════════════════════════════════════════════════════════════
+  // Step 3: 技能匹配 — 看 skill 摘要，选最匹配的
+  // ══════════════════════════════════════════════════════════════
+  if (currentStep <= 3) {
+    yield { type: "phase", phase: "skill", meta: { label: "匹配技能" } };
 
-  for (let step = 0; step < 15; step++) {
-    const result = yield* callLLM(messages, toolDefs, modelConfig);
+    const skillSummaries = agentCtx.skills.length > 0
+      ? agentCtx.skills.map(s => `- ${s.name}: ${s.summary}`).join("\n")
+      : "(暂无可用技能)";
+
+    const prompt = `你是 ${agentName}。
+
+## 当前任务
+
+${ctx[1] || userMessage}
+
+## 相关记忆
+
+${ctx[2] || "(无)"}
+
+## 可用技能
+
+${skillSummaries}
+
+## 指令
+
+从可用技能中选择最匹配当前任务的技能。输出选中的技能名和理由。如果无匹配，输出「无匹配技能，直接生成」。`;
+
+    const result = yield* callLLM([{ role: "system", content: prompt }], null, modelConfig);
+    const output = result.textContent || "(空)";
+    const saved = `## Step 3: 技能匹配\n\n${output}`;
+
+    if (!suppressSave && input.onSaveMessage) {
+      await input.onSaveMessage({ sessionId, agentName, role: "assistant", content: normalizeNewlines(saved) });
+    }
+    ctx[3] = saved;
+  }
+
+  // ══════════════════════════════════════════════════════════════
+  // Step 4: 内容生成 — 按 skill 模板生成 + 调 write_file
+  // ══════════════════════════════════════════════════════════════
+  if (currentStep <= 4) {
+    yield { type: "phase", phase: "thinking", meta: { label: "生成内容" } };
+
+    // 找到匹配的 skill 全文
+    const skillName = parseSelectedSkill(ctx[3] || "", agentCtx.skills);
+    const matchedSkill = skillName
+      ? agentCtx.skills.find(s => s.name === skillName)
+      : null;
+    const skillContent = matchedSkill?.entry
+      ? `## 选中的技能：${matchedSkill.name}\n\n${matchedSkill.entry}`
+      : agentCtx.skills.map(s => `## ${s.name}\n\n${s.entry}`).join("\n\n---\n\n");
+
+    const prompt = `你是 ${agentName}。
+
+## 任务需求
+
+${ctx[1] || userMessage}
+
+## 相关记忆
+
+${ctx[2] || "(无)"}
+
+${skillContent}
+
+## 指令
+
+1. 严格按照上面的技能模板（如果匹配）完成任务内容的生成。
+2. 生成完整文档内容后，使用 \`write_file\` 工具保存到 workspace/ 目录下。`;
+
+    // Step 4 有工具可用（write_file, web_search）
+    const result = yield* callLLM([{ role: "system", content: prompt }], toolDefs, modelConfig);
+
+    // 执行工具调用（write_file 等）
+    if (result.toolCalls.length > 0) {
+      yield* executeTools(result.toolCalls, toolHandlers);
+    }
+
+    const output = result.textContent || "(空)";
+    const saved = `## Step 4: 生成内容\n\n${output}`;
+
+    if (!suppressSave && input.onSaveMessage) {
+      await input.onSaveMessage({ sessionId, agentName, role: "assistant", content: normalizeNewlines(saved) });
+    }
+    ctx[4] = saved;
+  }
+
+  // ══════════════════════════════════════════════════════════════
+  // Step 5: 写文件兜底（如果 Step 4 没调 write_file，代码自动写）
+  // ══════════════════════════════════════════════════════════════
+  if (currentStep <= 5) {
+    const writeHandler = toolHandlers["write_file"];
+    if (writeHandler && ctx[4]) {
+      const content = ctx[4].replace(/^## Step 4: 生成内容\n\n/, "");
+      const fileName = `${agentName}-${Date.now()}.md`;
+      yield { type: "phase", phase: "write", meta: { path: `workspace/${fileName}` } };
+      await writeHandler.execute({ path: `workspace/${fileName}`, content });
+    }
+  }
+
+  // ══════════════════════════════════════════════════════════════
+  // Step 6: 总结回复
+  // ══════════════════════════════════════════════════════════════
+  if (currentStep <= 6) {
+    yield { type: "phase", phase: "text", meta: { label: "总结" } };
+
+    const prompt = `你是 ${agentName}。
+
+## 任务需求
+
+${userMessage}
+
+## 生成结果
+
+${ctx[4] || "(无生成内容)"}
+
+## 指令
+
+用 2-3 句话总结你做了什么、输出在哪个文件。简洁扼要，不要重复文档内容。`;
+
+    const result = yield* callLLM([{ role: "system", content: prompt }], null, modelConfig);
 
     if (result.textContent) {
-      if (result.toolCalls.length > 0) {
-        yield { type: "delta", phase: "thinking", text: result.textContent };
-      } else {
-        yield { type: "delta", phase: "text", text: result.textContent };
-      }
-    }
+      yield { type: "delta", phase: "text", text: result.textContent };
 
-    fullResponse += result.textContent;
-
-    if (result.toolCalls.length === 0) {
-      const msg: Record<string, unknown> = { role: "assistant", content: result.textContent };
-      if (result.reasoningContent) msg.reasoning_content = result.reasoningContent;
-      messages.push(msg);
-      break;
-    }
-
-    // 推送 assistant message
-    const assistantMsg: Record<string, unknown> = {
-      role: "assistant",
-      content: result.textContent || "",
-      tool_calls: result.toolCalls.map((tc) => ({
-        id: tc.id,
-        type: "function",
-        function: { name: tc.name, arguments: tc.args },
-      })),
-    };
-    if (result.reasoningContent) assistantMsg.reasoning_content = result.reasoningContent;
-    messages.push(assistantMsg);
-
-    // 检查是否有 call_agent，需要特殊处理（嵌套 Engine）
-    const hasCallAgent = result.toolCalls.some((tc) => tc.name === "call_agent");
-
-    if (hasCallAgent) {
-      for (const tc of result.toolCalls) {
-        if (tc.name === "call_agent") {
-          let parsedArgs: Record<string, unknown> = {};
-          try { parsedArgs = JSON.parse(tc.args); } catch {}
-
-          const subAgentName = parsedArgs.name as string;
-          const subTask = parsedArgs.task as string;
-          const isSelfCall = subAgentName === agentName;
-
-          if (!isSelfCall) {
-            yield { type: "phase", phase: "agent_start", meta: { agentName: subAgentName } };
-          }
-
-          // 递归调用子 Engine
-          const subInput: EngineInput = {
-            ...input,
-            userMessage: subTask,
-            targetAgent: subAgentName,
-            suppressSave: true,
-            depth: (depth || 0) + 1,
-          };
-          yield* runAgent(subInput);
-
-          if (!isSelfCall) {
-            yield { type: "phase", phase: "agent_done", meta: { agentName: subAgentName } };
-          }
-
-          messages.push({
-            role: "tool",
-            tool_call_id: tc.id,
-            content: `Sub-agent ${subAgentName} completed.`,
-          });
-        } else {
-          // 非 call_agent 工具走标准执行
-          const toolResults = yield* executeTools(
-            [{ id: tc.id, name: tc.name, args: tc.args }],
-            toolHandlers,
-          );
-          for (const tr of toolResults) {
-            messages.push({ role: "tool", tool_call_id: tr.tool_call_id, content: tr.content });
-          }
-        }
-      }
-    } else {
-      const toolResults = yield* executeTools(result.toolCalls, toolHandlers);
-      for (const tr of toolResults) {
-        messages.push({ role: "tool", tool_call_id: tr.tool_call_id, content: tr.content });
+      if (!suppressSave && input.onSaveMessage) {
+        await input.onSaveMessage({
+          sessionId, agentName, role: "assistant",
+          content: normalizeNewlines(result.textContent),
+        });
       }
     }
   }
 
-  if (fullResponse.trim().length === 0) {
-    yield { type: "delta", phase: "text", text: "⚠️ Agent stopped after max steps with no output." };
-  }
-
-  if (!suppressSave && input.onSaveMessage) {
-    await input.onSaveMessage({
-      sessionId,
-      agentName,
-      role: "assistant",
-      content: normalizeNewlines(fullResponse),
-    });
-  }
-
-  // 只有顶层 Engine 才 yield done
-  if (!depth || depth === 0) {
-    yield { type: "done" };
-  }
+  yield { type: "done" };
 }
 
 // ── 直接聊天模式（Yumi） ──
