@@ -96,8 +96,9 @@ export function ChatPanel({
   const [phaseCards, setPhaseCards] = useState<PhaseCard[]>([]);
   const [streamActive, setStreamActive] = useState(false);
   const [streamText, setStreamText] = useState("");
+  const [streamThinking, setStreamThinking] = useState("");
   const [streamAgent, setStreamAgent] = useState<string | null>(null);
-  const [thinkingOpen, setThinkingOpen] = useState<Set<number>>(new Set());
+  const [thinkingOpen, setThinkingOpen] = useState(false);
   const [showMentions, setShowMentions] = useState(false);
   const [mentionFilter, setMentionFilter] = useState("");
   const [mentionIndex, setMentionIndex] = useState(0);
@@ -113,6 +114,7 @@ export function ChatPanel({
   onStreamEndRef.current = onStreamEnd;
   const mountedRef = useRef(false);
   const streamTextRef = useRef("");
+  const streamThinkingRef = useRef("");
   const phaseCardsRef = useRef<PhaseCard[]>([]);
   const preStreamMaxIdRef = useRef(0);
 
@@ -138,6 +140,8 @@ export function ChatPanel({
     phaseCardsRef.current = [];
     setStreamText("");
     streamTextRef.current = "";
+    setStreamThinking("");
+    streamThinkingRef.current = "";
     setStreamAgent(null);
     setHasCards(false);
   }, [sessionId]);
@@ -196,8 +200,10 @@ export function ChatPanel({
     phaseCardsRef.current = [];
     setStreamText("");
     streamTextRef.current = "";
+    setStreamThinking("");
+    streamThinkingRef.current = "";
     setStreamAgent(null);
-    setThinkingOpen(new Set());
+    setThinkingOpen(false);
     setHasCards(true);
 
     const controller = new AbortController(); abortRef.current = controller;
@@ -280,6 +286,10 @@ export function ChatPanel({
         // 文本增量 → 追加到对话区
         setStreamText((prev) => prev + (event.text || ""));
         streamTextRef.current += (event.text || "");
+      } else if (p === "thinking") {
+        // thinking delta → 追加到思考内容
+        setStreamThinking((prev) => prev + (event.text || ""));
+        streamThinkingRef.current += (event.text || "");
       } else if (p === "write") {
         // write delta → 通知上层追加到编辑器
         if (onPhase && event.meta?.path) {
@@ -330,6 +340,7 @@ export function ChatPanel({
   const visibleMessages = hasStreamContent
     ? messages.filter((m) => !(m.role === "assistant" && m.id > preStreamMaxIdRef.current && m.id < 0))
     : messages;
+  const hasThinking = streamThinking !== "" || phaseCards.some(c => c.phase === "thinking");
 
   return (
     <div className="flex flex-col h-full bg-[var(--app-bg)]">
@@ -379,30 +390,9 @@ export function ChatPanel({
           </div>
         ))}
 
-        {/* Phase cards */}
-        {(streamActive || phaseCards.length > 0) && hasCards && phaseCards.map((card, i) => {
-          // thinking → 折叠卡片
-          if (card.phase === "thinking") {
-            const open = thinkingOpen.has(i);
-            return (
-              <div key={card.key} className="animate-pageIn">
-                <div className="flex items-center gap-2 cursor-pointer" onClick={() => {
-                  setThinkingOpen((p) => { const n = new Set(p); if (n.has(i)) n.delete(i); else n.add(i); return n; });
-                }}>
-                  <span className="text-xs opacity-60">💭</span>
-                  <span className="text-[10px] font-bold uppercase tracking-wider text-[var(--app-text-tertiary)]">Thinking</span>
-                  <svg width="8" height="8" viewBox="0 0 24 24" fill="none" stroke="var(--app-text-tertiary)" strokeWidth="3" style={{ transform: open ? "rotate(0deg)" : "rotate(-90deg)", transition: "transform 0.15s" }}>
-                    <polyline points="6 9 12 15 18 9" />
-                  </svg>
-                </div>
-                {open && (
-                  <div className="mt-1 ml-5 text-xs leading-relaxed whitespace-pre-wrap text-[var(--app-text-secondary)]">{card.content}</div>
-                )}
-              </div>
-            );
-          }
-
-          // agent_start → 子 agent 卡片
+        {/* 非 thinking 的 phase 卡片（read/memory/skill/search/write） */}
+        {(streamActive || phaseCards.length > 0) && hasCards && phaseCards.map((card) => {
+          if (card.phase === "thinking") return null;
           if (card.phase === "agent_start") {
             const name = (card.meta?.agentName as string) || "Agent";
             const avatar = getAvatar(name);
@@ -413,8 +403,6 @@ export function ChatPanel({
               </div>
             );
           }
-
-          // 普通 phase 卡片（read/memory/skill/search/write）
           const label = getPhaseLabel(card.phase, card.meta);
           return (
             <div key={card.key} className="animate-pageIn flex items-center gap-2 py-1 pl-1">
@@ -424,17 +412,36 @@ export function ChatPanel({
           );
         })}
 
-        {/* 流式文本（text phase delta） */}
+        {/* 流式 assistant 消息（统一块：角色 + thinking折叠 + 文本） */}
         {(streamActive || streamText !== "") && (
           <div className="animate-pageIn">
+            {/* 角色标签 */}
             <div className="flex items-center gap-2 mb-1">
               <span className="w-1.5 h-1.5 rounded-full" style={{ background: streamAgent ? "#a78bfa" : "var(--app-text-secondary)" }} />
               <span className="text-xs font-bold uppercase tracking-wider" style={{ color: streamAgent ? "#a78bfa" : "var(--app-text-secondary)" }}>
                 {streamAgent || "Yumi"}
               </span>
             </div>
+            {/* Thinking 折叠 */}
+            {hasThinking && (
+              <div className="ml-3 mb-0.5">
+                <div className="flex items-center gap-1 cursor-pointer select-none" onClick={() => setThinkingOpen((p) => !p)}>
+                  <span className="text-xs opacity-60">💭</span>
+                  <span className="text-[10px] font-bold uppercase tracking-wider text-[var(--app-text-tertiary)]">Thinking</span>
+                  <svg width="8" height="8" viewBox="0 0 24 24" fill="none" stroke="var(--app-text-tertiary)" strokeWidth="3" style={{ transform: thinkingOpen ? "rotate(0deg)" : "rotate(-90deg)", transition: "transform 0.15s" }}>
+                    <polyline points="6 9 12 15 18 9" />
+                  </svg>
+                </div>
+                {thinkingOpen && (
+                  <div className="mt-1 ml-4 text-xs leading-relaxed whitespace-pre-wrap text-[var(--app-text-secondary)]">
+                    {streamThinking}
+                  </div>
+                )}
+              </div>
+            )}
+            {/* 文本内容 */}
             <div className="text-sm leading-relaxed whitespace-pre-wrap text-[var(--app-text)]">
-              {streamText ? <MarkdownContent content={streamText} /> : (streamActive ? "" : "")}
+              {streamText ? <MarkdownContent content={streamText} /> : (streamActive ? <span className="text-[var(--app-text-tertiary)]">...</span> : "")}
             </div>
           </div>
         )}
