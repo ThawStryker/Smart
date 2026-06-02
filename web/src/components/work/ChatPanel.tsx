@@ -236,9 +236,6 @@ export function ChatPanel({
     if (onStreamEnd) onStreamEnd();
     setStreamActive(false); abortRef.current = null;
     loadMessages();
-    // 清除流式文本，避免与 DB 加载的消息重复
-    setStreamText("");
-    streamTextRef.current = "";
   };
 
   const handleSSE = (event: any) => {
@@ -322,7 +319,7 @@ export function ChatPanel({
 
   const filteredMentions = agents.filter((a) => a.toLowerCase().startsWith(mentionFilter.toLowerCase()));
 
-  const hasStreamContent = phaseCards.length > 0 || streamText !== "";
+  const hasStreamContent = streamActive || phaseCards.length > 0 || streamText !== "" || streamThinking !== "";
   const visibleMessages = hasStreamContent
     ? messages.filter((m) => !(m.role === "assistant" && m.id > preStreamMaxIdRef.current && m.id < 0))
     : messages;
