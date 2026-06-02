@@ -63,3 +63,4 @@ temp/
 
 # Lock files - committed for reproducible builds
 # server/package-lock.json and web/package-lock.json are intentionally committed
+.reasonix/
