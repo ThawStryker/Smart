@@ -46,7 +46,7 @@ export function getModel(key: string): ModelConfig | null {
 }
 
 export const DEFAULTS = {
-  agent: "deepseek-v4-pro-260425",
-  chat: "seed-pro",
-  coding: "seed-code",
+  agent: "deepseek-v4-pro",
+  chat: "deepseek-v4-pro",
+  coding: "deepseek-v4-pro",
 };
