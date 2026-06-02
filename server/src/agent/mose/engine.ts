@@ -420,6 +420,8 @@ ${skillContent}
   // Step 6: 总结回复
   // ══════════════════════════════════════════════════════════════
   if (currentStep <= 6) {
+    yield { type: "phase", phase: "text", meta: { label: "总结" } };
+
     const prompt = `你是 ${agentName}。
 
 ## 任务需求
@@ -437,7 +439,6 @@ ${ctx[4] || "(无生成内容)"}
     const result = yield* callLLM([{ role: "system", content: prompt }], null, modelConfig);
 
     if (result.textContent) {
-      // 直接 yield text delta，不 yield phase: text（前端不做卡片渲染）
       yield { type: "delta", phase: "text", text: result.textContent };
 
       if (!suppressSave && input.onSaveMessage) {
