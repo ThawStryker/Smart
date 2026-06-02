@@ -64,38 +64,6 @@ function parseSSELine(data: string, state: SSELineState): SSELineResult {
   }
 }
 
-async function parseSSEStream(
-  body: ReadableStream<Uint8Array>,
-): Promise<ParsedStream> {
-  const reader = body.getReader();
-  const decoder = new TextDecoder();
-  let buffer = "";
-  const state: SSELineState = { textContent: "", reasoningContent: "", toolCallMap: new Map() };
-
-  while (true) {
-    const { done, value } = await reader.read();
-    if (done) break;
-    buffer += decoder.decode(value, { stream: true });
-    const lines = buffer.split("\n");
-    buffer = lines.pop() || "";
-
-    for (const line of lines) {
-      if (!line.startsWith("data: ")) continue;
-      const data = line.slice(6).trim();
-      if (!data || data === "[DONE]") continue;
-
-      parseSSELine(data, state);
-    }
-  }
-
-  const toolCalls: Array<{ id: string; name: string; args: string }> = [];
-  for (const [, tc] of state.toolCallMap) {
-    toolCalls.push({ id: tc.id, name: tc.name, args: tc.args });
-  }
-
-  return { textContent: state.textContent, reasoningContent: state.reasoningContent, toolCalls };
-}
-
 // ── LLM 调用 + 流式解析 + phase 事件发射 ──
 async function* callLLM(
   messages: Array<Record<string, unknown>>,
@@ -452,8 +420,6 @@ ${skillContent}
   // Step 6: 总结回复
   // ══════════════════════════════════════════════════════════════
   if (currentStep <= 6) {
-    yield { type: "phase", phase: "text", meta: { label: "总结" } };
-
     const prompt = `你是 ${agentName}。
 
 ## 任务需求
@@ -471,6 +437,7 @@ ${ctx[4] || "(无生成内容)"}
     const result = yield* callLLM([{ role: "system", content: prompt }], null, modelConfig);
 
     if (result.textContent) {
+      // 直接 yield text delta，不 yield phase: text（前端不做卡片渲染）
       yield { type: "delta", phase: "text", text: result.textContent };
 
       if (!suppressSave && input.onSaveMessage) {

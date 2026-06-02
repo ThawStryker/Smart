@@ -239,7 +239,9 @@ export function ChatPanel({
     const p = event.phase as PhaseName | undefined;
 
     if (t === "phase") {
-      // 新 phase 开始 → 创建卡片
+      // text phase 是对话内容，不做卡片
+      if (p === "text") return;
+
       if (p === "agent_start") {
         setStreamAgent(event.meta?.agentName as string || null);
       }
