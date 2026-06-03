@@ -378,7 +378,6 @@ export function ChatPanel({
             {/* 角色标签 */}
             <div className="flex items-center gap-2 mb-1">
               {streamAgent && <span className="text-sm leading-none">{getAvatar(streamAgent)}</span>}
-              <span className="w-1.5 h-1.5 rounded-full" style={{ background: streamAgent ? "#a78bfa" : "var(--app-text-secondary)" }} />
               <span className="text-xs font-bold uppercase tracking-wider" style={{ color: streamAgent ? "#a78bfa" : "var(--app-text-secondary)" }}>
                 {streamAgent || "Yumi"}
               </span>

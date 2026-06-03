@@ -219,13 +219,15 @@ async function* runAgent(input: EngineInput): EngineOutput {
   // yield agent_start
   yield { type: "phase", phase: "agent_start", meta: { agentName, depth } };
 
-  // Emit 加载阶段（context → memory → skills → generate → write）
-  for (const _ctx of agentCtx.contexts) {
-    yield { type: "phase", phase: "read", meta: { label: "加载背景" } };
+  // context 文件在 system prompt 中自动加载，不展示标签
+  // memory 文件：展示 Read 标签（带文件名）
+  if (agentCtx.userMd) {
+    yield { type: "phase", phase: "read", meta: { path: "memory/USER.md" } };
   }
   if (agentCtx.memoryMd) {
-    yield { type: "phase", phase: "memory", meta: { label: "加载记忆" } };
+    yield { type: "phase", phase: "read", meta: { path: "memory/MEMORY.md" } };
   }
+  // skill 列表（模型在 thinking 中自行匹配）
   if (agentCtx.skills.length > 0) {
     for (const sk of agentCtx.skills) {
       yield { type: "phase", phase: "skill", meta: { name: sk.name } };
