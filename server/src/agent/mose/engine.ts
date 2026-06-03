@@ -175,11 +175,18 @@ async function* executeTools(
         const hasPath = !!parsedArgs.path;
         const hasContent = !!parsedArgs.content;
         const contentLen = typeof parsedArgs.content === "string" ? parsedArgs.content.length : 0;
-        yield { type: "delta", phase: "text" as PhaseName, text: `[DEBUG write_file] hasPath=${hasPath} hasContent=${hasContent} contentLen=${contentLen} args=${tc.args.slice(0, 500)}` };
+        yield { type: "delta", phase: "text" as PhaseName, text: `\n[DEBUG] write_file 调用: path=${parsedArgs.path} contentLen=${contentLen}` };
       }
       result = await handler!.execute(parsedArgs);
+      // 调试：输出执行结果
+      if (tc.name === "write_file") {
+        yield { type: "delta", phase: "text" as PhaseName, text: `\n[DEBUG] write_file 结果: ${result}` };
+      }
     } catch (err: unknown) {
       result = `Error: ${err instanceof Error ? err.message : String(err)}`;
+      if (tc.name === "write_file") {
+        yield { type: "delta", phase: "text" as PhaseName, text: `\n[DEBUG] write_file 异常: ${result}` };
+      }
     }
 
     // 2. yield phase 事件（前端据此渲染卡片、刷新文件树、自动打开）
