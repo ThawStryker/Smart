@@ -209,9 +209,9 @@ export function WorkPage() {
             }
           }}
           onStreamEnd={() => {
-            // R2: 停止时自动保存当前文件到服务器
-            if (activeFile) save(activeFile.path, activeFile.content, sessionId);
+            // write_file 已在服务端保存，不需要前端再次 PUT（且 state 可能过期导致覆盖为空）
             setIsStreaming(false);
+            if (activeFile) clearSavedContent(activeFile.path);
             setReloadCounter((c) => c + 1);
           }}
         />
