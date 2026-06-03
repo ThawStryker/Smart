@@ -170,23 +170,9 @@ async function* executeTools(
     // 1. 先执行工具（write_file 创建文件+写内容）
     let result: string;
     try {
-      // 调试：write_file 时输出参数信息
-      if (tc.name === "write_file") {
-        const hasPath = !!parsedArgs.path;
-        const hasContent = !!parsedArgs.content;
-        const contentLen = typeof parsedArgs.content === "string" ? parsedArgs.content.length : 0;
-        yield { type: "delta", phase: "text" as PhaseName, text: `\n[DEBUG] write_file 调用: path=${parsedArgs.path} contentLen=${contentLen}` };
-      }
       result = await handler!.execute(parsedArgs);
-      // 调试：输出执行结果
-      if (tc.name === "write_file") {
-        yield { type: "delta", phase: "text" as PhaseName, text: `\n[DEBUG] write_file 结果: ${result}` };
-      }
     } catch (err: unknown) {
       result = `Error: ${err instanceof Error ? err.message : String(err)}`;
-      if (tc.name === "write_file") {
-        yield { type: "delta", phase: "text" as PhaseName, text: `\n[DEBUG] write_file 异常: ${result}` };
-      }
     }
 
     // 2. yield phase 事件（前端据此渲染卡片、刷新文件树、自动打开）
