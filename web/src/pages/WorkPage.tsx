@@ -211,7 +211,6 @@ export function WorkPage() {
           onStreamEnd={() => {
             // write_file 已在服务端保存，不需要前端再次 PUT（且 state 可能过期导致覆盖为空）
             setIsStreaming(false);
-            if (activeFile) clearSavedContent(activeFile.path);
             setReloadCounter((c) => c + 1);
           }}
         />
