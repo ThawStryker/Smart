@@ -170,6 +170,13 @@ async function* executeTools(
     // 1. 先执行工具（write_file 创建文件+写内容）
     let result: string;
     try {
+      // 调试：write_file 时输出参数信息
+      if (tc.name === "write_file") {
+        const hasPath = !!parsedArgs.path;
+        const hasContent = !!parsedArgs.content;
+        const contentLen = typeof parsedArgs.content === "string" ? parsedArgs.content.length : 0;
+        yield { type: "delta", phase: "text" as PhaseName, text: `[DEBUG write_file] hasPath=${hasPath} hasContent=${hasContent} contentLen=${contentLen} args=${tc.args.slice(0, 500)}` };
+      }
       result = await handler!.execute(parsedArgs);
     } catch (err: unknown) {
       result = `Error: ${err instanceof Error ? err.message : String(err)}`;
