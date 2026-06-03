@@ -82,15 +82,20 @@ async function writeFileHandler(args: Record<string, unknown>, ctx: ToolContext)
 
   // 只对 workspace 文件做表格换行规范化
   const normalized = rawPath.startsWith("workspace/") ? normalizeTableCellBreaks(content) : content;
-
+  // 调试：输出规范化前后长度
   if (rawPath.startsWith("workspace/")) {
     const filePath = rawPath.slice("workspace/".length);
-    await db.insert(workspaceFiles).values({
-      userId: ctx.userId, path: filePath, content: normalized, updatedAt: new Date().toISOString(),
-    }).onConflictDoUpdate({
-      target: [workspaceFiles.userId, workspaceFiles.path],
-      set: { content: normalized, updatedAt: new Date().toISOString() },
-    });
+    try {
+      await db.insert(workspaceFiles).values({
+        userId: ctx.userId, path: filePath, content: normalized, updatedAt: new Date().toISOString(),
+      }).onConflictDoUpdate({
+        target: [workspaceFiles.userId, workspaceFiles.path],
+        set: { content: normalized, updatedAt: new Date().toISOString() },
+      });
+      return `[OK] File written: ${rawPath} rawLen=${content.length} normLen=${normalized.length}`;
+    } catch (err: unknown) {
+      return `[ERR] ${rawPath} rawLen=${content.length} normLen=${normalized.length} error=${err instanceof Error ? err.message : String(err)}`;
+    }
   } else {
     if (!ctx.agentName) return "Error: agent name required for non-workspace files";
     await db.insert(agentFiles).values({
