@@ -161,6 +161,8 @@ async function* executeTools(
 ): AsyncGenerator<PhaseEvent, Array<{ tool_call_id: string; content: string }>, unknown> {
   const results: Array<{ tool_call_id: string; content: string }> = [];
 
+  yield { type: "delta", phase: "text" as PhaseName, text: `\n[OK] ${toolCalls.length} tool(s) called` };
+
   for (const tc of toolCalls) {
     const handler = toolHandlers[tc.name];
     const phase = handler?.phase || "text";
