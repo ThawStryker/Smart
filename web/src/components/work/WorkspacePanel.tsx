@@ -1,8 +1,6 @@
-import { useState, useEffect, useCallback } from "react";
-import { buildTree, renderFileChildren } from "./FileTree";
+import { renderFileChildren } from "./FileTree";
 import { WorkspaceActions } from "./ContextMenu";
-import { useFileTreeActions } from "@/hooks/useFileTreeActions";
-import type { FileEntry } from "@/types/work";
+import { useFilePanel } from "@/hooks/useFilePanel";
 
 interface WorkspacePanelProps {
   sessionId: number;
@@ -13,53 +11,12 @@ interface WorkspacePanelProps {
 }
 
 export function WorkspacePanel({ sessionId, onFileSelect, selectedFile, reloadTrigger, onCloseFile }: WorkspacePanelProps) {
-  const [files, setFiles] = useState<FileEntry[]>([]);
-  const [expanded, setExpanded] = useState<Set<string>>(new Set(["workspace"]));
-
-  const loadFiles = useCallback(async () => {
-    try {
-      const res = await fetch("/api/work/workspace").catch(() => ({ ok: false } as Response));
-      if (res.ok) {
-        const wsFiles = await res.json();
-        const allFiles: FileEntry[] = wsFiles.map((f: FileEntry) => ({ ...f, path: `workspace/${f.path}` }));
-        const deletedFiles: string[] = JSON.parse(localStorage.getItem("deletedFiles") || "[]");
-        const seen = new Set<string>();
-        setFiles(allFiles.filter((f: FileEntry) => {
-          if (deletedFiles.includes(f.path)) return false;
-          if (seen.has(f.path)) return false;
-          seen.add(f.path);
-          return true;
-        }));
-      }
-    } catch {
-      // 网络错误 — 保持现有文件列表不变
-    }
-  }, []);
-
-  useEffect(() => { if (sessionId) loadFiles(); }, [sessionId, loadFiles]);
-  useEffect(() => { if (reloadTrigger && sessionId) loadFiles(); }, [reloadTrigger]);
-
-  useEffect(() => {
-    const handler = (e: StorageEvent) => { if (e.key === "deletedFiles") loadFiles(); };
-    window.addEventListener("storage", handler);
-    return () => window.removeEventListener("storage", handler);
-  }, [loadFiles]);
-
-  const toggleExpand = (path: string) => {
-    setExpanded((prev) => {
-      const next = new Set(prev);
-      if (next.has(path)) next.delete(path); else next.add(path);
-      return next;
-    });
-  };
-
   const {
+    expanded, toggleExpand, tree,
     createFile, createFolder, renameFile, renameFolder, deleteFile, deleteFolder,
     startFileRename, finishFileRename, renamingPath, renameValue, setRenameValue,
     toast, ConfirmDialog,
-  } = useFileTreeActions({ sessionId, urlPrefix: "workspace", files, reloadFiles: loadFiles, selectedFile, onCloseFile });
-
-  const tree = buildTree(files);
+  } = useFilePanel({ sessionId, urlPrefix: "workspace", selectedFile, onCloseFile, reloadTrigger });
 
   return (
     <div className="border-t border-[var(--app-border)] flex flex-col" style={{ flex: "1 1 0", minHeight: 0 }}>
@@ -74,7 +31,7 @@ export function WorkspacePanel({ sessionId, onFileSelect, selectedFile, reloadTr
       </div>
       <div className="flex-1 overflow-auto border-t border-[var(--app-border)]">
         {(() => {
-          const children = renderFileChildren("workspace", tree, expanded, toggleExpand, onFileSelect, selectedFile, 0, createFile, createFolder, renameFolder, deleteFolder, renameFile, deleteFile, renamingPath, renameValue, startFileRename, setRenameValue, finishFileRename);
+          const children = renderFileChildren({ prefix: "workspace", tree, expanded, toggleExpand, onFileSelect, selectedFile, depth: 0, createFile, createFolder, renameFolder, deleteFolder, renameFile, deleteFile, renamingPath, renameValue, onStartRename: startFileRename, onRenameChange: setRenameValue, onFinishRename: finishFileRename });
           if (children.length === 0) {
             return (
               <div className="px-4 py-6 text-center text-[10px] text-[var(--app-text-tertiary)] leading-relaxed">

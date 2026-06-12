@@ -90,3 +90,39 @@ export function resolveRenameUrl(treePath: string, _sessionId: number): string |
   if (treePath.startsWith("workspace/")) return "/api/work/workspace/rename";
   return null;
 }
+
+export async function getFileContent(treePath: string): Promise<string | null> {
+  const agentMatch = treePath.match(/^agents\/([^/]+)\/(.+)$/);
+  if (agentMatch) {
+    const url = `/api/agents/${encodeURIComponent(agentMatch[1])}/files/${encodeFilePath(agentMatch[2])}`;
+    const res = await fetch(url);
+    if (!res.ok) return null;
+    const data = await res.json();
+    return data.content || "";
+  }
+  if (treePath.startsWith("workspace/")) {
+    const url = `/api/work/workspace/${encodeFilePath(treePath.slice("workspace/".length))}`;
+    const res = await fetch(url);
+    if (!res.ok) return null;
+    const data = await res.json();
+    return data.content || "";
+  }
+  return null;
+}
+
+export async function saveFileContent(treePath: string, content: string): Promise<boolean> {
+  const api = resolveApiUrl(treePath, 0);
+  if (!api) return false;
+  const res = await fetch(api.url, {
+    method: api.method,
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ content }),
+  });
+  return res.ok;
+}
+
+export async function loadWorkspaceFiles(): Promise<FileEntry[]> {
+  const res = await fetch("/api/work/workspace").catch(() => ({ ok: false } as Response));
+  if (!res.ok) return [];
+  return res.json();
+}

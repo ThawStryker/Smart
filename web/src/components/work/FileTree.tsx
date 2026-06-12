@@ -50,22 +50,29 @@ export function buildTree(files: FileEntry[]): Record<string, any> {
   return root;
 }
 
-export function renderFileChildren(
-  prefix: string, tree: Record<string, any>, expanded: Set<string>,
-  toggleExpand: (p: string) => void, onFileSelect: (p: string, c: string) => void, selectedFile: string | null,
-  depth: number,
-  createFile: (parentPath: string) => Promise<void>,
-  createFolder: (parentPath: string) => Promise<void>,
-  renameFolder: (folderPath: string, newName: string) => void,
-  deleteFolder: (folderPath: string) => void,
-  renameFile: (filePath: string, newName: string) => void,
-  deleteFile: (filePath: string) => void,
-  renamingPath: string | null,
-  renameValue: string,
-  onStartRename: (path: string, name: string) => void,
-  onRenameChange: (v: string) => void,
-  onFinishRename: (path: string, oldName: string) => void,
-): React.ReactNode[] {
+export interface FileTreeRenderOptions {
+  prefix: string;
+  tree: Record<string, any>;
+  expanded: Set<string>;
+  toggleExpand: (path: string) => void;
+  onFileSelect: (path: string, content: string) => void;
+  selectedFile: string | null;
+  depth: number;
+  createFile: (parentPath: string) => Promise<void>;
+  createFolder: (parentPath: string) => Promise<void>;
+  renameFolder: (folderPath: string, newName: string) => void;
+  deleteFolder: (folderPath: string) => void;
+  renameFile: (filePath: string, newName: string) => void;
+  deleteFile: (filePath: string) => void;
+  renamingPath: string | null;
+  renameValue: string;
+  onStartRename: (path: string, name: string) => void;
+  onRenameChange: (value: string) => void;
+  onFinishRename: (path: string, oldName: string) => void;
+}
+
+export function renderFileChildren(opts: FileTreeRenderOptions): React.ReactNode[] {
+  const { prefix, tree, expanded, toggleExpand, onFileSelect, selectedFile, depth, createFile, createFolder, deleteFolder, deleteFile, renamingPath, renameValue, onStartRename, onRenameChange, onFinishRename } = opts;
   const parts = prefix.split("/");
   let node = tree;
   for (const part of parts) {
@@ -131,7 +138,7 @@ export function renderFileChildren(
                 onDelete={() => deleteFolder(cp)} />
             </span>
           </div>
-          {isOpen && renderFileChildren(cp, tree, expanded, toggleExpand, onFileSelect, selectedFile, depth + 1, createFile, createFolder, renameFolder, deleteFolder, renameFile, deleteFile, renamingPath, renameValue, onStartRename, onRenameChange, onFinishRename)}
+          {isOpen && renderFileChildren({ ...opts, prefix: cp, depth: depth + 1 })}
         </div>
       );
     }

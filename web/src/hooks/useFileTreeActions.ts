@@ -98,11 +98,16 @@ export function useFileTreeActions({
     if (newPath === folderPath) return;
     const renameUrl = resolveRenameUrl(folderPath, sessionId);
     if (!renameUrl) { reloadFiles(); return; }
+    const agentMatch = folderPath.match(/^agents\/([^/]+)\/(.+)$/);
+    const serverOldPath = agentMatch ? agentMatch[2] : folderPath.replace(/^workspace\//, "");
+    const serverNewPath = agentMatch
+      ? agentMatch[2].replace(/\/?[^/]+$/, `/${newName.trim()}`)
+      : newPath.replace(/^workspace\//, "");
     try {
       const res = await fetch(renameUrl, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ oldPath: folderPath, newPath }),
+        body: JSON.stringify({ oldPath: serverOldPath, newPath: serverNewPath }),
       });
       if (!res.ok) throw new Error(`Rename failed: ${res.status}`);
     } catch { /* fallback */ }
@@ -127,11 +132,16 @@ export function useFileTreeActions({
     if (newPath === filePath) return;
     const renameUrl = resolveRenameUrl(filePath, sessionId);
     if (!renameUrl) { reloadFiles(); return; }
+    const agentMatch = filePath.match(/^agents\/([^/]+)\/(.+)$/);
+    const serverOldPath = agentMatch ? agentMatch[2] : filePath.replace(/^workspace\//, "");
+    const serverNewPath = agentMatch
+      ? agentMatch[2].replace(/\/?[^/]+$/, `/${newName.trim()}`)
+      : newPath.replace(/^workspace\//, "");
     try {
       const res = await fetch(renameUrl, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ oldPath: filePath, newPath }),
+        body: JSON.stringify({ oldPath: serverOldPath, newPath: serverNewPath }),
       });
       if (!res.ok) throw new Error(`Rename failed: ${res.status}`);
     } catch { /* fallback */ }

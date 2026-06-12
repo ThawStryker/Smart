@@ -1,9 +1,7 @@
 import { useState, useEffect, useCallback } from "react";
 import { getAgentAvatar } from "./icons";
-import { buildTree, renderFileChildren } from "./FileTree";
-import { useFileTreeActions } from "@/hooks/useFileTreeActions";
-import { loadAllAgentFiles } from "@/lib/file-api";
-import type { FileEntry } from "@/types/work";
+import { renderFileChildren } from "./FileTree";
+import { useFilePanel } from "@/hooks/useFilePanel";
 
 interface AgentPanelProps {
   sessionId: number;
@@ -15,41 +13,18 @@ interface AgentPanelProps {
 }
 
 export function AgentPanel({ sessionId, onFileSelect, selectedFile, onAgentListChange, reloadTrigger, onCloseFile }: AgentPanelProps) {
-  const [files, setFiles] = useState<FileEntry[]>([]);
-  const [expanded, setExpanded] = useState<Set<string>>(new Set(["agents"]));
   const [agentNames, setAgentNames] = useState<string[]>([]);
   const [renaming, setRenaming] = useState<string | null>(null);
+  const [showCreateDialog, setShowCreateDialog] = useState(false);
+  const [newAgentName, setNewAgentName] = useState("");
+  const [newAgentTemplate, setNewAgentTemplate] = useState("通用");
 
-  const loadFiles = useCallback(async () => {
-    try {
-      const agentFileMap = await loadAllAgentFiles();
-      const allFiles: FileEntry[] = [];
-      for (const [agentName, files] of agentFileMap) {
-        for (const f of files) {
-          allFiles.push({ ...f, path: `agents/${agentName}/${f.path}` });
-        }
-      }
-      const deletedFiles: string[] = JSON.parse(localStorage.getItem("deletedFiles") || "[]");
-      const seen = new Set<string>();
-      setFiles(allFiles.filter((f: FileEntry) => {
-        if (deletedFiles.includes(f.path)) return false;
-        if (seen.has(f.path)) return false;
-        seen.add(f.path);
-        return true;
-      }));
-    } catch {
-      // Network error — keep existing file list unchanged
-    }
-  }, [sessionId]);
-
-  // R5: 跨标签页同步 — 其他标签删除文件后刷新
-  useEffect(() => {
-    const handler = (e: StorageEvent) => {
-      if (e.key === "deletedFiles") loadFiles();
-    };
-    window.addEventListener("storage", handler);
-    return () => window.removeEventListener("storage", handler);
-  }, [loadFiles]);
+  const {
+    expanded, setExpanded, toggleExpand, tree,
+    createFile, createFolder, renameFile, renameFolder, deleteFile, deleteFolder,
+    startFileRename, finishFileRename, renamingPath, renameValue, setRenameValue,
+    toast, setToast, confirm, ConfirmDialog,
+  } = useFilePanel({ sessionId, urlPrefix: "agents", selectedFile, onCloseFile, reloadTrigger });
 
   const loadUserAgents = useCallback(async () => {
     const res = await fetch("/api/agents");
@@ -60,27 +35,7 @@ export function AgentPanel({ sessionId, onFileSelect, selectedFile, onAgentListC
     }
   }, [onAgentListChange]);
 
-  useEffect(() => { if (sessionId) loadFiles(); }, [sessionId, loadFiles]);
   useEffect(() => { loadUserAgents(); }, [loadUserAgents]);
-  useEffect(() => { if (reloadTrigger && sessionId) loadFiles(); }, [reloadTrigger]);
-
-  const toggleExpand = (path: string) => {
-    setExpanded((prev) => {
-      const next = new Set(prev);
-      if (next.has(path)) next.delete(path); else next.add(path);
-      return next;
-    });
-  };
-
-  const {
-    createFile, createFolder, renameFile, renameFolder, deleteFile, deleteFolder,
-    startFileRename, finishFileRename, renamingPath, renameValue, setRenameValue,
-    toast, setToast, confirm, ConfirmDialog,
-  } = useFileTreeActions({ sessionId, urlPrefix: "agents", files, reloadFiles: loadFiles, selectedFile, onCloseFile });
-
-  const [showCreateDialog, setShowCreateDialog] = useState(false);
-  const [newAgentName, setNewAgentName] = useState("");
-  const [newAgentTemplate, setNewAgentTemplate] = useState("通用");
 
   const AGENT_TEMPLATES: Record<string, string> = {
     通用: `# 我的角色
@@ -130,10 +85,6 @@ export function AgentPanel({ sessionId, onFileSelect, selectedFile, onAgentListC
 4. 撰写完整剧本`,
   };
 
-  const createAgent = async () => {
-    setShowCreateDialog(true);
-  };
-
   const confirmCreateAgent = async () => {
     if (!newAgentName.trim()) return;
     const name = newAgentName.trim();
@@ -141,7 +92,6 @@ export function AgentPanel({ sessionId, onFileSelect, selectedFile, onAgentListC
       method: "POST", headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ name }),
     });
-    // Update AGENTS.md with template content
     const template = AGENT_TEMPLATES[newAgentTemplate] || AGENT_TEMPLATES["通用"];
     await fetch(`/api/agents/${encodeURIComponent(name)}/files/AGENTS.md`, {
       method: "PUT", headers: { "Content-Type": "application/json" },
@@ -149,9 +99,8 @@ export function AgentPanel({ sessionId, onFileSelect, selectedFile, onAgentListC
     });
     setShowCreateDialog(false);
     setNewAgentName("");
-    // 自动展开新创建 agent 的文件树
     setExpanded((prev) => { const n = new Set(prev); n.add(`agents/${name}`); return n; });
-    loadFiles(); loadUserAgents();
+    loadUserAgents();
     setToast(`Agent「${name}」已创建（${newAgentTemplate}模板）`);
   };
 
@@ -166,31 +115,27 @@ export function AgentPanel({ sessionId, onFileSelect, selectedFile, onAgentListC
       method: "PATCH", headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ name: newName.trim() }),
     });
-    loadFiles(); loadUserAgents();
+    loadUserAgents();
   };
 
   const deleteAgent = async (name: string) => {
     if (!await confirm(`确定删除 Agent「${name}」及其所有文件？`)) return;
     setAgentNames((prev) => prev.filter((a) => a !== name));
-    setFiles((prev) => prev.filter((f) => !f.path.startsWith(`agents/${name}/`)));
     try {
       await fetch(`/api/agents/${name}`, { method: "DELETE" });
-    } catch { loadFiles(); loadUserAgents(); }
+    } catch { /* keep current list */ }
   };
-
-  const tree = buildTree(files);
-  const agents = agentNames;
 
   return (
     <div className="flex flex-col h-full bg-[var(--app-bg)]">
       <div className="flex items-center justify-between px-4 py-3 border-b border-[var(--app-border)]">
         <span className="text-xs font-bold uppercase tracking-widest text-[var(--app-text-tertiary)]">Agents</span>
-        <button onClick={createAgent}
+        <button onClick={() => setShowCreateDialog(true)}
           className="w-6 h-6 rounded-lg flex items-center justify-center text-sm font-bold transition-all duration-200 hover:scale-110 bg-[var(--app-accent-bg)] text-[var(--app-accent)] leading-none">+</button>
       </div>
 
       <div className="overflow-auto py-1" style={{ flex: "1 1 0", minHeight: 0 }}>
-        {agents.map((name) => {
+        {agentNames.map((name) => {
           const isExpanded = expanded.has(`agents/${name}`);
           const avatar = getAgentAvatar(name);
           return (
@@ -231,23 +176,22 @@ export function AgentPanel({ sessionId, onFileSelect, selectedFile, onAgentListC
               </div>
               {isExpanded && (
                 <div className="ml-7 border-l border-[var(--app-border)]">
-                  {renderFileChildren(`agents/${name}`, tree, expanded, toggleExpand, onFileSelect, selectedFile, 0, createFile, createFolder, renameFolder, deleteFolder, renameFile, deleteFile, renamingPath, renameValue, startFileRename, setRenameValue, finishFileRename)}
+                  {renderFileChildren({ prefix: `agents/${name}`, tree, expanded, toggleExpand, onFileSelect, selectedFile, depth: 0, createFile, createFolder, renameFolder, deleteFolder, renameFile, deleteFile, renamingPath, renameValue, onStartRename: startFileRename, onRenameChange: setRenameValue, onFinishRename: finishFileRename })}
                 </div>
               )}
             </div>
           );
         })}
-        {agents.length === 0 && (
+        {agentNames.length === 0 && (
           <div className="px-4 py-8 text-center text-xs leading-relaxed text-[var(--app-text-tertiary)]">
             No agents yet.<br />
-            <button onClick={createAgent} className="mt-2 font-medium hover:underline text-[var(--app-accent)]">Create your first agent</button>
+            <button onClick={() => setShowCreateDialog(true)} className="mt-2 font-medium hover:underline text-[var(--app-accent)]">Create your first agent</button>
           </div>
         )}
       </div>
 
       {ConfirmDialog}
 
-      {/* Toast */}
       {toast && (
         <div className="fixed bottom-20 right-4 z-50 animate-pageIn">
           <div className="rounded-xl px-4 py-2.5 text-xs font-medium text-center shadow-xl bg-[var(--app-surface)] border border-[var(--app-border)] text-[var(--app-text)]">
@@ -256,7 +200,6 @@ export function AgentPanel({ sessionId, onFileSelect, selectedFile, onAgentListC
         </div>
       )}
 
-      {/* Create Agent Dialog */}
       {showCreateDialog && (
         <>
           <div className="fixed inset-0 z-40 bg-black/30" onClick={cancelCreateAgent} />
@@ -305,8 +248,6 @@ export function AgentPanel({ sessionId, onFileSelect, selectedFile, onAgentListC
     </div>
   );
 }
-
-// ── Agent kebab menu ──
 
 function AgentMenu({ agentName: _agentName, onRename, onDelete }: { agentName: string; onRename: () => void; onDelete: () => void }) {
   const [open, setOpen] = useState(false);
