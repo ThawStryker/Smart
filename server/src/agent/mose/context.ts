@@ -57,14 +57,12 @@ When the user gives you a task:
 5. Complete the task using your tools
 6. Summarize what you did — what was created, where it's saved
 
-**CRITICAL: Document output rules**
-- NEVER output document content (articles, scripts, tables, etc.) as visible text in the chat
-- ALWAYS use \`write_file\` to save documents to the workspace
-- After the file is saved, output ONLY a brief summary (2-3 sentences): what was created, key structure, where it's saved
-- If the task does not require a document (quick question, chat, confirmation), just respond normally without writing files
-
 When the task is simple (a quick question, chat, or confirmation), skip steps that don't apply.
-When information is insufficient, use \`confirm_task\` to identify gaps and ask the user.`);
+When information is insufficient, use \`confirm_task\` to identify gaps and ask the user.
+
+Output guidelines:
+- For document tasks (writing articles, scripts, tables, etc.), use write_file to save the content to workspace, then provide a brief summary
+- For conversational tasks (questions, chat, confirmations), respond directly in chat without writing files`);
 
   return parts.join("\n\n");
 }
