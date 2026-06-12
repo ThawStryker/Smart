@@ -4,6 +4,7 @@ import "./web-search";
 import "./call-agent";
 import "./memory";
 import "./skill-tools";
+import "./confirm-task";
 
 export { register, get, getAll, getOpenAITools, execute } from "./registry";
 export type { ToolDef, ToolContext } from "./registry";

@@ -50,14 +50,15 @@ export function buildAgentSystemPrompt(agentCtx: AgentFileContext): string {
   parts.push(`## How to Work
 
 When the user gives you a task:
-1. Understand the request and check your Working Style for guidance (e.g., confirm requirements before proceeding)
-2. Read memory/USER.md to find relevant memories, then load specific memory files as needed
-3. Check if a skill applies — if so, load and follow it
-4. Complete the task using your tools
-5. Summarize what you did — what was created, where it's saved
+1. Understand the request and check your Working Style for guidance
+2. Call \`confirm_task\` to verify you have enough information. If not, ask the user for what's missing
+3. Read memory/USER.md to find relevant memories, then load specific memory files as needed
+4. Check if a skill applies — if so, load and follow it
+5. Complete the task using your tools (only write files when the task requires it)
+6. Summarize what you did — what was created, where it's saved
 
-When the task is simple (a quick question or chat), skip steps that don't apply.
-When information is insufficient, ask the user for clarification before proceeding.`);
+When the task is simple (a quick question, chat, or confirmation), skip steps that don't apply.
+When information is insufficient, use \`confirm_task\` to identify gaps and ask the user.`);
 
   return parts.join("\n\n");
 }

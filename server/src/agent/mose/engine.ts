@@ -258,17 +258,7 @@ async function* runAgent(input: EngineInput): EngineOutput {
     }
   }
 
-  // auto-save 兜底：agent 没调 write_file 但有文本输出
-  if (!hasWrittenFile && fullResponse.trim()) {
-    const writeHandler = toolHandlers["write_file"];
-    if (writeHandler) {
-      const fileName = `${agentName}-${Date.now()}.md`;
-      yield { type: "phase", phase: "write", meta: { path: `workspace/${fileName}` } };
-      await writeHandler.execute({ path: `workspace/${fileName}`, content: fullResponse });
-    }
-  }
-
-  // 保存 agent 响应为消息（注：工具调用阶段的文本已在循环中作为 assistant 消息推送）
+  // 保存 agent 响应为消息
   if (!suppressSave && input.onSaveMessage) {
     await input.onSaveMessage({
       sessionId, agentName, role: "assistant",
