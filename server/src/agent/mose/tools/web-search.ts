@@ -1,4 +1,7 @@
-export async function webSearch(args: Record<string, unknown>): Promise<string> {
+import { register } from "./registry";
+import type { ToolContext } from "./registry";
+
+async function webSearchHandler(args: Record<string, unknown>, _ctx: ToolContext): Promise<string> {
   const query = args.query as string | undefined;
   if (!query) return "Error: query required";
   try {
@@ -11,3 +14,18 @@ export async function webSearch(args: Record<string, unknown>): Promise<string> 
     return `Search error: ${err instanceof Error ? err.message : String(err)}`;
   }
 }
+
+register({
+  name: "web_search",
+  description: "Search the web",
+  parameters: {
+    type: "object",
+    properties: {
+      query: { type: "string", description: "Search query" },
+    },
+    required: ["query"],
+  },
+  phase: "search",
+  meta: (args) => ({ query: args.query as string }),
+  handler: webSearchHandler,
+});

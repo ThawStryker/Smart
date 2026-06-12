@@ -10,3 +10,4 @@ export { useProfile } from "./useProfile";
 export { useProjects } from "./useProjects";
 export type { Project } from "./useProjects";
 export { ThemeProvider, useTheme } from "./useTheme";
+export { useWorkPage } from "./useWorkPage";

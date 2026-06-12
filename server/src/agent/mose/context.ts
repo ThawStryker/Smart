@@ -44,7 +44,6 @@ export function buildAgentSystemPrompt(agentCtx: AgentFileContext): string {
     parts.push(`## Skills (pre-loaded)\n\nThe following skills are already loaded. You MUST follow the matching skill's exact template, structure, and requirements when the task fits.\n\n${skillBlocks.join("\n\n---\n\n")}`);
   }
 
-  // Workflow guide
   // Workflow guide (full 5-step enforce)
   parts.push(`## Agent Workflow
 You operate in a structured 5-step workflow. Follow these steps IN ORDER for every task.

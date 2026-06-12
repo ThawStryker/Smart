@@ -1,32 +1,25 @@
-import { WorkspaceActions } from "./ContextMenu";
 import { renderFileChildren } from "./FileTree";
+import { WorkspaceActions } from "./ContextMenu";
+import { useFilePanel } from "@/hooks/useFilePanel";
 
 interface WorkspacePanelProps {
-  expanded: Set<string>;
-  toggleExpand: (path: string) => void;
-  tree: Record<string, any>;
+  sessionId: number;
   onFileSelect: (path: string, content: string) => void;
   selectedFile: string | null;
-  createFile: (parentPath: string) => Promise<void>;
-  createFolder: (parentPath: string) => Promise<void>;
-  renameFolder: (folderPath: string, newName: string) => void;
-  deleteFolder: (folderPath: string) => void;
-  renameFile: (filePath: string, newName: string) => void;
-  deleteFile: (filePath: string) => void;
-  renamingPath: string | null;
-  renameValue: string;
-  onStartRename: (path: string, name: string) => void;
-  onRenameChange: (v: string) => void;
-  onFinishRename: (path: string, oldName: string) => void;
+  reloadTrigger?: number;
+  onCloseFile?: () => void;
 }
 
-export function WorkspacePanel({
-  expanded, toggleExpand, tree, onFileSelect, selectedFile,
-  createFile, createFolder, renameFolder, deleteFolder, renameFile, deleteFile,
-  renamingPath, renameValue, onStartRename, onRenameChange, onFinishRename,
-}: WorkspacePanelProps) {
+export function WorkspacePanel({ sessionId, onFileSelect, selectedFile, reloadTrigger, onCloseFile }: WorkspacePanelProps) {
+  const {
+    expanded, toggleExpand, tree,
+    createFile, createFolder, renameFile, renameFolder, deleteFile, deleteFolder,
+    startFileRename, finishFileRename, renamingPath, renameValue, setRenameValue,
+    toast, ConfirmDialog,
+  } = useFilePanel({ sessionId, urlPrefix: "workspace", selectedFile, onCloseFile, reloadTrigger });
+
   return (
-    <div className="border-t border-[var(--app-border)] flex flex-col" style={{ flex: "0 0 50%", minHeight: 0 }}>
+    <div className="border-t border-[var(--app-border)] flex flex-col" style={{ flex: "1 1 0", minHeight: 0 }}>
       <div className="flex items-center justify-between px-4 py-2.5 group">
         <div className="flex items-center gap-2">
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--app-text-secondary)" strokeWidth="2" strokeLinecap="round" className="flex-shrink-0">
@@ -38,7 +31,7 @@ export function WorkspacePanel({
       </div>
       <div className="flex-1 overflow-auto border-t border-[var(--app-border)]">
         {(() => {
-          const children = renderFileChildren("workspace", tree, expanded, toggleExpand, onFileSelect, selectedFile, 0, createFile, createFolder, renameFolder, deleteFolder, renameFile, deleteFile, renamingPath, renameValue, onStartRename, onRenameChange, onFinishRename);
+          const children = renderFileChildren({ prefix: "workspace", tree, expanded, toggleExpand, onFileSelect, selectedFile, depth: 0, createFile, createFolder, renameFolder, deleteFolder, renameFile, deleteFile, renamingPath, renameValue, onStartRename: startFileRename, onRenameChange: setRenameValue, onFinishRename: finishFileRename });
           if (children.length === 0) {
             return (
               <div className="px-4 py-6 text-center text-[10px] text-[var(--app-text-tertiary)] leading-relaxed">
@@ -49,6 +42,16 @@ export function WorkspacePanel({
           return children;
         })()}
       </div>
+
+      {ConfirmDialog}
+
+      {toast && (
+        <div className="fixed bottom-20 right-4 z-50 animate-pageIn">
+          <div className="rounded-xl px-4 py-2.5 text-xs font-medium text-center shadow-xl bg-[var(--app-surface)] border border-[var(--app-border)] text-[var(--app-text)]">
+            {toast}
+          </div>
+        </div>
+      )}
     </div>
   );
 }

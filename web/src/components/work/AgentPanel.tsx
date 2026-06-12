@@ -1,10 +1,7 @@
-import { useState, useEffect, useCallback, useRef } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { getAgentAvatar } from "./icons";
-import { WorkspacePanel } from "./WorkspacePanel";
-import { buildTree, renderFileChildren } from "./FileTree";
-import { useConfirm } from "@/components/shared/useConfirm";
-import { resolveApiUrl, resolveDeleteUrl, resolveRenameUrl, loadAllAgentFiles } from "@/lib/file-api";
-import type { FileEntry } from "@/types/work";
+import { renderFileChildren } from "./FileTree";
+import { useFilePanel } from "@/hooks/useFilePanel";
 
 interface AgentPanelProps {
   sessionId: number;
@@ -16,85 +13,18 @@ interface AgentPanelProps {
 }
 
 export function AgentPanel({ sessionId, onFileSelect, selectedFile, onAgentListChange, reloadTrigger, onCloseFile }: AgentPanelProps) {
-  const [files, setFiles] = useState<FileEntry[]>([]);
-  const [expanded, setExpanded] = useState<Set<string>>(new Set(["agents"]));
-  const [renaming, setRenaming] = useState<string | null>(null);
-  const [renameValue, setRenameValue] = useState("");
-  const [renamingPath, setRenamingPath] = useState<string | null>(null);
   const [agentNames, setAgentNames] = useState<string[]>([]);
-  const [toast, setToast] = useState<string | null>(null);
-  const { confirm, ConfirmDialog } = useConfirm();
-  useEffect(() => { if (toast) { const t = setTimeout(() => setToast(null), 3000); return () => clearTimeout(t); } }, [toast]);
-  const pendingDeletesRef = useRef<Set<string>>(new Set());
+  const [renaming, setRenaming] = useState<string | null>(null);
+  const [showCreateDialog, setShowCreateDialog] = useState(false);
+  const [newAgentName, setNewAgentName] = useState("");
+  const [newAgentTemplate, setNewAgentTemplate] = useState("通用");
 
-  const startFileRename = (path: string, name: string) => { setRenamingPath(path); setRenameValue(name); };
-  const finishFileRename = (path: string, oldName: string) => {
-    if (renameValue.trim() && renameValue.trim() !== oldName) {
-      if (path.includes(`/${oldName}`)) {
-        const tree = buildTree(files);
-        const isFolder = (() => {
-          const parts = path.split("/");
-          let node: any = tree;
-          for (const p of parts) { if (!node?.__kids?.[p]) return false; node = node.__kids[p]; }
-          return node && typeof node === "object" && "__kids" in node;
-        })();
-        if (isFolder) renameFolder(path, renameValue.trim());
-        else renameFile(path, renameValue.trim());
-      }
-    }
-    setRenamingPath(null);
-    setRenameValue("");
-  };
-
-  const loadFiles = useCallback(async () => {
-    try {
-      const [sessionRes, workspaceRes] = await Promise.all([
-        fetch(`/api/work/sessions/${sessionId}/files`).catch(() => ({ ok: false } as Response)),
-        fetch("/api/work/workspace").catch(() => ({ ok: false } as Response)),
-      ]);
-      let allFiles: FileEntry[] = [];
-      // Session files — exclude workspace/ and agents/ (now in their own tables)
-      if (sessionRes.ok) {
-        const sf = await sessionRes.json();
-        allFiles = sf.filter((f: FileEntry) => !f.path.startsWith("workspace/") && !f.path.startsWith("agents/"));
-      }
-      // Workspace files — prefix with "workspace/" for tree display
-      if (workspaceRes.ok) {
-        const wsFiles = await workspaceRes.json();
-        for (const f of wsFiles) {
-          allFiles.push({ ...f, path: `workspace/${f.path}` });
-        }
-      }
-      // Agent files — 批量加载（N+1 → 1 请求）
-      const agentFileMap = await loadAllAgentFiles();
-      for (const [agentName, files] of agentFileMap) {
-        for (const f of files) {
-          allFiles.push({ ...f, path: `agents/${agentName}/${f.path}` });
-        }
-      }
-      // Deduplicate by path + skip pending deletes + skip sessionStorage deleted
-      const deletedFiles: string[] = JSON.parse(localStorage.getItem("deletedFiles") || "[]");
-      const seen = new Set<string>();
-      setFiles(allFiles.filter((f: FileEntry) => {
-        if (deletedFiles.includes(f.path)) return false;
-        if (pendingDeletesRef.current.has(f.path)) return false;
-        if (seen.has(f.path)) return false;
-        seen.add(f.path);
-        return true;
-      }));
-    } catch {
-      // Network error — keep existing file list unchanged
-    }
-  }, [sessionId]);
-
-  // R5: 跨标签页同步 — 其他标签删除文件后刷新
-  useEffect(() => {
-    const handler = (e: StorageEvent) => {
-      if (e.key === "deletedFiles") loadFiles();
-    };
-    window.addEventListener("storage", handler);
-    return () => window.removeEventListener("storage", handler);
-  }, [loadFiles]);
+  const {
+    expanded, setExpanded, toggleExpand, tree,
+    createFile, createFolder, renameFile, renameFolder, deleteFile, deleteFolder,
+    startFileRename, finishFileRename, renamingPath, renameValue, setRenameValue,
+    toast, setToast, confirm, ConfirmDialog,
+  } = useFilePanel({ sessionId, urlPrefix: "agents", selectedFile, onCloseFile, reloadTrigger });
 
   const loadUserAgents = useCallback(async () => {
     const res = await fetch("/api/agents");
@@ -105,21 +35,7 @@ export function AgentPanel({ sessionId, onFileSelect, selectedFile, onAgentListC
     }
   }, [onAgentListChange]);
 
-  useEffect(() => { if (sessionId) loadFiles(); }, [sessionId, loadFiles]);
   useEffect(() => { loadUserAgents(); }, [loadUserAgents]);
-  useEffect(() => { if (reloadTrigger && sessionId) loadFiles(); }, [reloadTrigger]);
-
-  const toggleExpand = (path: string) => {
-    setExpanded((prev) => {
-      const next = new Set(prev);
-      if (next.has(path)) next.delete(path); else next.add(path);
-      return next;
-    });
-  };
-
-  const [showCreateDialog, setShowCreateDialog] = useState(false);
-  const [newAgentName, setNewAgentName] = useState("");
-  const [newAgentTemplate, setNewAgentTemplate] = useState("通用");
 
   const AGENT_TEMPLATES: Record<string, string> = {
     通用: `# 我的角色
@@ -169,10 +85,6 @@ export function AgentPanel({ sessionId, onFileSelect, selectedFile, onAgentListC
 4. 撰写完整剧本`,
   };
 
-  const createAgent = async () => {
-    setShowCreateDialog(true);
-  };
-
   const confirmCreateAgent = async () => {
     if (!newAgentName.trim()) return;
     const name = newAgentName.trim();
@@ -180,7 +92,6 @@ export function AgentPanel({ sessionId, onFileSelect, selectedFile, onAgentListC
       method: "POST", headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ name }),
     });
-    // Update AGENTS.md with template content
     const template = AGENT_TEMPLATES[newAgentTemplate] || AGENT_TEMPLATES["通用"];
     await fetch(`/api/agents/${encodeURIComponent(name)}/files/AGENTS.md`, {
       method: "PUT", headers: { "Content-Type": "application/json" },
@@ -188,9 +99,8 @@ export function AgentPanel({ sessionId, onFileSelect, selectedFile, onAgentListC
     });
     setShowCreateDialog(false);
     setNewAgentName("");
-    // 自动展开新创建 agent 的文件树
     setExpanded((prev) => { const n = new Set(prev); n.add(`agents/${name}`); return n; });
-    loadFiles(); loadUserAgents();
+    loadUserAgents();
     setToast(`Agent「${name}」已创建（${newAgentTemplate}模板）`);
   };
 
@@ -205,127 +115,27 @@ export function AgentPanel({ sessionId, onFileSelect, selectedFile, onAgentListC
       method: "PATCH", headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ name: newName.trim() }),
     });
-    loadFiles(); loadUserAgents();
+    loadUserAgents();
   };
 
   const deleteAgent = async (name: string) => {
     if (!await confirm(`确定删除 Agent「${name}」及其所有文件？`)) return;
     setAgentNames((prev) => prev.filter((a) => a !== name));
-    setFiles((prev) => prev.filter((f) => !f.path.startsWith(`agents/${name}/`)));
     try {
       await fetch(`/api/agents/${name}`, { method: "DELETE" });
-    } catch { loadFiles(); loadUserAgents(); }
+    } catch { /* keep current list */ }
   };
-
-  const createFile = useCallback(async (parentPath: string) => {
-    const prefix = parentPath.endsWith("/") ? parentPath : `${parentPath}/`;
-    const name = `新文件.md`;
-    let path = `${prefix}${name}`;
-    let idx = 1;
-    while (files.some((f) => f.path === path)) { idx++; path = `${prefix}新文件 ${idx}.md`; }
-    const api = resolveApi(path);
-    if (api) await fetch(api.url, { method: api.method, headers: { "Content-Type": "application/json" }, body: JSON.stringify({ content: "" }) });
-    loadFiles();
-  }, [sessionId, files, loadFiles]);
-
-  const createFolder = useCallback(async (parentPath: string) => {
-    const prefix = parentPath.endsWith("/") ? parentPath : `${parentPath}/`;
-    const name = "新文件夹";
-    let path = `${prefix}${name}`;
-    let idx = 1;
-    while (files.some((f) => f.path === path)) { idx++; path = `${prefix}新文件夹 ${idx}`; }
-    const api = resolveApi(path);
-    if (api) await fetch(api.url, { method: api.method, headers: { "Content-Type": "application/json" }, body: JSON.stringify({ isFolder: true }) });
-    loadFiles();
-  }, [sessionId, files, loadFiles]);
-
-  const renameFolder = useCallback(async (folderPath: string, newName: string) => {
-    if (!newName.trim()) return;
-    const parentPath = folderPath.split("/").slice(0, -1).join("/");
-    const newPath = parentPath ? `${parentPath}/${newName.trim()}` : newName.trim();
-    if (newPath === folderPath) return;
-    const renameUrl = resolveRenameUrl(folderPath, sessionId);
-    if (!renameUrl) { loadFiles(); return; }
-    try {
-      const res = await fetch(renameUrl, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ oldPath: folderPath, newPath }),
-      });
-      if (!res.ok) throw new Error(`Rename failed: ${res.status}`);
-    } catch { /* fallback */ }
-    loadFiles();
-  }, [files, sessionId, loadFiles]);
-
-  // 路径解析已提取到 @/lib/file-api.ts
-
-  const resolveApi = (treePath: string) => resolveApiUrl(treePath, sessionId);
-  const resolveApiDelete = (treePath: string) => resolveDeleteUrl(treePath, sessionId);
-
-  const deleteFolder = useCallback(async (folderPath: string) => {
-    if (!await confirm(`确定删除「${folderPath}」及其所有内容？`)) return;
-    pendingDeletesRef.current.add(folderPath);
-    setFiles((prev) => prev.filter((f) => f.path !== folderPath && !f.path.startsWith(`${folderPath}/`)));
-    try {
-      const res = await fetch(resolveApiDelete(folderPath), { method: "DELETE" });
-      if (!res.ok) throw new Error(`Delete failed: ${res.status}`);
-    } catch { loadFiles(); }
-    pendingDeletesRef.current.delete(folderPath);
-  }, [loadFiles]);
-
-  // 重命名 URL 映射（原子化 rename endpoint，从共享模块引用）
-  // resolveRenameUrl 已通过 file-api.ts 提供
-
-  const renameFile = useCallback(async (filePath: string, newName: string) => {
-    if (!newName.trim()) return;
-    const parentPath = filePath.split("/").slice(0, -1).join("/");
-    const newPath = parentPath ? `${parentPath}/${newName.trim()}` : newName.trim();
-    if (newPath === filePath) return;
-    const renameUrl = resolveRenameUrl(filePath, sessionId);
-    if (!renameUrl) { loadFiles(); return; }
-    try {
-      const res = await fetch(renameUrl, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ oldPath: filePath, newPath }),
-      });
-      if (!res.ok) throw new Error(`Rename failed: ${res.status}`);
-    } catch { /* fallback */ }
-    loadFiles();
-  }, [sessionId, loadFiles]);
-
-  const deleteFile = useCallback(async (filePath: string) => {
-    if (!await confirm(`确定删除「${filePath}」？`)) return;
-    try {
-      const res = await fetch(resolveApiDelete(filePath), { method: "DELETE" });
-      if (!res.ok) throw new Error(`Delete failed: ${res.status}`);
-      // 服务器确认删除成功后再关编辑器
-      if (selectedFile === filePath && onCloseFile) onCloseFile();
-      const deletedFiles: string[] = JSON.parse(localStorage.getItem("deletedFiles") || "[]");
-      deletedFiles.push(filePath);
-      localStorage.setItem("deletedFiles", JSON.stringify(deletedFiles));
-      // Remove from local state immediately — D1 is eventually consistent,
-      // so reloading would likely return stale data and "resurrect" the file.
-      setFiles((prev) => prev.filter((f) => f.path !== filePath));
-    } catch {
-      setToast(`删除失败：${filePath}`);
-      loadFiles(); // fallback: reload to sync
-    }
-  }, [selectedFile, onCloseFile, loadFiles]);
-
-  const tree = buildTree(files);
-  const agents = agentNames;
 
   return (
     <div className="flex flex-col h-full bg-[var(--app-bg)]">
       <div className="flex items-center justify-between px-4 py-3 border-b border-[var(--app-border)]">
         <span className="text-xs font-bold uppercase tracking-widest text-[var(--app-text-tertiary)]">Agents</span>
-        <button onClick={createAgent}
+        <button onClick={() => setShowCreateDialog(true)}
           className="w-6 h-6 rounded-lg flex items-center justify-center text-sm font-bold transition-all duration-200 hover:scale-110 bg-[var(--app-accent-bg)] text-[var(--app-accent)] leading-none">+</button>
       </div>
 
       <div className="overflow-auto py-1" style={{ flex: "1 1 0", minHeight: 0 }}>
-        {agents.map((name) => {
+        {agentNames.map((name) => {
           const isExpanded = expanded.has(`agents/${name}`);
           const avatar = getAgentAvatar(name);
           return (
@@ -366,42 +176,22 @@ export function AgentPanel({ sessionId, onFileSelect, selectedFile, onAgentListC
               </div>
               {isExpanded && (
                 <div className="ml-7 border-l border-[var(--app-border)]">
-                  {renderFileChildren(`agents/${name}`, tree, expanded, toggleExpand, onFileSelect, selectedFile, 0, createFile, createFolder, renameFolder, deleteFolder, renameFile, deleteFile, renamingPath, renameValue, startFileRename, setRenameValue, finishFileRename)}
+                  {renderFileChildren({ prefix: `agents/${name}`, tree, expanded, toggleExpand, onFileSelect, selectedFile, depth: 0, createFile, createFolder, renameFolder, deleteFolder, renameFile, deleteFile, renamingPath, renameValue, onStartRename: startFileRename, onRenameChange: setRenameValue, onFinishRename: finishFileRename })}
                 </div>
               )}
             </div>
           );
         })}
-        {agents.length === 0 && (
+        {agentNames.length === 0 && (
           <div className="px-4 py-8 text-center text-xs leading-relaxed text-[var(--app-text-tertiary)]">
             No agents yet.<br />
-            <button onClick={createAgent} className="mt-2 font-medium hover:underline text-[var(--app-accent)]">Create your first agent</button>
+            <button onClick={() => setShowCreateDialog(true)} className="mt-2 font-medium hover:underline text-[var(--app-accent)]">Create your first agent</button>
           </div>
         )}
       </div>
 
-      <WorkspacePanel
-        expanded={expanded}
-        toggleExpand={toggleExpand}
-        tree={tree}
-        onFileSelect={onFileSelect}
-        selectedFile={selectedFile}
-        createFile={createFile}
-        createFolder={createFolder}
-        renameFolder={renameFolder}
-        deleteFolder={deleteFolder}
-        renameFile={renameFile}
-        deleteFile={deleteFile}
-        renamingPath={renamingPath}
-        renameValue={renameValue}
-        onStartRename={startFileRename}
-        onRenameChange={setRenameValue}
-        onFinishRename={finishFileRename}
-      />
-
       {ConfirmDialog}
 
-      {/* Toast */}
       {toast && (
         <div className="fixed bottom-20 right-4 z-50 animate-pageIn">
           <div className="rounded-xl px-4 py-2.5 text-xs font-medium text-center shadow-xl bg-[var(--app-surface)] border border-[var(--app-border)] text-[var(--app-text)]">
@@ -410,7 +200,6 @@ export function AgentPanel({ sessionId, onFileSelect, selectedFile, onAgentListC
         </div>
       )}
 
-      {/* Create Agent Dialog */}
       {showCreateDialog && (
         <>
           <div className="fixed inset-0 z-40 bg-black/30" onClick={cancelCreateAgent} />
@@ -459,8 +248,6 @@ export function AgentPanel({ sessionId, onFileSelect, selectedFile, onAgentListC
     </div>
   );
 }
-
-// ── Agent kebab menu ──
 
 function AgentMenu({ agentName: _agentName, onRename, onDelete }: { agentName: string; onRename: () => void; onDelete: () => void }) {
   const [open, setOpen] = useState(false);

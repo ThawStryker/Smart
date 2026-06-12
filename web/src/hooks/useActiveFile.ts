@@ -1,7 +1,5 @@
-/**
- * useActiveFile — Currently open file state
- */
 import { useState, useRef, useCallback } from "react";
+import { getFileContent, saveFileContent } from "@/lib/file-api";
 
 interface ActiveFile {
   path: string;
@@ -18,19 +16,11 @@ export function useActiveFile() {
     setIsStreaming(false);
   }, []);
 
-  const openExisting = useCallback(async (path: string, sessionId: number) => {
-    const apiPath = path.startsWith("workspace/") ? path.slice("workspace/".length) : path;
-    const url = path.startsWith("workspace/")
-      ? `/api/work/workspace/${apiPath.split("/").map(encodeURIComponent).join("/")}`
-      : `/api/work/sessions/${sessionId}/files/${apiPath.split("/").map(encodeURIComponent).join("/")}`;
+  const openExisting = useCallback(async (path: string, _sessionId: number) => {
     try {
-      const r = await fetch(url);
-      if (r.ok) {
-        const data = await r.json();
-        const c = data.content || "";
-        savedContent.current[path] = c;
-        setActiveFile({ path, content: c });
-      }
+      const c = await getFileContent(path);
+      savedContent.current[path] = c ?? "";
+      setActiveFile({ path, content: c ?? "" });
     } catch {
       setActiveFile({ path, content: "" });
     }
@@ -71,18 +61,9 @@ export function useActiveFile() {
     setActiveFile((prev) => prev && prev.path === oldPath ? { path: newPath, content } : prev);
   }, [activeFile]);
 
-  const save = useCallback(async (path: string, content: string, sessionId: number) => {
-    let url: string;
-    const m = path.match(/^agents\/([^/]+)\/(.+)$/);
-    if (m) {
-      url = `/api/agents/${encodeURIComponent(m[1])}/files/${m[2].split("/").map(encodeURIComponent).join("/")}`;
-    } else if (path.startsWith("workspace/")) {
-      url = `/api/work/workspace/${path.slice("workspace/".length).split("/").map(encodeURIComponent).join("/")}`;
-    } else {
-      url = `/api/work/sessions/${sessionId}/files/${path.split("/").map(encodeURIComponent).join("/")}`;
-    }
+  const save = useCallback(async (path: string, content: string, _sessionId: number) => {
     savedContent.current[path] = content;
-    await fetch(url, { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ content }) });
+    await saveFileContent(path, content);
   }, []);
 
   return { activeFile, isStreaming, setIsStreaming, open, openExisting, close, updateContent, appendContent, rename, save };

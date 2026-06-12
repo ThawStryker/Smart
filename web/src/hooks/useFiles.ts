@@ -1,12 +1,8 @@
 /**
- * useFiles — Workspace file CRUD with server-confirmed state.
- *
- * Rules:
- * - Never manipulate local state directly — always reload from server after mutation.
- * - Server is the source of truth. This prevents "file reappears" bugs.
+ * useFiles — Workspace 文件 CRUD，服务器为唯一数据源。
  */
 import { useState, useCallback } from "react";
-import { resolveApiUrl, resolveDeleteUrl, resolveRenameUrl, loadAllAgentFiles } from "@/lib/file-api";
+import { resolveApiUrl, resolveDeleteUrl, resolveRenameUrl } from "@/lib/file-api";
 
 export interface FileEntry {
   id: number;
@@ -23,32 +19,15 @@ export function useFiles(sessionId: number) {
 
   const load = useCallback(async () => {
     try {
-      const [sessionRes, workspaceRes] = await Promise.all([
-        fetch(`/api/work/sessions/${sessionId}/files`).catch(() => ({ ok: false } as Response)),
-        fetch("/api/work/workspace").catch(() => ({ ok: false } as Response)),
-      ]);
-      const all: FileEntry[] = [];
-      if (sessionRes.ok) {
-        const sf = await sessionRes.json();
-        all.push(...sf.filter((f: FileEntry) => !f.path.startsWith("workspace/") && !f.path.startsWith("agents/")));
+      const res = await fetch("/api/work/workspace").catch(() => ({ ok: false } as Response));
+      if (res.ok) {
+        const wsFiles = await res.json();
+        setFiles(wsFiles.map((f: FileEntry) => ({ ...f, path: `workspace/${f.path}` })));
       }
-      if (workspaceRes.ok) {
-        const ws = await workspaceRes.json();
-        for (const f of ws) all.push({ ...f, path: `workspace/${f.path}` });
-      }
-      // Agent files — 批量加载（N+1 → 1 请求）
-      const agentFileMap = await loadAllAgentFiles();
-      for (const [agentName, files] of agentFileMap) {
-        for (const f of files) {
-          all.push({ ...f, path: `agents/${agentName}/${f.path}` });
-        }
-      }
-      const seen = new Set<string>();
-      setFiles(all.filter((f) => { if (seen.has(f.path)) return false; seen.add(f.path); return true; }));
     } catch {
-      // Network error — keep existing file list unchanged
+      // 网络错误 — 保持现有文件列表不变
     }
-  }, [sessionId]);
+  }, []);
 
   const create = useCallback(async (parentPath: string) => {
     const prefix = parentPath.endsWith("/") ? parentPath : `${parentPath}/`;
@@ -72,7 +51,9 @@ export function useFiles(sessionId: number) {
 
   const remove = useCallback(async (filePath: string) => {
     try {
-      const res = await fetch(delUrl(filePath), { method: "DELETE" });
+      const url = delUrl(filePath);
+      if (!url) return;
+      const res = await fetch(url, { method: "DELETE" });
       if (!res.ok) throw new Error(`Delete failed: ${res.status}`);
       await load();
     } catch {
@@ -89,7 +70,9 @@ export function useFiles(sessionId: number) {
     const newPath = parts.join("/");
     if (newPath === filePath) return;
     try {
-      const res = await fetch(renameUrl(filePath), {
+      const url = renameUrl(filePath);
+      if (!url) return;
+      const res = await fetch(url, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ oldPath: filePath, newPath }),

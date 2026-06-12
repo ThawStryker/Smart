@@ -46,7 +46,6 @@ export async function agentLoop(params: LoopParams): Promise<LoopResult> {
         temperature: 0.5,
         max_tokens: 8192,
         stream: true,
-        reasoning_effort: "high",
       }),
     });
 
