@@ -12,59 +12,52 @@ export function buildConversationSummary(
 export function buildAgentSystemPrompt(agentCtx: AgentFileContext): string {
   const parts: string[] = [];
 
-  // AGENTS.md — role definition + constraints
-  if (agentCtx.agentsMd) {
-    parts.push(`## Role & Rules\n\n${agentCtx.agentsMd}`);
+  // ── 角色定义（AGENTS.md） ──
+  if (agentCtx.identity) {
+    parts.push(agentCtx.identity);
   }
 
-  // Context — full load, always-present background knowledge
+  // ── 行为准则（context/ 目录） ──
   if (agentCtx.contexts.length > 0) {
-    parts.push(`## Background Context\n\n${agentCtx.contexts.join("\n\n---\n\n")}`);
+    parts.push(`## Working Style\n\n${agentCtx.contexts.join("\n\n---\n\n")}`);
   }
 
-  // USER.md — user's fixed memory with document references for on-demand loading
-  if (agentCtx.userMd) {
-    parts.push(
-      `## User Memory\n\n${agentCtx.userMd}\n\n(These are the user's permanent preferences. Use \`read_file\` to load referenced documents on demand.)`,
+  // ── 可用资源清单 ──
+  const resourceLines: string[] = [];
+
+  // 记忆索引
+  if (agentCtx.memoryIndex) {
+    resourceLines.push(
+      `### memory/USER.md (Memory Index)\n\n${agentCtx.memoryIndex}\n\nThis is your memory directory. Read it to find memories relevant to the current task. Use \`read_file\` to load specific memory files.`,
     );
   }
 
-  // MEMORY.md — agent's self-learned growth memory
-  if (agentCtx.memoryMd) {
-    parts.push(
-      `## Agent Memory\n\n${agentCtx.memoryMd}\n\n(Your accumulated learnings from past tasks. Learn from them.)`,
-    );
-  }
-
-  // Skills — full content pre-loaded (same as context)
+  // 技能列表
   if (agentCtx.skills.length > 0) {
-    const skillBlocks = agentCtx.skills.map(
-      (s) => `### ${s.name}\n\n${s.entry}`,
+    const skillList = agentCtx.skills
+      .map((s) => `- **${s.name}**: ${s.summary}`)
+      .join("\n");
+    resourceLines.push(
+      `### Available Skills\n\n${skillList}\n\nWhen a task matches a skill, use \`read_file\` to load its full content from skills/<name>/SKILL.md, then follow its template exactly.`,
     );
-    parts.push(`## Skills (pre-loaded)\n\nThe following skills are already loaded. You MUST follow the matching skill's exact template, structure, and requirements when the task fits.\n\n${skillBlocks.join("\n\n---\n\n")}`);
   }
 
-  // Workflow guide (full 5-step enforce)
-  parts.push(`## Agent Workflow
-You operate in a structured 5-step workflow. Follow these steps IN ORDER for every task.
-**CRITICAL: Use your thinking channel for ALL analysis. Your visible output must be a SINGLE short paragraph (2-3 sentences).**
-### Step 0: SKILL MATCH (thinking only)
-Check the Skills section above. If a skill matches the task, follow its template, format, and requirements EXACTLY. Do not improvise the structure — the skill defines it.
-### Step 1-3: ANALYSIS (thinking only)
-Complete these steps silently in your thinking/reasoning channel — do NOT output them as visible text:
-1. INFORMATION CHECK — what's missing? Do you need to ask?
-2. FORMAT SELECTION — which format from the skill applies?
-3. CONTENT GENERATION — produce the complete document internally
-### Step 4: SAVE TO WORKSPACE
-- Use write_file to save the complete content to workspace/<filename>.md
-- The file content must be the EXACT output from Step 3, with no additions or modifications
-- You MUST call write_file for all document content — NEVER output document content directly as visible text
-### Step 5: SUMMARIZE (visible)
-Output only this short summary in visible text:
-- What was created (topic, format, structure)
-- Where the file is saved
-- Example: "已完成「AI语音识别」课时脚本，包含7个环节的4列表格。脚本已保存到 workspace/AI语音识别.md。"
-- Do NOT list steps, do NOT explain your process, do NOT show the document content`);
+  if (resourceLines.length > 0) {
+    parts.push(`## Available Resources\n\n${resourceLines.join("\n\n")}`);
+  }
+
+  // ── 工作指引（引导模型思考，不写死步骤） ──
+  parts.push(`## How to Work
+
+When the user gives you a task:
+1. Understand the request and check your Working Style for guidance (e.g., confirm requirements before proceeding)
+2. Read memory/USER.md to find relevant memories, then load specific memory files as needed
+3. Check if a skill applies — if so, load and follow it
+4. Complete the task using your tools
+5. Summarize what you did — what was created, where it's saved
+
+When the task is simple (a quick question or chat), skip steps that don't apply.
+When information is insufficient, ask the user for clarification before proceeding.`);
 
   return parts.join("\n\n");
 }

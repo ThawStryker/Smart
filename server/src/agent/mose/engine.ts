@@ -1,4 +1,4 @@
-import { loadAgentFiles, loadSessionMessages, listAgentNames } from "./loader";
+import { loadAgentContext, loadSessionMessages, listAgentNames } from "./loader";
 import { buildConversationSummary, buildAgentSystemPrompt } from "./context";
 import type { EngineInput, EngineOutput, PhaseEvent, PhaseName } from "./phases";
 
@@ -190,21 +190,21 @@ async function* executeTools(
   return results;
 }
 
-// ── Agent 模式：1 次完整 prompt + 工具循环 + Phase 事件 ──
-// 构建完整 system prompt（AGENTS.md + context + memory + skills + workflow），
-// 单次 LLM 调用带工具，循环执行工具调用，emit Phase 事件供前端渲染。
+// ── Agent 模式：智能编排 + 工具循环 + Phase 事件 ──
+// 加载 agent 资源（角色 + 行为准则 + 资源清单），
+// 由模型动态决定读取哪些 memory/skill 文件，循环执行工具调用，emit Phase 事件供前端渲染。
 async function* runAgent(input: EngineInput): EngineOutput {
   const { sessionId, userId, userMessage, targetAgent, modelConfig, toolHandlers, toolDefs, suppressSave, depth } = input;
   const agentName = targetAgent!;
   let fullResponse = "";
   let hasWrittenFile = false;
 
-  // 加载 agent 文件 + 对话历史
-  const agentCtx = await loadAgentFiles(userId, agentName);
+  // 加载 agent 上下文 + 对话历史
+  const agentCtx = await loadAgentContext(userId, agentName);
   const msgs = await loadSessionMessages(sessionId);
   const summary = buildConversationSummary(msgs);
 
-  // 构建完整 system prompt（AGENTS.md + context + skills + workflow）
+  // 构建 system prompt（角色 + 行为准则 + 资源清单 + 工作指引）
   const agentSystemPrompt = buildAgentSystemPrompt(agentCtx);
 
   // 组装消息
@@ -218,21 +218,6 @@ async function* runAgent(input: EngineInput): EngineOutput {
 
   // yield agent_start
   yield { type: "phase", phase: "agent_start", meta: { agentName, depth } };
-
-  // context 文件在 system prompt 中自动加载，不展示标签
-  // memory 文件：展示 Read 标签（带文件名）
-  if (agentCtx.userMd) {
-    yield { type: "phase", phase: "read", meta: { path: "memory/USER.md" } };
-  }
-  if (agentCtx.memoryMd) {
-    yield { type: "phase", phase: "read", meta: { path: "memory/MEMORY.md" } };
-  }
-  // skill 列表（模型在 thinking 中自行匹配）
-  if (agentCtx.skills.length > 0) {
-    for (const sk of agentCtx.skills) {
-      yield { type: "phase", phase: "skill", meta: { name: sk.name } };
-    }
-  }
 
   // 工具循环（max 15 rounds）
   for (let step = 0; step < 15; step++) {
