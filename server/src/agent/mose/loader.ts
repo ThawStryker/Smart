@@ -64,44 +64,6 @@ export async function loadSessionMessages(
   }));
 }
 
-// ── 按需加载：读取单个 memory 文件 ──
-export async function loadMemoryFile(
-  userId: string,
-  agentName: string,
-  memoryPath: string,
-): Promise<string> {
-  const rows = await db
-    .select()
-    .from(agentFiles)
-    .where(
-      and(
-        eq(agentFiles.userId, userId),
-        eq(agentFiles.agentName, agentName),
-        eq(agentFiles.path, `memory/${memoryPath}`),
-      ),
-    );
-  return rows[0]?.content || "";
-}
-
-// ── 按需加载：读取单个 skill 文件 ──
-export async function loadSkillContent(
-  userId: string,
-  agentName: string,
-  skillName: string,
-): Promise<string> {
-  const rows = await db
-    .select()
-    .from(agentFiles)
-    .where(
-      and(
-        eq(agentFiles.userId, userId),
-        eq(agentFiles.agentName, agentName),
-        eq(agentFiles.path, `skills/${skillName}/SKILL.md`),
-      ),
-    );
-  return rows[0]?.content || "";
-}
-
 export async function listAgentNames(userId: string): Promise<string[]> {
   const agents = await db.select({ name: userAgents.name }).from(userAgents).where(eq(userAgents.userId, userId));
   return agents.map((a) => a.name);
