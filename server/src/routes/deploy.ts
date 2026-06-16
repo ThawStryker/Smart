@@ -1,7 +1,7 @@
 import { Hono } from "hono";
 import { db } from "edgespark";
 import { auth } from "edgespark/http";
-import { eq, and, desc } from "drizzle-orm";
+import { eq, and, or, desc } from "drizzle-orm";
 import { projects, tools, domains } from "@defs";
 
 export const deployRoutes = new Hono()
@@ -39,6 +39,14 @@ export const deployRoutes = new Hono()
     if (!subdomain || subdomain.length < 2) return c.json({ error: "Invalid subdomain (min 2 chars, a-z0-9-)" }, 400);
 
     const fullDomain = `${subdomain}.torresx.cn`;
+
+    // 清理失败或移除中的旧记录，允许用户重试
+    await db
+      .delete(domains)
+      .where(and(
+        eq(domains.domain, fullDomain),
+        or(eq(domains.status, "failed"), eq(domains.status, "removing")),
+      ));
 
     // Check global uniqueness
     const [dup] = await db
