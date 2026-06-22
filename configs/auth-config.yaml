@@ -5,7 +5,7 @@ providerEmailPassword:
   config:
     minPasswordLength: 8
     requireEmailVerification: false
-    requirePasswordResetEmailVerification: false
+    requirePasswordResetEmailVerification: true
     revokeSessionsOnPasswordReset: false
   enabled: true
 providerGoogle:

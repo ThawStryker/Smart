@@ -32,6 +32,7 @@ import { skillsRoutes } from "./routes/skills";
 import { mcpsRoutes } from "./routes/mcps";
 import { marketRoutes } from "./routes/market";
 import { adminRoutes } from "./routes/admin";
+import { resetPasswordRoutes } from "./routes/resetPassword";
 import { workRoutes } from "./routes/work";
 import { userAgentRoutes } from "./routes/agents";
 
@@ -55,6 +56,7 @@ const app = new Hono()
   .route("/", mcpsRoutes)
   .route("/", marketRoutes)
   .route("/", adminRoutes)
+  .route("/", resetPasswordRoutes)
   .route("/api/work", workRoutes)
   .route("/api/agents", userAgentRoutes);
 

@@ -1,0 +1,317 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Engine Debug - SSE 流调试工具</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: #0a0a0a; color: #e0e0e0; height: 100vh; display: flex; flex-direction: column; }
+  
+  .header { padding: 8px 16px; background: #111; border-bottom: 1px solid #333; display: flex; align-items: center; gap: 12px; flex-shrink: 0; }
+  .header h1 { font-size: 14px; color: #888; }
+  .header .status { font-size: 11px; color: #666; }
+  
+  .main { flex: 1; display: flex; overflow: hidden; }
+  
+  .panel { flex: 1; display: flex; flex-direction: column; border-right: 1px solid #222; overflow: hidden; }
+  .panel:last-child { border-right: none; }
+  .panel-header { padding: 6px 12px; background: #151515; border-bottom: 1px solid #222; font-size: 11px; font-weight: 600; color: #888; text-transform: uppercase; letter-spacing: 0.5px; flex-shrink: 0; }
+  .panel-body { flex: 1; overflow: auto; padding: 8px; font-family: 'SF Mono', 'Fira Code', monospace; font-size: 11px; line-height: 1.5; }
+  
+  .input-bar { padding: 8px 16px; background: #111; border-top: 1px solid #333; display: flex; gap: 8px; flex-shrink: 0; }
+  .input-bar input { flex: 1; background: #1a1a1a; border: 1px solid #333; border-radius: 6px; padding: 8px 12px; color: #e0e0e0; font-size: 13px; outline: none; }
+  .input-bar input:focus { border-color: #555; }
+  .input-bar button { background: #2563eb; color: white; border: none; border-radius: 6px; padding: 8px 16px; font-size: 13px; cursor: pointer; font-weight: 500; }
+  .input-bar button:hover { background: #1d4ed8; }
+  .input-bar button:disabled { background: #333; color: #666; cursor: not-allowed; }
+  
+  .event { margin-bottom: 4px; padding: 4px 8px; border-radius: 4px; border-left: 3px solid transparent; }
+  .event-phase { border-left-color: #eab308; background: #1a1700; }
+  .event-delta-text { border-left-color: #06b6d4; background: #001a1a; }
+  .event-delta-thinking { border-left-color: #8b5cf6; background: #1a0033; }
+  .event-delta-write { border-left-color: #22c55e; background: #001a00; }
+  .event-done { border-left-color: #22c55e; background: #001a00; color: #22c55e; }
+  .event-error { border-left-color: #ef4444; background: #1a0000; color: #ef4444; }
+  .event-user { border-left-color: #3b82f6; background: #001033; }
+  .event-system { border-left-color: #6b7280; background: #111; color: #888; }
+  
+  .event-type { font-weight: 600; margin-right: 8px; }
+  .event-phase-label { color: #eab308; }
+  .event-meta { color: #888; font-size: 10px; }
+  .event-content { white-space: pre-wrap; word-break: break-all; margin-top: 4px; }
+  
+  .rendered { font-size: 14px; line-height: 1.6; }
+  .rendered p { margin-bottom: 8px; }
+  .rendered h1, .rendered h2, .rendered h3 { margin: 12px 0 8px; color: #f0f0f0; }
+  .rendered ul, .rendered ol { padding-left: 20px; margin-bottom: 8px; }
+  .rendered li { margin-bottom: 4px; }
+  .rendered code { background: #1a1a1a; padding: 2px 6px; border-radius: 3px; font-size: 12px; }
+  .rendered pre { background: #1a1a1a; padding: 12px; border-radius: 6px; overflow-x: auto; margin-bottom: 8px; }
+  .rendered table { border-collapse: collapse; width: 100%; margin-bottom: 8px; }
+  .rendered th, .rendered td { border: 1px solid #333; padding: 6px 10px; text-align: left; font-size: 12px; }
+  .rendered th { background: #1a1a1a; font-weight: 600; }
+  
+  .tool-call { background: #1a1a2e; border: 1px solid #333; border-radius: 4px; padding: 6px 8px; margin: 4px 0; }
+  .tool-call .tool-name { color: #60a5fa; font-weight: 600; }
+  .tool-call .tool-args { color: #888; font-size: 10px; white-space: pre-wrap; }
+  .tool-call .tool-result { color: #22c55e; font-size: 10px; white-space: pre-wrap; margin-top: 4px; }
+  
+  .clear-btn { background: none; border: 1px solid #333; color: #888; border-radius: 4px; padding: 4px 8px; font-size: 11px; cursor: pointer; margin-left: auto; }
+  .clear-btn:hover { border-color: #555; color: #ccc; }
+</style>
+</head>
+<body>
+
+<div class="header">
+  <h1>Engine Debug</h1>
+  <span class="status" id="status">Ready</span>
+  <button class="clear-btn" onclick="clearAll()">Clear All</button>
+</div>
+
+<div class="main">
+  <!-- 左栏：SSE 原始事件流 -->
+  <div class="panel">
+    <div class="panel-header">SSE Events (Raw)</div>
+    <div class="panel-body" id="events-panel"></div>
+  </div>
+  
+  <!-- 中栏：结构化解析 -->
+  <div class="panel">
+    <div class="panel-header">Parsed Phases</div>
+    <div class="panel-body" id="phases-panel"></div>
+  </div>
+  
+  <!-- 右栏：渲染效果 -->
+  <div class="panel">
+    <div class="panel-header">Rendered Output</div>
+    <div class="panel-body rendered" id="rendered-panel"></div>
+  </div>
+</div>
+
+<div class="input-bar">
+  <input id="msg-input" placeholder="输入消息，@agent名 调用 agent..." 
+         onkeydown="if(event.key==='Enter'&&!event.shiftKey){event.preventDefault();sendMsg()}" />
+  <button id="send-btn" onclick="sendMsg()">Send</button>
+</div>
+
+<script>
+// ── 状态 ──
+let streaming = false;
+let fullText = '';
+let fullThinking = '';
+const events = [];
+const phases = [];
+
+// ── DOM 引用 ──
+const eventsPanel = document.getElementById('events-panel');
+const phasesPanel = document.getElementById('phases-panel');
+const renderedPanel = document.getElementById('rendered-panel');
+const statusEl = document.getElementById('status');
+const msgInput = document.getElementById('msg-input');
+const sendBtn = document.getElementById('send-btn');
+
+// ── 渲染辅助 ──
+function escapeHtml(s) { return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+
+function renderEvents() {
+  eventsPanel.innerHTML = events.map(e => {
+    let cls = 'event event-system';
+    if (e.type === 'user') cls = 'event event-user';
+    else if (e.type === 'data') {
+      try {
+        const p = JSON.parse(e.raw.slice(6));
+        if (p.type === 'phase') cls = 'event event-phase';
+        else if (p.type === 'delta' && p.phase === 'thinking') cls = 'event event-delta-thinking';
+        else if (p.type === 'delta' && p.phase === 'write') cls = 'event event-delta-write';
+        else if (p.type === 'delta') cls = 'event event-delta-text';
+        else if (p.type === 'done') cls = 'event event-done';
+        else if (p.type === 'error') cls = 'event event-error';
+      } catch {}
+    }
+    return `<div class="${cls}"><span class="event-type">${escapeHtml(e.label)}</span><span class="event-content">${escapeHtml(e.raw)}</span></div>`;
+  }).join('');
+  eventsPanel.scrollTop = eventsPanel.scrollHeight;
+}
+
+function renderPhases() {
+  phasesPanel.innerHTML = phases.map(p => {
+    if (p.type === 'phase') {
+      const meta = p.meta ? JSON.stringify(p.meta) : '';
+      return `<div class="event event-phase"><span class="event-type event-phase-label">[${escapeHtml(p.phase)}]</span><span class="event-meta">${escapeHtml(meta)}</span></div>`;
+    }
+    if (p.type === 'delta' && p.phase === 'thinking') {
+      return `<div class="event event-delta-thinking"><span class="event-type">💭 thinking</span><span class="event-content">${escapeHtml(p.text)}</span></div>`;
+    }
+    if (p.type === 'delta' && p.phase === 'text') {
+      return `<div class="event event-delta-text"><span class="event-type">💬 text</span><span class="event-content">${escapeHtml(p.text)}</span></div>`;
+    }
+    if (p.type === 'delta' && p.phase === 'write') {
+      return `<div class="event event-delta-write"><span class="event-type">✍️ write</span><span class="event-meta">${escapeHtml(JSON.stringify(p.meta))}</span></div>`;
+    }
+    if (p.type === 'tool') {
+      return `<div class="tool-call"><span class="tool-name">🔧 ${escapeHtml(p.name)}</span><div class="tool-args">${escapeHtml(JSON.stringify(p.args, null, 2))}</div>${p.result ? `<div class="tool-result">→ ${escapeHtml(p.result)}</div>` : ''}</div>`;
+    }
+    if (p.type === 'done') return `<div class="event event-done">✅ DONE</div>`;
+    if (p.type === 'error') return `<div class="event event-error">❌ ${escapeHtml(p.message)}</div>`;
+    return `<div class="event event-system">${escapeHtml(JSON.stringify(p))}</div>`;
+  }).join('');
+  phasesPanel.scrollTop = phasesPanel.scrollHeight;
+}
+
+function renderOutput() {
+  // thinking 折叠
+  let html = '';
+  if (fullThinking) {
+    html += `<details><summary style="color:#8b5cf6;cursor:pointer;font-size:12px">💭 Thinking (${fullThinking.length} chars)</summary><pre style="color:#a78bfa;font-size:11px;white-space:pre-wrap">${escapeHtml(fullThinking)}</pre></details>`;
+  }
+  // text
+  if (fullText) {
+    html += `<div>${simpleMarkdown(fullText)}</div>`;
+  }
+  renderedPanel.innerHTML = html || '<div style="color:#666;font-style:italic">等待响应...</div>';
+  renderedPanel.scrollTop = renderedPanel.scrollHeight;
+}
+
+function simpleMarkdown(md) {
+  // 极简 markdown 渲染
+  return md
+    .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+    .replace(/^### (.+)$/gm, '<h3>$1</h3>')
+    .replace(/^## (.+)$/gm, '<h2>$1</h2>')
+    .replace(/^# (.+)$/gm, '<h1>$1</h1>')
+    .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
+    .replace(/`(.+?)`/g, '<code>$1</code>')
+    .replace(/^- (.+)$/gm, '<li>$1</li>')
+    .replace(/(<li>.*<\/li>\n?)+/g, (m) => `<ul>${m}</ul>`)
+    .replace(/\n\n/g, '</p><p>')
+    .replace(/\n/g, '<br>');
+}
+
+function addEvent(label, raw) {
+  events.push({ label, raw });
+  renderEvents();
+}
+
+function addPhase(obj) {
+  phases.push(obj);
+  renderPhases();
+}
+
+function clearAll() {
+  events.length = 0;
+  phases.length = 0;
+  fullText = '';
+  fullThinking = '';
+  eventsPanel.innerHTML = '';
+  phasesPanel.innerHTML = '';
+  renderedPanel.innerHTML = '<div style="color:#666;font-style:italic">等待响应...</div>';
+}
+
+// ── 发送消息 ──
+async function sendMsg() {
+  if (streaming) return;
+  const msg = msgInput.value.trim();
+  if (!msg) return;
+  
+  streaming = true;
+  fullText = '';
+  fullThinking = '';
+  phases.length = 0;
+  events.length = 0;
+  msgInput.value = '';
+  sendBtn.disabled = true;
+  statusEl.textContent = 'Streaming...';
+  
+  addEvent('USER', msg);
+  
+  // 从 URL 获取 sessionId（默认 1）
+  const params = new URLSearchParams(window.location.search);
+  const sessionId = parseInt(params.get('session') || '1');
+  
+  try {
+    const res = await fetch('/api/work/chat', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ sessionId, message: msg }),
+    });
+    
+    if (!res.ok) {
+      const errText = await res.text();
+      addEvent('ERROR', `HTTP ${res.status}: ${errText}`);
+      statusEl.textContent = `Error ${res.status}`;
+      streaming = false;
+      sendBtn.disabled = false;
+      return;
+    }
+    
+    const reader = res.body.getReader();
+    const decoder = new TextDecoder();
+    let buf = '';
+    
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      buf += decoder.decode(value, { stream: true });
+      const lines = buf.split('\n');
+      buf = lines.pop() || '';
+      
+      for (const line of lines) {
+        if (!line.startsWith('data: ')) continue;
+        const data = line.slice(6).trim();
+        if (!data || data === '[DONE]') continue;
+        
+        addEvent('SSE', line);
+        
+        try {
+          const parsed = JSON.parse(data);
+          
+          if (parsed.type === 'phase') {
+            addPhase({ type: 'phase', phase: parsed.phase, meta: parsed.meta });
+          } else if (parsed.type === 'delta') {
+            if (parsed.phase === 'thinking') {
+              fullThinking += (parsed.text || '');
+              addPhase({ type: 'delta', phase: 'thinking', text: parsed.text });
+            } else if (parsed.phase === 'text') {
+              fullText += (parsed.text || '');
+              addPhase({ type: 'delta', phase: 'text', text: parsed.text });
+            } else if (parsed.phase === 'write') {
+              addPhase({ type: 'delta', phase: 'write', meta: parsed.meta });
+            }
+            renderOutput();
+          } else if (parsed.type === 'done') {
+            addPhase({ type: 'done' });
+          } else if (parsed.type === 'error') {
+            addPhase({ type: 'error', message: parsed.message });
+          }
+        } catch {}
+      }
+    }
+  } catch (err) {
+    addEvent('ERROR', err.message);
+    addPhase({ type: 'error', message: err.message });
+  }
+  
+  renderOutput();
+  statusEl.textContent = 'Done';
+  streaming = false;
+  sendBtn.disabled = false;
+}
+
+// ── URL 参数提示 ──
+const params = new URLSearchParams(window.location.search);
+if (!params.get('session')) {
+  statusEl.textContent = 'Ready — 用 ?session=N 指定会话ID';
+  // 自动获取最新 session
+  fetch('/api/work/sessions').then(r => r.json()).then(sessions => {
+    if (sessions.length > 0) {
+      const latest = sessions[0];
+      statusEl.textContent = `Ready — 使用 session ${latest.id}: ${latest.title?.slice(0, 30) || '新对话'}`;
+      window._sessionId = latest.id;
+    }
+  }).catch(() => {});
+}
+</script>
+
+</body>
+</html>
