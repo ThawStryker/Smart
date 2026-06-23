@@ -571,6 +571,7 @@ body {
 }
 .markdown-body p:first-child { margin-top: 0; }
 .markdown-body p:last-child { margin-bottom: 0; }
+.markdown-body p:empty { display: none; }
 
 .markdown-body code {
   font-family: 'Fira Code', 'JetBrains Mono', Menlo, monospace;
