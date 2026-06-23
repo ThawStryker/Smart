@@ -31,10 +31,8 @@ export function useFilePanel({ sessionId, urlPrefix, selectedFile, onCloseFile, 
         const wsFiles = await loadWorkspaceFiles();
         allFiles = wsFiles.map((f) => ({ ...f, path: `workspace/${f.path}` }));
       }
-      const deletedFiles: string[] = JSON.parse(localStorage.getItem("deletedFiles") || "[]");
       const seen = new Set<string>();
       setFiles(allFiles.filter((f) => {
-        if (deletedFiles.includes(f.path)) return false;
         if (seen.has(f.path)) return false;
         seen.add(f.path);
         return true;
@@ -43,12 +41,6 @@ export function useFilePanel({ sessionId, urlPrefix, selectedFile, onCloseFile, 
       // Network error — keep existing file list unchanged
     }
   }, [urlPrefix, sessionId]);
-
-  useEffect(() => {
-    const handler = (e: StorageEvent) => { if (e.key === "deletedFiles") loadFiles(); };
-    window.addEventListener("storage", handler);
-    return () => window.removeEventListener("storage", handler);
-  }, [loadFiles]);
 
   useEffect(() => { if (sessionId) loadFiles(); }, [sessionId, loadFiles]);
   useEffect(() => { if (reloadTrigger && sessionId) loadFiles(); }, [reloadTrigger]);

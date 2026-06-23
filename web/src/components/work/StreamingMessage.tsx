@@ -47,10 +47,11 @@ export function getPhaseLabel(phase: PhaseName, meta?: Record<string, unknown>):
 
 export function MarkdownContent({ content }: { content: string }) {
   if (!content) return null;
+  const normalized = content.replace(/\n{3,}/g, "\n\n");
   return (
     <div className="markdown-body">
       <ReactMarkdown remarkPlugins={[remarkGfm]}>
-        {content}
+        {normalized}
       </ReactMarkdown>
     </div>
   );
@@ -105,7 +106,7 @@ export function StreamingMessage({ streamAgent, streamText, streamThinking, phas
           </div>
         );
       })}
-      <div className="text-sm leading-relaxed whitespace-pre-wrap text-[var(--app-text)]">
+      <div className="text-sm leading-relaxed text-[var(--app-text)]">
         {streamText ? <MarkdownContent content={streamText} /> : (streamActive ? <span className="text-[var(--app-text-tertiary)]">...</span> : "")}
       </div>
     </div>

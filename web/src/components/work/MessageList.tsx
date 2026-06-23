@@ -24,7 +24,7 @@ export function MessageList({ messages, streamingMessage }: MessageListProps) {
               </>
             )}
           </div>
-          <div className="text-sm leading-relaxed whitespace-pre-wrap rounded-xl px-4 py-3 text-[var(--app-text)]"
+          <div className="text-sm leading-relaxed rounded-xl px-4 py-3 text-[var(--app-text)]"
             style={{ background: msg.role === "user" ? "rgba(255,255,255,0.04)" : "transparent", border: msg.role === "user" ? "1px solid var(--app-border)" : "none" }}>
             <MarkdownContent content={msg.content} />
           </div>
