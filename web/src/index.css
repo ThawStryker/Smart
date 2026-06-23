@@ -544,7 +544,7 @@ body {
 /* === Markdown Body (ChatPanel ReactMarkdown) === */
 .markdown-body {
   font-size: 14px;
-  line-height: 1.7;
+  line-height: 1.5;
   color: var(--app-text);
 }
 
