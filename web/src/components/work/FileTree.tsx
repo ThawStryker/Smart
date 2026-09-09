@@ -81,8 +81,7 @@ export function renderFileChildren(opts: FileTreeRenderOptions): React.ReactNode
   }
   if (!node.__kids) return [];
   const entries = Object.entries(node.__kids) as Array<[string, any]>;
-  // 过滤：隐藏 heartbeat 文件夹（对普通用户无意义）
-  const filtered = entries.filter(([name]) => name !== "heartbeat");
+  const filtered = entries;
   // Fixed folder order: context → memory → skills, then other folders, then files
   const folderOrder = ["context", "memory", "skills"];
   filtered.sort(([aName, a], [bName, b]) => {

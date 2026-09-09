@@ -16,12 +16,9 @@ export const DEFAULT_TOOL_PHASE: Record<string, PhaseName> = {
   list_files: "read",
   write_file: "write",
   edit_file: "write",
-  web_search: "search",
-  call_agent: "agent_start",
-  memory_save: "memory",
+  skill_load: "skill",
   memory_recall: "memory",
-  skill_list: "skill",
-  skill_view: "skill",
+  ask_user: "text",
 };
 
 // ── Phase 事件类型 ──

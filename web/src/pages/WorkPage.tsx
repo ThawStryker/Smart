@@ -168,10 +168,14 @@ export function WorkPage() {
           onPhase={(event: PhaseEvent) => {
             if (event.phase === "write" && event.meta?.path) {
               const path = event.meta.path as string;
+              const mode = event.meta.mode as string | undefined;
               if (event.text !== undefined) {
-                if (activeFile && activeFile.path === path) appendContent(event.text);
+                if (mode === "edit") updateContent(event.text);
+                else if (activeFile && activeFile.path === path) appendContent(event.text);
               } else {
-                openFile(path, "");
+                if (mode !== "edit" || !activeFile || activeFile.path !== path) {
+                  openFile(path, mode === "edit" ? (activeFile?.content ?? "") : "");
+                }
                 setIsStreaming(true);
               }
             }

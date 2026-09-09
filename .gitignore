@@ -55,8 +55,13 @@ temp/
 # Vite
 *.local
 
-# Debug
+# Debug / local dumps (never commit)
 .eslintcache
+.auth.json
+.debug-*
+.fetch-snapshot.js
+.parse-snapshot.js
+.mimocode/
 
 # EdgeSpark local state
 .edgespark/

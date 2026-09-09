@@ -1,0 +1,12 @@
+---
+description: EdgeSpark 前端：同源 API、不要直连 server
+globs: web/**/*.{ts,tsx}
+alwaysApply: false
+---
+
+# Web
+
+- API 走 `src/lib/edgespark.ts` 的 `client.api.fetch`，cookie 会自动带上。
+- 登录用 `@edgespark/web`（`client.auth` / `authUI`），不要手打 `/api/_es/auth/*`。
+- 不要 `import` `../server/`。
+- 改了构建工具或输出目录，同步改 `edgespark.toml` 的 `[web].output_path`（现在是 `web/dist`）。

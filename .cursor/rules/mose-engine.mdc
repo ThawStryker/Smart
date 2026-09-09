@@ -1,0 +1,15 @@
+---
+description: Work 引擎 mose：强设计、工具策略、不要乱改 prompt
+globs: server/src/agent/mose/**/*.ts,server/src/routes/work/**/*.ts,web/src/components/work/**/*.tsx
+alwaysApply: false
+---
+
+# Mose
+
+Work 聊天引擎是 **mose**（单循环 + session log + 先读后改），入口 `server/src/agent/mose/index.ts`，路由 `POST /api/work/chat`。
+
+- 强设计（代码/政策）优于改 prompt。不要一出问题就改 `core/prompt.ts`。
+- 引擎要通用，不针对某个 agent 优化。
+- `write_file` 只能新建；已有文件必须 `read_file` 后再 `edit_file`。
+- 文档正文走 write/edit；「覆盖说明 / 质量自检」从文件拆到 Output 的 `text`。
+- 格式问题先查工具是否可用，再查 skill 加载，最后才看 prompt。

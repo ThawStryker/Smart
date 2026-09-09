@@ -272,3 +272,11 @@ export const agentFileVersions = sqliteTable("agent_file_versions", {
   createdAt: text("created_at").default(sql`(datetime('now'))`),
 });
 
+// 调试快照：测试页面 streaming 完成后自动上报三视图
+export const debugSnapshots = sqliteTable("debug_snapshots", {
+  id: integer("id").primaryKey({ autoIncrement: true }),
+  sessionId: integer("session_id").notNull(),
+  dataJson: text("data_json").notNull(),
+  createdAt: text("created_at").default(sql`(datetime('now'))`),
+});
+

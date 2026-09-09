@@ -4,10 +4,9 @@ import { auth } from "edgespark/http";
 import { eq } from "drizzle-orm";
 import { workSessions, workMessages } from "@defs";
 import { createPhaseSSEStream, SSE_HEADERS } from "../../agent/stream";
-import { run } from "../../agent/mose/engine";
-import { getAll, getOpenAITools } from "../../agent/mose/tools";
+import { run } from "../../agent/mose";
 import { getModel, DEFAULTS } from "../../models";
-import type { EngineInput, ToolHandler } from "../../agent/mose/phases";
+import type { EngineInput, SavedState } from "../../agent/mose/types";
 
 export const chatRoutes = new Hono();
 
@@ -34,14 +33,10 @@ chatRoutes.post("/", async (c) => {
   if (!model) return c.json({ error: `Model not configured: ${modelKey}` }, 500);
   const modelConfig = { baseURL: model.baseURL, apiPath: model.apiPath, apiKey: model.apiKey, modelName: model.modelName };
 
-  // 从 registry 组装 toolHandlers
-  const toolHandlers: Record<string, ToolHandler> = {};
-  for (const tool of getAll()) {
-    toolHandlers[tool.name] = {
-      execute: (args) => tool.handler(args, { sessionId, userId, agentName: targetAgent }),
-      phase: tool.phase,
-      meta: tool.meta,
-    };
+  // 加载之前保存的跨轮状态
+  let savedState: SavedState | undefined;
+  if (session.stateJson) {
+    try { savedState = JSON.parse(session.stateJson); } catch {}
   }
 
   const input: EngineInput = {
@@ -50,15 +45,19 @@ chatRoutes.post("/", async (c) => {
     userMessage: cleanMessage,
     targetAgent,
     modelConfig,
-    toolHandlers,
-    toolDefs: getOpenAITools(),
+    toolHandlers: {},
+    toolDefs: [],
     onSaveMessage: async (msg) => {
       await db.insert(workMessages).values(msg);
     },
   };
 
-  const events = run(input);
-  const stream = createPhaseSSEStream(events);
+  const events = run(input, savedState, async (state) => {
+    await db.update(workSessions)
+      .set({ stateJson: JSON.stringify(state), updatedAt: new Date().toISOString() })
+      .where(eq(workSessions.id, sessionId));
+  });
 
+  const stream = createPhaseSSEStream(events);
   return new Response(stream, { headers: SSE_HEADERS });
 });

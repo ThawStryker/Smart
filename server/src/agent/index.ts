@@ -1,8 +1,9 @@
 import { Hono } from "hono";
-import { db, secret, vars, ctx } from "edgespark";
+import { db, ctx } from "edgespark";
 import { auth } from "edgespark/http";
 import { eq, asc } from "drizzle-orm";
-import { projects, conversations, tools as toolsDef, userProfiles } from "@defs";
+import { projects, conversations, tools as toolsDef } from "@defs";
+import { getModel, DEFAULTS } from "../models";
 import { SSE_HEADERS, emit, createSSEStream } from "./stream";
 import { buildToolList } from "./tools/registry";
 import { buildSkillPrompt } from "./tools/skill";
@@ -21,28 +22,16 @@ export const agentRoutes = new Hono()
     const [project] = await db.select().from(projects).where(eq(projects.id, projectId));
     if (!project) return c.json({ error: "Project not found" }, 404);
 
-    const body = await c.req.json<{ message: string; model?: string; images?: string[]; mcps?: string[]; skills?: string[] }>();
+    const body = await c.req.json<{ message: string; images?: string[]; mcps?: string[]; skills?: string[] }>();
     if (!body.message?.trim() && (!body.images || body.images.length === 0)) {
       return c.json({ error: "Message required" }, 400);
     }
 
-    // === Model selection ===
-    const isAdminUser = await db.select().from(userProfiles).where(eq(userProfiles.userId, userId)).then(r => r[0]?.role === "admin");
-    let selectedModel = body.model || "seed";
-    if (selectedModel === "deepseek" && !isAdminUser) selectedModel = "seed";
-
-    let baseURL: string, apiKey: string | null, modelName: string;
-    if (selectedModel === "seed") {
-      baseURL = vars.get("SEED_BASE_URL") || "https://ark.cn-beijing.volces.com/api/v3";
-      apiKey = secret.get("SEED_API_KEY");
-      modelName = "doubao-seed-2-0-code-preview-260215";
-    } else {
-      baseURL = vars.get("DEEPSEEK_BASE_URL") || "https://api.deepseek.com";
-      apiKey = secret.get("DEEPSEEK_API_KEY");
-      modelName = "deepseek-v4-pro";
-    }
-    if (!apiKey) return c.json({ error: `API key not configured for ${selectedModel}` }, 500);
-    const apiPath = selectedModel === "seed" ? "/chat/completions" : "/v1/chat/completions";
+    const modelKey = DEFAULTS.coding;
+    const model = getModel(modelKey);
+    if (!model) return c.json({ error: `Model not configured: ${modelKey}` }, 500);
+    const { baseURL, apiPath, apiKey, modelName } = model;
+    const selectedModel = "deepseek";
 
     // === Save user message ===
     await db.insert(conversations).values({

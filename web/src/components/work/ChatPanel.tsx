@@ -38,7 +38,6 @@ export function ChatPanel({
   const [streamText, setStreamText] = useState("");
   const [streamThinking, setStreamThinking] = useState("");
   const [streamAgent, setStreamAgent] = useState<string | null>(null);
-  const [thinkingOpen, setThinkingOpen] = useState(false);
   const [showMentions, setShowMentions] = useState(false);
   const [mentionFilter, setMentionFilter] = useState("");
   const [mentionIndex, setMentionIndex] = useState(0);
@@ -141,7 +140,6 @@ export function ChatPanel({
     setStreamThinking("");
     streamThinkingRef.current = "";
     setStreamAgent(null);
-    setThinkingOpen(false);
     setHasCards(true);
 
     const controller = new AbortController(); abortRef.current = controller;
@@ -181,6 +179,22 @@ export function ChatPanel({
     const t = event.type;
     const p = event.phase as PhaseName | undefined;
 
+    const pushCard = (card: PhaseCard) => {
+      setPhaseCards((prev) => {
+        const last = prev[prev.length - 1];
+        if (card.phase !== "thinking" && last && last.phase === card.phase) {
+          const a = last.meta || {};
+          const b = card.meta || {};
+          if (a.path === b.path && a.name === b.name && a.tool === b.tool && a.mode === b.mode) {
+            return prev;
+          }
+        }
+        const next = [...prev, card];
+        phaseCardsRef.current = next;
+        return next;
+      });
+    };
+
     if (t === "phase") {
       if (p === "text") return;
       if (p === "agent_start") {
@@ -191,20 +205,36 @@ export function ChatPanel({
       if (p === "write" && event.meta?.path && onPhase) {
         onPhase({ phase: "write", meta: event.meta });
       }
-      const card: PhaseCard = {
+      pushCard({
         key: `card-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
         phase: p || "text",
         meta: event.meta,
         content: "",
-      };
-      setPhaseCards((prev) => { const next = [...prev, card]; phaseCardsRef.current = next; return next; });
+      });
     } else if (t === "delta") {
       if (p === "text") {
         setStreamText((prev) => prev + (event.text || ""));
         streamTextRef.current += (event.text || "");
       } else if (p === "thinking") {
-        setStreamThinking((prev) => prev + (event.text || ""));
-        streamThinkingRef.current += (event.text || "");
+        const chunk = event.text || "";
+        setStreamThinking((prev) => prev + chunk);
+        streamThinkingRef.current += chunk;
+        setPhaseCards((prev) => {
+          const last = prev[prev.length - 1];
+          if (last?.phase === "thinking") {
+            const next = [...prev.slice(0, -1), { ...last, content: last.content + chunk }];
+            phaseCardsRef.current = next;
+            return next;
+          }
+          const card: PhaseCard = {
+            key: `think-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+            phase: "thinking",
+            content: chunk,
+          };
+          const next = [...prev, card];
+          phaseCardsRef.current = next;
+          return next;
+        });
       } else if (p === "write") {
         if (onPhase && event.meta?.path) {
           onPhase({ phase: "write", meta: event.meta, text: event.text });
@@ -223,8 +253,7 @@ export function ChatPanel({
         });
       }
     } else if (t === "error") {
-      const errCard: PhaseCard = { key: `err-${Date.now()}`, phase: "text", content: `⚠️ ${event.message || "Unknown error"}` };
-      setPhaseCards((prev) => { const next = [...prev, errCard]; phaseCardsRef.current = next; return next; });
+      pushCard({ key: `err-${Date.now()}`, phase: "text", content: event.message || "Unknown error" });
     }
   };
 
@@ -287,8 +316,8 @@ export function ChatPanel({
               phaseCards={phaseCards}
               streamActive={streamActive}
               hasCards={hasCards}
-              thinkingOpen={thinkingOpen}
-              onToggleThinking={() => setThinkingOpen((p) => !p)}
+              thinkingOpen={false}
+              onToggleThinking={() => {}}
             />
           }
         />

@@ -4,7 +4,17 @@ export const SSE_HEADERS = {
   "Content-Type": "text/event-stream",
   "Cache-Control": "no-cache",
   Connection: "keep-alive",
+  "X-Accel-Buffering": "no",
 };
+
+function describeStreamError(err: unknown): string {
+  const msg = err instanceof Error ? err.message : String(err);
+  const low = msg.toLowerCase();
+  if (low.includes("network") || low.includes("fetch") || low.includes("connection")) {
+    return `网络中断: ${msg}`;
+  }
+  return msg || "Stream error";
+}
 
 // 向后兼容：旧代码仍使用 eventQueue 数组模式
 export function emit(queue: Array<Record<string, unknown>>, data: Record<string, unknown>) {
@@ -37,20 +47,26 @@ export function createPhaseSSEStream(
   const encoder = new TextEncoder();
   return new ReadableStream({
     async start(controller) {
+      const send = (chunk: string) => {
+        controller.enqueue(encoder.encode(chunk));
+      };
+      // 等模型首包时保持连接，避免代理把空闲 SSE 掐掉
+      const ping = setInterval(() => {
+        try { send(": ping\n\n"); } catch { /* 客户端已断开 */ }
+      }, 15000);
       try {
+        send(": connected\n\n");
         for await (const event of events) {
-          controller.enqueue(encoder.encode(`data: ${JSON.stringify(event)}\n\n`));
-          if (event.type === "done") {
-            controller.close();
-            return;
-          }
+          send(`data: ${JSON.stringify(event)}\n\n`);
+          if (event.type === "done") break;
         }
-        controller.close();
-      } catch (err: any) {
-        controller.enqueue(
-          encoder.encode(`data: ${JSON.stringify({ type: "error", message: err.message || "Stream error" })}\n\n`),
-        );
-        controller.close();
+      } catch (err: unknown) {
+        try {
+          send(`data: ${JSON.stringify({ type: "error", message: describeStreamError(err) })}\n\n`);
+        } catch { /* 客户端已断开 */ }
+      } finally {
+        clearInterval(ping);
+        try { controller.close(); } catch { /* already closed */ }
       }
     },
     cancel() {},

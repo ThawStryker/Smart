@@ -7,17 +7,9 @@ interface ChatInputProps {
   onSubmit: (selectedMcps: string[], selectedSkills: string[]) => void;
   onGenerate: (selectedMcps: string[], selectedSkills: string[]) => void;
   isLoading?: boolean;
-  model: string;
-  onModelChange: (model: string) => void;
   images: string[];
   onImagesChange: (images: string[]) => void;
-  isAdmin?: boolean;
 }
-
-const allModels = [
-  { key: "deepseek", label: "DeepSeek V4", adminOnly: true },
-  { key: "seed", label: "Seed 2.0 Code", adminOnly: false },
-];
 
 interface Command {
   name: string;
@@ -25,10 +17,9 @@ interface Command {
   skillName: string;
 }
 
-export function ChatInput({ value, onChange, onSubmit, onGenerate, isLoading, model, onModelChange, images, onImagesChange, isAdmin }: ChatInputProps) {
+export function ChatInput({ value, onChange, onSubmit, onGenerate, isLoading, images, onImagesChange }: ChatInputProps) {
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const commandsRef = useRef<HTMLDivElement>(null);
-  const models = allModels.filter(m => !m.adminOnly || isAdmin);
 
   const [mcpList, setMcpList] = useState<Array<{ id: number; name: string; description: string; enabled: boolean }>>([]);
   const [skillList, setSkillList] = useState<Array<{ id: number; name: string; description: string; enabled: boolean; status: string }>>([]);
@@ -294,9 +285,6 @@ export function ChatInput({ value, onChange, onSubmit, onGenerate, isLoading, mo
             <button onClick={handleGenerate} disabled={isLoading || !value.trim()} className="flex items-center gap-1.5 text-xs bg-amber-50 text-amber-600 px-3 py-1 rounded-lg hover:bg-amber-100 transition-colors disabled:opacity-40 disabled:cursor-not-allowed">+ 创建工具</button>
           </div>
           <div className="flex items-center gap-2">
-            <select value={model} onChange={e => onModelChange(e.target.value)} className="text-xs border border-neutral-200 rounded-lg px-2 py-1.5 bg-white text-neutral-500 outline-none focus:border-amber-400 focus:ring-1 focus:ring-amber-100 hover:border-neutral-300 transition-colors cursor-pointer appearance-none">
-              {models.map(m => (<option key={m.key} value={m.key}>{m.label}</option>))}
-            </select>
             <button onClick={handleSend} disabled={(!value.trim() && images.length === 0) || isLoading} className="w-8 h-8 rounded-full bg-gradient-to-r from-amber-500 to-orange-500 text-white flex items-center justify-center shadow-sm hover:shadow-md hover:shadow-amber-100 transition-all disabled:opacity-40 disabled:cursor-not-allowed">
               {isLoading ? <span className="text-xs">⋯</span> : <span>➤</span>}
             </button>

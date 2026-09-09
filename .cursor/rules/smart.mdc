@@ -1,0 +1,34 @@
+---
+description: Smart 项目约定：模块边界、模型、部署、EdgeSpark CLI
+alwaysApply: true
+---
+
+# Smart
+
+Fullstack EdgeSpark：`server/` Hono Worker，`web/` React SPA。`configs/` 是 auth，`edgespark.toml` 是项目配置。依赖在 `server/`、`web/` 分别 `npm install`。
+
+本地种子：把 `server/dev/seed.ts.example` 改名为 `seed.ts` 后，`edgespark dev` 会跑一次；必须幂等。
+
+## 模块边界
+
+默认只改 Work。不要动 Coding / Market / Admin 的生产代码。
+
+- Work 路由：`server/src/routes/work/`
+- Work 引擎：`server/src/agent/mose/`
+- Work UI：`web/src/components/work/`、`web/src/pages/WorkPage.tsx`
+
+## 改动方式
+
+- 讨论用中文，代码注释用中文。
+- 最小精准改动，不要整文件重写。
+- 模型走 `server/src/models.ts`，禁止硬编码模型名。唯一模型 `deepseek-v4-pro`（`DEFAULTS.agent` / `chat` / `coding`）。
+
+## EdgeSpark
+
+- 不确定的命令先 `edgespark <cmd> --help`。
+- 禁止并行跑多个 `edgespark` 命令。
+- 未登录：`edgespark login`，把 URL 交给用户；用户确认后再跑原命令。
+- 部署：项目根目录 `edgespark deploy`。
+- `edgespark secret set` 的密钥不得进入对话或代码。
+
+经验与坑：见 `.cursor/knowledge/`。

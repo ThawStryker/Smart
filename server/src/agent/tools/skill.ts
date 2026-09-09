@@ -71,15 +71,14 @@ async function readSkillMd(storagePath: string): Promise<string | null> {
   return null;
 }
 
-function getSkillCharLimit(model: string): number {
-  if (model === "deepseek") return 8000;
-  return 3000;
+function getSkillCharLimit(_model?: string): number {
+  return 8000;
 }
 
 // Always load superpowers fully. Other skills are loaded on-demand.
 export async function buildSkillPrompt(selectedSkills: string[], model?: string, triggerSkill?: string): Promise<string> {
   let result = "";
-  const charLimit = getSkillCharLimit(model || "seed");
+  const charLimit = getSkillCharLimit(model);
 
   // 1. Always inject superpowers
   let foundSuperpowers = false;
@@ -126,7 +125,7 @@ function detectSkillTrigger(selectedSkills: string[], triggerSkill?: string): st
 
 // Load a specific skill's full content on demand
 export async function loadSkillContent(skillName: string, model?: string): Promise<string> {
-  const charLimit = getSkillCharLimit(model || "seed");
+  const charLimit = getSkillCharLimit(model);
   const [skill] = await db.select().from(skillsDef).where(eq(skillsDef.name, skillName));
   if (!skill || skill.status !== "installed" || !skill.storagePath) return "";
   const content = await readSkillMd(skill.storagePath);

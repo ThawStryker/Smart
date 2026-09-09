@@ -1,0 +1,16 @@
+---
+description: EdgeSpark 服务端：defs、Worker SDK、迁移不可逆
+globs: server/**/*.ts
+alwaysApply: false
+---
+
+# Server
+
+- 表定义只改 `src/defs/db_schema.ts`，关系改 `db_relations.ts`，vars/secrets 先改 `runtime.ts`。
+- `src/__generated__/` 和已应用的 `drizzle/*.sql` 不要手改。`defs/` 禁止 import `"edgespark"`。
+- `db` / `storage` / `secret` / `ctx` / `auth` 只能写在路由处理函数里，不能写在模块顶层。
+- 后台任务用 `ctx.runInBackground()`，不要 `c.executionCtx.waitUntil()`。
+- 不要 `db.transaction()`，用 `db.batch([...])`。不要 BLOB 列。
+- **迁移只做加法**（加表/列/索引）。不要 DROP/RENAME。改 schema 后：`edgespark db generate` → `db migrate` → `deploy`。
+- 客户端上传/下载走预签名 URL，不要把文件流经 Worker；库里存 `s3://` URI，不要把 URI 直接给前端。
+- 类型以 `src/__generated__/edgespark.d.ts` 为准。细节见 `.cursor/knowledge/edgespark.md`。

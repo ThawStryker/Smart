@@ -7,7 +7,6 @@ import { ChatInput } from "@/components/chat/ChatInput";
 import { PreviewPanel } from "@/components/preview/PreviewPanel";
 import { useNavigate, useParams } from "react-router-dom";
 import { LoadingSpinner } from "@/components/shared/LoadingSpinner";
-import { useProfile } from "@/hooks/useProfile";
 
 interface ProjectData {
   id: number;
@@ -46,8 +45,6 @@ export function ProjectDetail() {
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [input, setInput] = useState("");
   const [isStreaming, setIsStreaming] = useState(false);
-  const { isAdmin } = useProfile();
-  const [model, setModel] = useState("seed");
   const [images, setImages] = useState<string[]>([]);
   const [leftTab, setLeftTab] = useState<"chat" | "log">("chat");
   const [generatedFiles, setGeneratedFiles] = useState<StoredFile[]>([]);
@@ -161,7 +158,7 @@ export function ProjectDetail() {
         method: "POST",
         credentials: "include",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ message: userMessage.content, model, images, mcps: selectedMcps || [], skills: selectedSkills || [] }),
+        body: JSON.stringify({ message: userMessage.content, images, mcps: selectedMcps || [], skills: selectedSkills || [] }),
         signal: controller.signal,
       });
 
@@ -257,7 +254,7 @@ export function ProjectDetail() {
       setIsStreaming(false);
       abortRef.current = null;
     }
-  }, [input, isStreaming, numProjectId, model, images]);
+  }, [input, isStreaming, numProjectId, images]);
 
   if (pageLoading) return <LoadingSpinner />;
   if (!project || !numProjectId) return null;
@@ -311,11 +308,8 @@ export function ProjectDetail() {
                   onSubmit={handleSend}
                   onGenerate={handleSend}
                   isLoading={isStreaming}
-                  model={model}
-                  onModelChange={setModel}
                   images={images}
                   onImagesChange={setImages}
-                  isAdmin={isAdmin}
                 />
               </>
             ) : (
