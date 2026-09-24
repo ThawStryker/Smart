@@ -1,3 +1,4 @@
+import { useState } from "react";
 import { useNavigate, useLocation } from "react-router-dom";
 import { client } from "@/lib/edgespark";
 import { useTheme } from "@/hooks/useTheme";
@@ -12,8 +13,6 @@ interface TopNavProps {
 const navItems = [
   { label: "Work", path: "/work" },
   { label: "Coding", path: "/dashboard" },
-  { label: "Skill", path: "/skills" },
-  { label: "MCP", path: "/mcps" },
 ];
 
 export function TopNav({ user, isAdmin }: TopNavProps) {
@@ -66,22 +65,68 @@ export function TopNav({ user, isAdmin }: TopNavProps) {
               )}
             </button>
             <button onClick={() => navigate("/market")} className="text-[13px] text-neutral-400 hover:text-neutral-600 transition-colors px-3 py-1.5 rounded-md hover:bg-neutral-50">
-              工具市场
+              Market
             </button>
             {isAdmin && (
               <button onClick={() => navigate("/admin")} className="text-[13px] text-amber-600 bg-amber-50 hover:bg-amber-100 px-3 py-1.5 rounded-md transition-colors font-medium">
                 管理
               </button>
             )}
-            {user?.name && (
-              <span className="text-[13px] text-neutral-400 ml-1">{user.name}</span>
-            )}
-            <button onClick={() => client.auth.signOut()} className="text-[13px] text-neutral-400 hover:text-red-500 transition-colors px-2 py-1.5 rounded-md hover:bg-red-50 ml-1">
-              退出
-            </button>
+            <UserMenu user={user} />
           </>
         )}
       </div>
     </header>
+  );
+}
+
+function getInitials(name?: string | null, email?: string | null) {
+  const src = (name || email || "?").trim();
+  const parts = src.split(/\s+/).filter(Boolean);
+  if (parts.length >= 2) return (parts[0][0] + parts[1][0]).toUpperCase();
+  return src.slice(0, 2).toUpperCase();
+}
+
+function UserMenu({ user }: { user: AuthUser }) {
+  const [open, setOpen] = useState(false);
+  const name = user.name || "User";
+  const email = "email" in user ? String((user as { email?: string }).email || "") : "";
+  const image = "image" in user ? (user as { image?: string | null }).image : null;
+
+  return (
+    <div className="relative ml-1">
+      <button
+        type="button"
+        onClick={() => setOpen((v) => !v)}
+        className="w-8 h-8 rounded-full overflow-hidden shrink-0 ring-1 ring-neutral-200 hover:ring-neutral-300 transition-all"
+        aria-label="账户菜单"
+      >
+        {image ? (
+          <img src={image} alt="" className="w-full h-full object-cover" />
+        ) : (
+          <span className="w-full h-full flex items-center justify-center bg-gradient-to-br from-amber-400 to-orange-500 text-white text-[11px] font-semibold">
+            {getInitials(user.name, email)}
+          </span>
+        )}
+      </button>
+      {open && (
+        <>
+          <div className="fixed inset-0 z-40" onClick={() => setOpen(false)} />
+          <div className="absolute right-0 top-full mt-2 z-50 w-56 rounded-xl bg-white border border-neutral-200 shadow-lg overflow-hidden py-1">
+            <div className="px-3 py-2.5 border-b border-neutral-100">
+              <div className="text-sm font-medium text-neutral-900 truncate">{name}</div>
+              {email && <div className="text-[11px] text-neutral-400 truncate mt-0.5">{email}</div>}
+            </div>
+            <button
+              type="button"
+              onClick={() => { setOpen(false); client.auth.signOut(); }}
+              className="w-full text-left px-3 py-2 text-[13px] text-neutral-600 hover:bg-red-50 hover:text-red-500 transition-colors"
+            >
+              退出登录
+            </button>
+          </div>
+        </>
+      )}
+    </div>
   );
 }

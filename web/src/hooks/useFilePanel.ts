@@ -11,9 +11,11 @@ interface UseFilePanelInput {
   selectedFile: string | null;
   onCloseFile?: () => void;
   reloadTrigger?: number;
+  onOpenNewFile?: (path: string) => void;
+  onFileRenamed?: (oldPath: string, newPath: string) => void;
 }
 
-export function useFilePanel({ sessionId, urlPrefix, selectedFile, onCloseFile, reloadTrigger }: UseFilePanelInput) {
+export function useFilePanel({ sessionId, urlPrefix, selectedFile, onCloseFile, reloadTrigger, onOpenNewFile, onFileRenamed }: UseFilePanelInput) {
   const [files, setFiles] = useState<FileEntry[]>([]);
   const [expanded, setExpanded] = useState<Set<string>>(new Set([urlPrefix]));
 
@@ -55,7 +57,7 @@ export function useFilePanel({ sessionId, urlPrefix, selectedFile, onCloseFile, 
 
   const tree = buildTree(files);
 
-  const fileTreeActions = useFileTreeActions({ sessionId, urlPrefix, files, reloadFiles: loadFiles, selectedFile, onCloseFile });
+  const fileTreeActions = useFileTreeActions({ sessionId, urlPrefix, files, reloadFiles: loadFiles, selectedFile, onCloseFile, onOpenNewFile, onFileRenamed });
 
   return {
     files,
@@ -63,6 +65,7 @@ export function useFilePanel({ sessionId, urlPrefix, selectedFile, onCloseFile, 
     setExpanded,
     toggleExpand,
     tree,
+    reloadFiles: loadFiles,
     ...fileTreeActions,
   };
 }

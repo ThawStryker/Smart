@@ -1,8 +1,9 @@
 import { db } from "edgespark";
-import { eq, and, like, asc } from "drizzle-orm";
+import { eq, and, asc } from "drizzle-orm";
 import { agentFiles, workspaceFiles } from "@defs";
 import type { FileEntry, FileRecord, FileStore } from "../types";
 import { listTarget, resolvePath } from "./fs";
+import { pathIsSelfOrChild } from "../../../lib/path-prefix";
 
 function missing(path: string): FileRecord {
   const { kind, storePath, displayPath } = resolvePath(path);
@@ -58,7 +59,7 @@ export function createD1FileStore(userId: string, agentName: string): FileStore 
       const { kind, storePrefix } = listTarget(prefix);
       if (kind === "workspace") {
         const condition = storePrefix
-          ? and(eq(workspaceFiles.userId, userId), like(workspaceFiles.path, `${storePrefix}%`))
+          ? and(eq(workspaceFiles.userId, userId), pathIsSelfOrChild(workspaceFiles.path, storePrefix))
           : eq(workspaceFiles.userId, userId);
         const files = await db.select().from(workspaceFiles).where(condition).orderBy(asc(workspaceFiles.createdAt));
         return files.map((f) => ({
@@ -68,7 +69,7 @@ export function createD1FileStore(userId: string, agentName: string): FileStore 
         }));
       }
       const condition = storePrefix
-        ? and(eq(agentFiles.userId, userId), eq(agentFiles.agentName, agentName), like(agentFiles.path, `${storePrefix}%`))
+        ? and(eq(agentFiles.userId, userId), eq(agentFiles.agentName, agentName), pathIsSelfOrChild(agentFiles.path, storePrefix))
         : and(eq(agentFiles.userId, userId), eq(agentFiles.agentName, agentName));
       const files = await db.select().from(agentFiles).where(condition).orderBy(asc(agentFiles.createdAt));
       return files.map((f) => ({

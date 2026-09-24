@@ -20,6 +20,10 @@ edgespark deploy
 
 未登录：`edgespark login`，把 URL 给用户。禁止并行跑 CLI。
 
+## 平台版本
+
+根目录 `VERSION` 与 `CHANGELOG.md` 同步。发版时改版本号、写 changelog、打 `vX.Y.Z` tag。管理后台右上角显示当前版本。
+
 ## 迁移红线
 
 只加不减。不要 DROP TABLE/COLUMN、不要 RENAME。多余列留着即可。

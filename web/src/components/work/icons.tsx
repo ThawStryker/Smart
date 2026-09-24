@@ -7,6 +7,46 @@ export function getAgentAvatar(name: string): string {
   return agentAvatars[Math.abs(hash) % agentAvatars.length];
 }
 
+function EmojiAvatar({ emoji, size = 20 }: { emoji: string; size?: number }) {
+  return (
+    <span
+      className="inline-flex items-center justify-center shrink-0 overflow-hidden select-none"
+      style={{ width: size, height: size, fontSize: size * 0.8, lineHeight: 1 }}
+      aria-hidden
+    >
+      {emoji}
+    </span>
+  );
+}
+
+/** Yumi 头像：和 Agent 同一套 emoji 风格 */
+export function YumiAvatar({ size = 20 }: { size?: number }) {
+  return <EmojiAvatar emoji="🌟" size={size} />;
+}
+
+export function AgentAvatar({ name, emoji, size = 20 }: { name: string; emoji?: string; size?: number }) {
+  return <EmojiAvatar emoji={emoji || getAgentAvatar(name)} size={size} />;
+}
+
+export function AssistantHeader({ agentName, emoji }: { agentName?: string | null; emoji?: string }) {
+  if (agentName) {
+    return (
+      <div className="flex items-center gap-1.5 min-w-0">
+        <AgentAvatar name={agentName} emoji={emoji} size={20} />
+        <span className="text-[12px] font-medium truncate" style={{ color: "#8b7bb8" }}>
+          {agentName}
+        </span>
+      </div>
+    );
+  }
+  return (
+    <div className="flex items-center gap-1.5 min-w-0">
+      <YumiAvatar size={20} />
+      <span className="text-[12px] font-medium text-[var(--app-text-secondary)]">Yumi</span>
+    </div>
+  );
+}
+
 // ── File icons (12x12 SVG) ──
 
 export function GenericFileIcon({ active }: { active?: boolean }) {
@@ -29,14 +69,6 @@ export function AgentIcon({ active }: { active?: boolean }) {
   return (
     <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke={active ? "var(--app-accent)" : "var(--app-accent)"} strokeWidth="2" strokeLinecap="round" className="flex-shrink-0">
       <circle cx="12" cy="8" r="4" /><path d="M4 20c0-4 4-7 8-7s8 3 8 7" />
-    </svg>
-  );
-}
-
-export function HeartbeatIcon({ active }: { active?: boolean }) {
-  return (
-    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke={active ? "var(--app-accent)" : "#f87171"} strokeWidth="2" strokeLinecap="round" className="flex-shrink-0">
-      <polyline points="22 12 18 12 15 21 9 3 6 12 2 12" />
     </svg>
   );
 }
@@ -79,14 +111,6 @@ export function SkillsFolderIcon() {
   );
 }
 
-export function HeartbeatFolderIcon() {
-  return (
-    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#f472b6" strokeWidth="2" strokeLinecap="round" className="flex-shrink-0">
-      <polyline points="22 12 18 12 15 21 9 3 6 12 2 12" />
-    </svg>
-  );
-}
-
 export function ContextFolderIcon() {
   return (
     <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#4ade80" strokeWidth="2" strokeLinecap="round" className="flex-shrink-0">
@@ -100,7 +124,6 @@ export function ContextFolderIcon() {
 export function getFileIcon(name: string) {
   const base = name.split("/").pop() || name;
   if (base === "AGENTS.md") return AgentIcon;
-  if (base === "heartbeat.md") return HeartbeatIcon;
   if (base === "README.md") return ReadmeIcon;
   if (base.endsWith(".md")) return DocIcon;
   return GenericFileIcon;

@@ -45,6 +45,7 @@ export function createPhaseSSEStream(
   events: AsyncIterable<PhaseEvent>,
 ): ReadableStream {
   const encoder = new TextEncoder();
+  let iterator: AsyncIterator<PhaseEvent> | null = null;
   return new ReadableStream({
     async start(controller) {
       const send = (chunk: string) => {
@@ -54,11 +55,18 @@ export function createPhaseSSEStream(
       const ping = setInterval(() => {
         try { send(": ping\n\n"); } catch { /* 客户端已断开 */ }
       }, 15000);
+      iterator = events[Symbol.asyncIterator]();
       try {
         send(": connected\n\n");
-        for await (const event of events) {
-          send(`data: ${JSON.stringify(event)}\n\n`);
-          if (event.type === "done") break;
+        while (true) {
+          const step = await iterator.next();
+          if (step.done) break;
+          try {
+            send(`data: ${JSON.stringify(step.value)}\n\n`);
+          } catch {
+            // 客户端断开：继续把生成器跑完，finally 才能落库
+          }
+          if (step.value.type === "done") break;
         }
       } catch (err: unknown) {
         try {
@@ -66,9 +74,12 @@ export function createPhaseSSEStream(
         } catch { /* 客户端已断开 */ }
       } finally {
         clearInterval(ping);
+        try { await iterator.return?.(undefined); } catch { /* ignore */ }
         try { controller.close(); } catch { /* already closed */ }
       }
     },
-    cancel() {},
+    async cancel() {
+      try { await iterator?.return?.(undefined); } catch { /* ignore */ }
+    },
   });
 }

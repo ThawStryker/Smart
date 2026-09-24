@@ -1,6 +1,6 @@
 import { useState, useCallback, useRef, useEffect } from "react";
 import { useConfirm } from "@/components/shared/useConfirm";
-import { resolveApiUrl, resolveDeleteUrl, resolveRenameUrl } from "@/lib/file-api";
+import { blockFileSaves, resolveApiUrl, resolveDeleteUrl, resolveRenameUrl, unblockFileSaves } from "@/lib/file-api";
 import { buildTree } from "@/components/work/FileTree";
 import type { FileEntry } from "@/types/work";
 import type { ReactNode } from "react";
@@ -12,6 +12,8 @@ interface UseFileTreeActionsInput {
   reloadFiles: () => void;
   selectedFile: string | null;
   onCloseFile?: () => void;
+  onOpenNewFile?: (path: string) => void;
+  onFileRenamed?: (oldPath: string, newPath: string) => void;
 }
 
 interface UseFileTreeActionsOutput {
@@ -23,6 +25,7 @@ interface UseFileTreeActionsOutput {
   deleteFolder: (folderPath: string) => Promise<void>;
   startFileRename: (path: string, name: string) => void;
   finishFileRename: (path: string, oldName: string) => void;
+  cancelFileRename: () => void;
   renamingPath: string | null;
   renameValue: string;
   setRenameValue: (value: string) => void;
@@ -38,6 +41,8 @@ export function useFileTreeActions({
   reloadFiles,
   selectedFile,
   onCloseFile,
+  onOpenNewFile,
+  onFileRenamed,
 }: UseFileTreeActionsInput): UseFileTreeActionsOutput {
   const [renamingPath, setRenamingPath] = useState<string | null>(null);
   const [renameValue, setRenameValue] = useState("");
@@ -45,13 +50,26 @@ export function useFileTreeActions({
   const { confirm, ConfirmDialog } = useConfirm();
   useEffect(() => { if (toast) { const t = setTimeout(() => setToast(null), 3000); return () => clearTimeout(t); } }, [toast]);
   const pendingDeletesRef = useRef<Set<string>>(new Set());
+  const finishingRenameRef = useRef(false);
 
   const resolveApi = (treePath: string) => resolveApiUrl(treePath, sessionId);
   const resolveApiDelete = (treePath: string) => resolveDeleteUrl(treePath, sessionId);
 
-  const startFileRename = (path: string, name: string) => { setRenamingPath(path); setRenameValue(name); };
+  const startFileRename = (path: string, name: string) => {
+    finishingRenameRef.current = false;
+    setRenamingPath(path);
+    setRenameValue(name);
+  };
+
+  const cancelFileRename = () => {
+    finishingRenameRef.current = true;
+    setRenamingPath(null);
+    setRenameValue("");
+  };
 
   const finishFileRename = (path: string, oldName: string) => {
+    if (finishingRenameRef.current) return;
+    finishingRenameRef.current = true;
     if (renameValue.trim() && renameValue.trim() !== oldName) {
       if (path.includes(`/${oldName}`)) {
         const tree = buildTree(files);
@@ -77,8 +95,9 @@ export function useFileTreeActions({
     while (files.some((f) => f.path === path)) { idx++; path = `${prefix}新文件 ${idx}.md`; }
     const api = resolveApi(path);
     if (api) await fetch(api.url, { method: api.method, headers: { "Content-Type": "application/json" }, body: JSON.stringify({ content: "" }) });
+    onOpenNewFile?.(path);
     reloadFiles();
-  }, [sessionId, files, reloadFiles]);
+  }, [sessionId, files, reloadFiles, onOpenNewFile]);
 
   const createFolder = useCallback(async (parentPath: string) => {
     const prefix = parentPath.endsWith("/") ? parentPath : `${parentPath}/`;
@@ -109,21 +128,38 @@ export function useFileTreeActions({
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ oldPath: serverOldPath, newPath: serverNewPath }),
       });
-      if (!res.ok) throw new Error(`Rename failed: ${res.status}`);
-    } catch { /* fallback */ }
+      if (!res.ok) {
+        setToast(res.status === 409 ? "已有同名文件" : "重命名失败");
+        reloadFiles();
+        return;
+      }
+      onFileRenamed?.(folderPath, newPath);
+    } catch {
+      setToast("重命名失败");
+    }
     reloadFiles();
-  }, [files, sessionId, reloadFiles]);
+  }, [files, sessionId, reloadFiles, onFileRenamed]);
 
   const deleteFolder = useCallback(async (folderPath: string) => {
     if (!await confirm(`确定删除「${folderPath}」及其所有内容？`)) return;
     pendingDeletesRef.current.add(folderPath);
+    const nested = files
+      .map((f) => f.path)
+      .filter((p) => p === folderPath || p.startsWith(`${folderPath}/`));
+    for (const p of nested) blockFileSaves(p);
+    if (selectedFile && (selectedFile === folderPath || selectedFile.startsWith(`${folderPath}/`))) {
+      onCloseFile?.();
+    }
     try {
       const res = await fetch(resolveApiDelete(folderPath), { method: "DELETE" });
       if (!res.ok) throw new Error(`Delete failed: ${res.status}`);
-    } catch { /* will reload on error */ }
+    } catch {
+      for (const p of nested) unblockFileSaves(p);
+    }
     pendingDeletesRef.current.delete(folderPath);
     reloadFiles();
-  }, [reloadFiles]);
+    window.setTimeout(() => { for (const p of nested) unblockFileSaves(p); }, 0);
+  }, [files, selectedFile, onCloseFile, reloadFiles]);
 
   const renameFile = useCallback(async (filePath: string, newName: string) => {
     if (!newName.trim()) return;
@@ -143,22 +179,29 @@ export function useFileTreeActions({
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ oldPath: serverOldPath, newPath: serverNewPath }),
       });
-      if (!res.ok) throw new Error(`Rename failed: ${res.status}`);
-    } catch { /* fallback */ }
+      if (!res.ok) {
+        setToast(res.status === 409 ? "已有同名文件" : "重命名失败");
+        reloadFiles();
+        return;
+      }
+      onFileRenamed?.(filePath, newPath);
+    } catch {
+      setToast("重命名失败");
+    }
     reloadFiles();
-  }, [sessionId, reloadFiles]);
+  }, [sessionId, reloadFiles, onFileRenamed]);
 
   const deleteFile = useCallback(async (filePath: string) => {
     if (!await confirm(`确定删除「${filePath}」？`)) return;
+    blockFileSaves(filePath);
+    if (selectedFile === filePath) onCloseFile?.();
     try {
       const res = await fetch(resolveApiDelete(filePath), { method: "DELETE" });
       if (!res.ok) throw new Error(`Delete failed: ${res.status}`);
-      if (selectedFile === filePath && onCloseFile) onCloseFile();
-      const deletedFiles: string[] = JSON.parse(localStorage.getItem("deletedFiles") || "[]");
-      deletedFiles.push(filePath);
-      localStorage.setItem("deletedFiles", JSON.stringify(deletedFiles));
       reloadFiles();
+      window.setTimeout(() => unblockFileSaves(filePath), 0);
     } catch {
+      unblockFileSaves(filePath);
       setToast(`删除失败：${filePath}`);
       reloadFiles();
     }
@@ -173,6 +216,7 @@ export function useFileTreeActions({
     deleteFolder,
     startFileRename,
     finishFileRename,
+    cancelFileRename,
     renamingPath,
     renameValue,
     setRenameValue,

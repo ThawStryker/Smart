@@ -1,4 +1,5 @@
 {
-  "name": "smart-temp",
-  "private": true
+  "name": "smart",
+  "private": true,
+  "version": "1.0.0"
 }

@@ -1,4 +1,4 @@
-@import url('https://fonts.googleapis.com/css2?family=Open+Sans:ital,wght@0,400;0,600;0,700;1,400&family=Fira+Code:wght@400;500&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Inter:ital,wght@0,400;0,500;0,600;1,400&family=Rubik:wght@400;500;600&family=Open+Sans:ital,wght@0,400;0,600;0,700;1,400&family=JetBrains+Mono:wght@400;500&family=Fira+Code:wght@400;500&display=swap');
 @import "tailwindcss";
 
 #es-watermark { display: none !important; }
@@ -291,206 +291,14 @@ body {
 [data-theme="dark"] .hover\:bg-amber-100:hover { background-color: rgba(245,158,11,0.15); }
 
 
-/* === Milkdown Crepe Typography === */
-.milkdown .ProseMirror {
-  padding: 50px 100px !important;
-  min-height: 100%;
-}
+/* 文档编辑器视觉由 components/work/editor.css 负责，避免这里用 !important 压掉 Crepe Nord */
 
-.milkdown .ProseMirror h1,
-.milkdown .ProseMirror h2,
-.milkdown .ProseMirror h3,
-.milkdown .ProseMirror h4,
-.milkdown .ProseMirror h5,
-.milkdown .ProseMirror h6 {
-  font-family: 'Open Sans', Arial, Helvetica, sans-serif !important;
-  font-weight: 600 !important;
-  padding: 2px 0;
-}
-
-.milkdown .ProseMirror h1 { font-size: 42px; line-height: 50px; margin-top: 32px; font-weight: 700; }
-.milkdown .ProseMirror h2 { font-size: 36px; line-height: 44px; margin-top: 28px; font-weight: 700; }
-.milkdown .ProseMirror h3 { font-size: 32px; line-height: 40px; margin-top: 24px; font-weight: 700; }
-.milkdown .ProseMirror h4 { font-size: 24px; line-height: 32px; margin-top: 20px; font-weight: 700; }
-.milkdown .ProseMirror h5 { font-size: 20px; line-height: 28px; margin-top: 16px; font-weight: 700; }
-.milkdown .ProseMirror h6 { font-size: 18px; font-weight: 700; line-height: 28px; margin-top: 16px; }
-
-.milkdown .ProseMirror p {
-  font-size: 16px;
-  line-height: 28px;
-  padding: 4px 0;
-}
-
-.milkdown .ProseMirror code {
-  color: #ba1a1a;
-  background: rgba(0,0,0,0.04);
-  font-family: 'Fira Code', 'JetBrains Mono', Menlo, monospace;
-  padding: 0.1em 0.4em;
-  border-radius: 4px;
-  font-size: 87.5%;
-}
-
-.milkdown .ProseMirror pre {
-  background: rgba(0,0,0,0.04);
-  padding: 12px 16px;
-  border-radius: 8px;
-}
-
-.milkdown .ProseMirror pre code {
-  padding: 0;
-  background: transparent;
-  color: inherit;
-  font-size: 85%;
-}
-
-.milkdown .ProseMirror blockquote {
-  position: relative;
-  padding-left: 40px;
-  padding-top: 4px;
-  padding-bottom: 4px;
-  margin: 8px 0;
-}
-
-.milkdown .ProseMirror blockquote::before {
-  content: '';
-  width: 4px;
-  left: 8px;
-  top: 4px;
-  bottom: 4px;
-  position: absolute;
-  background: #d4d4d4;
-  border-radius: 100px;
-}
-
-.milkdown .ProseMirror ul,
-.milkdown .ProseMirror ol {
-  padding-left: 24px;
-}
-
-.milkdown .ProseMirror li {
-  font-size: 16px;
-  line-height: 28px;
-  padding: 2px 0;
-}
-
-.milkdown .ProseMirror a {
-  color: #2563eb;
-  text-decoration: underline;
-  text-underline-offset: 2px;
-}
-
-.milkdown .ProseMirror hr {
-  border: none;
-  height: 18px;
-  background: transparent;
-  position: relative;
-}
-
-.milkdown .ProseMirror hr::before {
-  content: '';
-  position: absolute;
-  left: 0;
-  right: 0;
-  top: 50%;
-  height: 1px;
-  background: rgba(0,0,0,0.1);
-}
-
-.milkdown .ProseMirror img {
-  max-width: 100%;
-  border-radius: 8px;
-}
-
-.milkdown .ProseMirror table {
-  border-collapse: collapse;
-  width: 100%;
-  margin: 8px 0;
-}
-
-.milkdown .ProseMirror th,
-.milkdown .ProseMirror td {
-  border: 1px solid rgba(0,0,0,0.1);
-  padding: 8px 12px;
-  text-align: left;
-}
-
-.milkdown .ProseMirror th {
-  background: rgba(0,0,0,0.02);
-  font-weight: 600;
-}
-
-.milkdown .ProseMirror {
-  font-family: 'Open Sans', Arial, Helvetica, sans-serif !important;
-}
-
-/* Fix block handle colors (Nord theme doesn't define Crepe variables) */
-.milkdown .milkdown-block-handle .operation-item {
-  background: transparent;
-}
-.milkdown .milkdown-block-handle .operation-item svg {
-  fill: var(--app-text-tertiary);
-}
-.milkdown .milkdown-block-handle .operation-item:hover {
-  background: var(--app-accent-bg);
-}
-
-/* Completely neutralize block handle dark backgrounds */
-.milkdown-block-handle,
-.milkdown-block-handle .operation-item,
-.milkdown-block-handle .operation-item.active,
-.milkdown-block-handle .operation-item:hover {
-  background: transparent !important;
-  color: var(--app-text-tertiary) !important;
-}
-.milkdown-block-handle .operation-item svg {
-  fill: var(--app-text-tertiary) !important;
-}
-
-/* Fix CodeMirror active line gutter dark background */
 .cm-activeLineGutter,
 .cm-gutterElement.cm-activeLineGutter {
   background: transparent !important;
   color: inherit !important;
 }
 
-/* Dark mode milkdown overrides */
-[data-theme="dark"] .milkdown .ProseMirror {
-  color: var(--app-text);
-}
-[data-theme="dark"] .milkdown .ProseMirror h1,
-[data-theme="dark"] .milkdown .ProseMirror h2,
-[data-theme="dark"] .milkdown .ProseMirror h3 {
-  color: var(--app-text);
-}
-[data-theme="dark"] .milkdown .ProseMirror code {
-  background: rgba(255,255,255,0.08);
-  color: #f87171;
-}
-[data-theme="dark"] .milkdown .ProseMirror pre {
-  background: rgba(255,255,255,0.06);
-}
-[data-theme="dark"] .milkdown .ProseMirror blockquote {
-  color: var(--app-text-secondary);
-}
-[data-theme="dark"] .milkdown .ProseMirror blockquote::before {
-  background: var(--app-border);
-}
-[data-theme="dark"] .milkdown .ProseMirror th {
-  background: rgba(255,255,255,0.04);
-}
-[data-theme="dark"] .milkdown .ProseMirror td,
-[data-theme="dark"] .milkdown .ProseMirror th {
-  border-color: var(--app-border);
-}
-
-[data-theme="dark"] .milkdown {
-  background: var(--app-surface) !important;
-}
-[data-theme="dark"] .milkdown .ProseMirror {
-  background: var(--app-surface) !important;
-}
-
-/* Dark mode: code blocks */
 [data-theme="dark"] .cm-editor,
 [data-theme="dark"] .cm-editor .cm-gutters,
 [data-theme="dark"] .milkdown .ProseMirror pre,
@@ -506,32 +314,14 @@ body {
   background: rgba(255,255,255,0.05) !important;
 }
 
-/* Dark mode: image caption */
 [data-theme="dark"] .milkdown-image-block figcaption,
 [data-theme="dark"] .milkdown-image-block .image-caption,
 [data-theme="dark"] figcaption {
   color: var(--app-text-secondary) !important;
 }
 
-/* Dark mode: general image block */
 [data-theme="dark"] .milkdown-image-block {
   color: var(--app-text) !important;
-}
-
-/* Dark mode: define Crepe CSS variables that Nord theme doesn't provide */
-[data-theme="dark"] .milkdown {
-  --crepe-color-surface: #1e1e1e;
-  --crepe-color-surface-low: #252422;
-  --crepe-color-on-surface: var(--app-text);
-  --crepe-color-on-surface-variant: var(--app-text-secondary);
-  --crepe-color-outline: var(--app-border);
-  --crepe-color-secondary: rgba(255,255,255,0.08);
-  --crepe-color-hover: rgba(255,255,255,0.06);
-}
-
-[data-theme="dark"] .caption-input {
-  color: var(--app-text-secondary) !important;
-  background: transparent !important;
 }
 
 [data-theme="dark"] .ProseMirror,
@@ -546,6 +336,11 @@ body {
   font-size: 14px;
   line-height: 1.5;
   color: var(--app-text);
+}
+
+.markdown-body.markdown-chat {
+  font-size: 13px;
+  line-height: 1.7;
 }
 
 .markdown-body h1,

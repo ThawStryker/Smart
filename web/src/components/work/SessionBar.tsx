@@ -7,10 +7,12 @@ interface SessionBarProps {
   onSelectSession: (id: number) => void;
   onRenameSession: (id: number, title: string) => void;
   onDeleteSession: (id: number) => void;
+  canCreate?: boolean;
 }
 
 export function SessionBar({
   sessions, sessionId, onCreateSession, onSelectSession, onRenameSession, onDeleteSession,
+  canCreate = true,
 }: SessionBarProps) {
   const [show, setShow] = useState(false);
   const [editing, setEditing] = useState<{ id: number; title: string } | null>(null);
@@ -61,18 +63,14 @@ export function SessionBar({
                     </span>
                   </div>
                 ))}
-                <div className="border-t border-[var(--app-border)]" />
-                <div onClick={() => { onCreateSession(); setShow(false); }}
-                  className="px-3 py-2 text-sm cursor-pointer transition-colors hover:bg-[var(--app-accent-bg)] text-[var(--app-accent)] font-medium flex items-center gap-2">
-                  <span className="text-base leading-none">+</span> 新对话
-                </div>
               </div>
             </>
           )}
         </div>
         <button onClick={onCreateSession}
-          className="w-6 h-6 rounded-full flex items-center justify-center text-sm font-bold transition-all duration-200 hover:scale-110 shrink-0 border border-[var(--app-accent-border)] text-[var(--app-accent)] hover:bg-[var(--app-accent-bg)] leading-none"
-          title="新对话">+</button>
+          disabled={!canCreate}
+          className="w-6 h-6 rounded-full flex items-center justify-center text-sm font-bold transition-all duration-200 hover:scale-110 shrink-0 border border-[var(--app-accent-border)] text-[var(--app-accent)] hover:bg-[var(--app-accent-bg)] leading-none disabled:opacity-40 disabled:hover:scale-100 disabled:cursor-default"
+          title={canCreate ? "新对话" : "当前已是空对话"}>+</button>
 
         {editing !== null && (
           <div className="fixed inset-0 z-50" onClick={handleRename} />

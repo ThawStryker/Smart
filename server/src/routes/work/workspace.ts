@@ -1,8 +1,9 @@
 import { Hono } from "hono";
 import { db } from "edgespark";
 import { auth } from "edgespark/http";
-import { eq, and, like, asc, sql } from "drizzle-orm";
+import { eq, and, asc, sql } from "drizzle-orm";
 import { workspaceFiles } from "@defs";
+import { pathIsChild, pathIsSelfOrChild } from "../../lib/path-prefix";
 
 export const workspaceRoutes = new Hono();
 
@@ -22,7 +23,7 @@ workspaceRoutes.post("/rename", async (c) => {
   await db.update(workspaceFiles).set({
     path: sql`REPLACE(${workspaceFiles.path}, ${oldPath + "/"}, ${newPath + "/"})`,
     updatedAt: new Date().toISOString(),
-  }).where(and(eq(workspaceFiles.userId, userId), like(workspaceFiles.path, `${oldPath}/%`)));
+  }).where(and(eq(workspaceFiles.userId, userId), pathIsChild(workspaceFiles.path, oldPath)));
 
   return c.json({ ok: true });
 });
@@ -32,7 +33,7 @@ workspaceRoutes.get("/", async (c) => {
   const userId = auth.user!.id;
   const prefix = c.req.query("prefix") || "";
   const condition = prefix
-    ? and(eq(workspaceFiles.userId, userId), like(workspaceFiles.path, `${prefix}%`))
+    ? and(eq(workspaceFiles.userId, userId), pathIsSelfOrChild(workspaceFiles.path, prefix))
     : eq(workspaceFiles.userId, userId);
   const files = await db.select().from(workspaceFiles).where(condition).orderBy(asc(workspaceFiles.createdAt));
   return c.json(files);
@@ -84,6 +85,6 @@ workspaceRoutes.delete("/:path{.+}", async (c) => {
   const userId = auth.user!.id;
   const filePath = c.req.param("path");
   if (!filePath) return c.json({ error: "Path required" }, 400);
-  await db.delete(workspaceFiles).where(and(eq(workspaceFiles.userId, userId), like(workspaceFiles.path, `${filePath}%`)));
+  await db.delete(workspaceFiles).where(and(eq(workspaceFiles.userId, userId), pathIsSelfOrChild(workspaceFiles.path, filePath)));
   return c.json({ ok: true });
 });

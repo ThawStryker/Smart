@@ -8,15 +8,17 @@ interface WorkspacePanelProps {
   selectedFile: string | null;
   reloadTrigger?: number;
   onCloseFile?: () => void;
+  onOpenNewFile?: (path: string) => void;
+  onFileRenamed?: (oldPath: string, newPath: string) => void;
 }
 
-export function WorkspacePanel({ sessionId, onFileSelect, selectedFile, reloadTrigger, onCloseFile }: WorkspacePanelProps) {
+export function WorkspacePanel({ sessionId, onFileSelect, selectedFile, reloadTrigger, onCloseFile, onOpenNewFile, onFileRenamed }: WorkspacePanelProps) {
   const {
     expanded, toggleExpand, tree,
     createFile, createFolder, renameFile, renameFolder, deleteFile, deleteFolder,
-    startFileRename, finishFileRename, renamingPath, renameValue, setRenameValue,
+    startFileRename, finishFileRename, cancelFileRename, renamingPath, renameValue, setRenameValue,
     toast, ConfirmDialog,
-  } = useFilePanel({ sessionId, urlPrefix: "workspace", selectedFile, onCloseFile, reloadTrigger });
+  } = useFilePanel({ sessionId, urlPrefix: "workspace", selectedFile, onCloseFile, reloadTrigger, onOpenNewFile, onFileRenamed });
 
   return (
     <div className="border-t border-[var(--app-border)] flex flex-col" style={{ flex: "1 1 0", minHeight: 0 }}>
@@ -31,7 +33,7 @@ export function WorkspacePanel({ sessionId, onFileSelect, selectedFile, reloadTr
       </div>
       <div className="flex-1 overflow-auto border-t border-[var(--app-border)]">
         {(() => {
-          const children = renderFileChildren({ prefix: "workspace", tree, expanded, toggleExpand, onFileSelect, selectedFile, depth: 0, createFile, createFolder, renameFolder, deleteFolder, renameFile, deleteFile, renamingPath, renameValue, onStartRename: startFileRename, onRenameChange: setRenameValue, onFinishRename: finishFileRename });
+          const children = renderFileChildren({ prefix: "workspace", tree, expanded, toggleExpand, onFileSelect, selectedFile, depth: 0, createFile, createFolder, renameFolder, deleteFolder, renameFile, deleteFile, renamingPath, renameValue, onStartRename: startFileRename, onRenameChange: setRenameValue, onFinishRename: finishFileRename, onCancelRename: cancelFileRename });
           if (children.length === 0) {
             return (
               <div className="px-4 py-6 text-center text-[10px] text-[var(--app-text-tertiary)] leading-relaxed">

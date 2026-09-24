@@ -1,18 +1,12 @@
 import { useState } from "react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
-
-const agentAvatars = ["🐱","🐶","🦊","🐼","🐨","🐯","🦁","🐸","🐵","🐰","🐻","🦄","🐙","🦋","🐞","🐣","🦉","🐳","🦀","🐲"];
-export function getAvatar(name: string): string {
-  let hash = 0;
-  for (let i = 0; i < name.length; i++) hash = ((hash << 5) - hash + name.charCodeAt(i)) | 0;
-  return agentAvatars[Math.abs(hash) % agentAvatars.length];
-}
+import { AgentAvatar, YumiAvatar } from "./icons";
 
 export type PhaseName = "thinking" | "agent_start" | "agent_done" | "read" | "memory" | "skill" | "search" | "write" | "text";
 
 export interface PhaseCard {
-  key: string;
+  key?: string;
   phase: PhaseName;
   meta?: Record<string, unknown>;
   content: string;
@@ -62,7 +56,7 @@ function dshFromCard(card: PhaseCard): { kind: DshKind; tag: string; detail: str
   const meta = card.meta || {};
   const extra = String(meta.error || "");
   if (card.phase === "thinking") {
-    return { kind: "thinking", tag: "Think", detail: previewText(card.content || ""), isPath: false, extra };
+    return { kind: "thinking", tag: "Think", detail: "", isPath: false, extra };
   }
   if (card.phase === "read" && meta.tool === "list_files") {
     return { kind: "list", tag: "List", detail: String(meta.path || meta.prefix || "/"), isPath: true, extra };
@@ -89,7 +83,7 @@ function dshFromCard(card: PhaseCard): { kind: DshKind; tag: string; detail: str
 }
 
 function DshIcon({ kind }: { kind: DshKind }) {
-  const common = { viewBox: "0 0 16 16", fill: "none", stroke: "currentColor", strokeWidth: 1.4, className: "w-3.5 h-3.5" };
+  const common = { viewBox: "0 0 16 16", fill: "none", stroke: "currentColor", strokeWidth: 1.4, className: "w-3 h-3" };
   if (kind === "thinking") {
     return (
       <svg {...common}>
@@ -153,7 +147,7 @@ export function MarkdownContent({ content }: { content: string }) {
   if (!content) return null;
   const normalized = content.replace(/\n{3,}/g, "\n\n");
   return (
-    <div className="markdown-body">
+    <div className="markdown-body markdown-chat">
       <ReactMarkdown remarkPlugins={[remarkGfm]}>
         {normalized}
       </ReactMarkdown>
@@ -161,8 +155,100 @@ export function MarkdownContent({ content }: { content: string }) {
   );
 }
 
+export function PhaseTimeline({ cards }: { cards: PhaseCard[] }) {
+  const [openThink, setOpenThink] = useState<Record<string, boolean>>({});
+  const visible = cards.filter((c) => c.phase !== "agent_start" && c.phase !== "agent_done");
+  if (visible.length === 0) return null;
+
+  return (
+    <div className="mb-2.5 space-y-0.5">
+      {visible.map((card, i) => {
+        const step = dshFromCard(card);
+        const key = card.key || `step-${i}`;
+        const canExpand = card.phase === "thinking" && !!(card.content || "").trim();
+        const expanded = !!openThink[key];
+        return (
+          <div key={key}>
+            <div className="flex items-center gap-1.5 min-w-0 text-[11px] text-[var(--app-text-tertiary)]">
+              <span className="w-3 h-3 flex-shrink-0">
+                <DshIcon kind={step.kind} />
+              </span>
+              <span className="font-medium shrink-0">{step.tag}</span>
+              {step.detail ? (
+                <span className={`min-w-0 truncate ${step.isPath ? "text-[#6b8fd4]" : ""}`}>
+                  {step.detail}
+                </span>
+              ) : null}
+              {canExpand && (
+                <button
+                  type="button"
+                  className="ml-auto shrink-0 text-[10px] hover:text-[var(--app-text-secondary)]"
+                  onClick={() => setOpenThink((p) => ({ ...p, [key]: !p[key] }))}
+                >
+                  {expanded ? "收起" : "展开"}
+                </button>
+              )}
+            </div>
+            {step.extra ? <div className="ml-4 text-[10px] text-red-500">{step.extra}</div> : null}
+            {canExpand && expanded && (
+              <div className="mt-1 ml-4 pl-2 border-l border-[var(--app-border)] text-[11px] leading-relaxed whitespace-pre-wrap text-[var(--app-text-tertiary)] max-h-32 overflow-auto">
+                {card.content}
+              </div>
+            )}
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
+export function AssistantTurn({
+  agentName,
+  avatar,
+  timeline,
+  content,
+  streaming,
+}: {
+  agentName?: string | null;
+  avatar?: string;
+  timeline?: PhaseCard[];
+  content?: string;
+  streaming?: boolean;
+}) {
+  return (
+    <div className="flex gap-2 items-start">
+      <div className="w-5 h-5 shrink-0 flex items-center justify-center">
+        {agentName
+          ? <AgentAvatar name={agentName} emoji={avatar} size={20} />
+          : <YumiAvatar size={20} />}
+      </div>
+      <div className="min-w-0 flex-1">
+        <div
+          className="h-5 flex items-center text-[12px] font-medium"
+          style={{ color: agentName ? "#8b7bb8" : "var(--app-text-secondary)" }}
+        >
+          {agentName || "Yumi"}
+        </div>
+        {timeline && timeline.length > 0 && <PhaseTimeline cards={timeline} />}
+        {content ? (
+          <div className="text-[13px] leading-[1.7] text-[var(--app-text)]">
+            <MarkdownContent content={content} />
+          </div>
+        ) : streaming ? (
+          <span className="inline-flex items-center gap-1 text-[var(--app-text-tertiary)]">
+            <span className="w-1 h-1 rounded-full bg-[var(--app-text-tertiary)] animate-pulse" />
+            <span className="w-1 h-1 rounded-full bg-[var(--app-text-tertiary)] animate-pulse [animation-delay:150ms]" />
+            <span className="w-1 h-1 rounded-full bg-[var(--app-text-tertiary)] animate-pulse [animation-delay:300ms]" />
+          </span>
+        ) : null}
+      </div>
+    </div>
+  );
+}
+
 interface StreamingMessageProps {
   streamAgent: string | null;
+  streamAvatar?: string;
   streamText: string;
   streamThinking: string;
   phaseCards: PhaseCard[];
@@ -172,61 +258,18 @@ interface StreamingMessageProps {
   onToggleThinking: () => void;
 }
 
-export function StreamingMessage({ streamAgent, streamText, phaseCards, streamActive, hasCards }: StreamingMessageProps) {
-  const [openThink, setOpenThink] = useState<Record<string, boolean>>({});
+export function StreamingMessage({ streamAgent, streamAvatar, streamText, phaseCards, streamActive, hasCards }: StreamingMessageProps) {
   if (!streamActive && !streamText && phaseCards.length === 0) return null;
-
-  const visible = phaseCards.filter((c) => c.phase !== "agent_start" && c.phase !== "agent_done");
 
   return (
     <div className="animate-pageIn">
-      <div className="flex items-center gap-2 mb-1">
-        {streamAgent && <span className="text-sm leading-none">{getAvatar(streamAgent)}</span>}
-        <span className="text-xs font-bold uppercase tracking-wider" style={{ color: streamAgent ? "#a78bfa" : "var(--app-text-secondary)" }}>
-          {streamAgent || "Yumi"}
-        </span>
-      </div>
-      {(streamActive || visible.length > 0) && hasCards && visible.map((card) => {
-        const step = dshFromCard(card);
-        const thinkLong = card.phase === "thinking" && (card.content || "").length > 88;
-        const expanded = !!openThink[card.key];
-        return (
-          <div key={card.key} className="animate-pageIn py-0.5">
-            <div className="flex items-baseline gap-2 min-w-0">
-              <span className="w-3.5 h-3.5 flex-shrink-0 text-[var(--app-text-secondary)] translate-y-0.5">
-                <DshIcon kind={step.kind} />
-              </span>
-              <span className="text-[13px] font-semibold text-[var(--app-text)] flex-shrink-0">{step.tag}</span>
-              <span className="text-[var(--app-text-tertiary)] flex-shrink-0">·</span>
-              <span className={step.isPath
-                ? "text-[13px] text-[#2563eb] underline underline-offset-2 decoration-[#93c5fd] min-w-0 truncate"
-                : "text-[13px] text-[var(--app-text-secondary)] min-w-0 truncate"}>
-                {step.detail}
-              </span>
-            </div>
-            {step.extra ? <div className="ml-9 text-[11px] text-red-500">{step.extra}</div> : null}
-            {thinkLong ? (
-              <div className="ml-9">
-                <button
-                  type="button"
-                  className="text-[11px] text-[var(--app-text-tertiary)] hover:text-[var(--app-text-secondary)]"
-                  onClick={() => setOpenThink((p) => ({ ...p, [card.key]: !p[card.key] }))}
-                >
-                  {expanded ? "收起思考" : "展开思考"}
-                </button>
-                {expanded ? (
-                  <div className="mt-1 text-xs leading-relaxed whitespace-pre-wrap text-[var(--app-text-secondary)]">
-                    {card.content}
-                  </div>
-                ) : null}
-              </div>
-            ) : null}
-          </div>
-        );
-      })}
-      <div className="text-sm leading-relaxed text-[var(--app-text)] mt-1 pl-1">
-        {streamText ? <MarkdownContent content={streamText} /> : (streamActive ? <span className="text-[var(--app-text-tertiary)]">...</span> : "")}
-      </div>
+      <AssistantTurn
+        agentName={streamAgent}
+        avatar={streamAvatar}
+        timeline={hasCards ? phaseCards : undefined}
+        content={streamText}
+        streaming={streamActive}
+      />
     </div>
   );
 }

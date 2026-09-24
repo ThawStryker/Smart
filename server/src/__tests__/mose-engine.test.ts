@@ -6,7 +6,7 @@ import { createSession, compactIfNeeded, deriveMessages, markObserved, toSavedSt
 import { MemoryFileStore, resolvePath } from "../agent/mose/core/fs";
 import { checkPolicy } from "../agent/mose/policy/observe";
 import { dispatchTool } from "../agent/mose/core/tools";
-import { buildSystemPrompt } from "../agent/mose/core/prompt";
+import { buildSystemPrompt, buildYumiPrompt } from "../agent/mose/core/prompt";
 import { runLoop } from "../agent/mose/core/loop";
 import { splitMetaNotes } from "../agent/mose/core/deliverable";
 import type { PromptContext } from "../agent/mose/types";
@@ -16,6 +16,7 @@ import type { PhaseEvent } from "../agent/mose/phases";
 const emptyPrompt: PromptContext = {
   agentsMd: "You are a writing agent.",
   context: [],
+  contextPaths: [],
   skillCatalog: [{ name: "lesson", description: "Write a lesson script" }],
   memoryIndex: [],
   userMd: "",
@@ -68,6 +69,80 @@ describe("observe policy", () => {
   it("allows write_file for new file", () => {
     const session = createSession();
     expect(checkPolicy("write_file", { path: "workspace/a.md" }, session, false)).toBeNull();
+  });
+
+  it("rejects listing the whole workspace", () => {
+    const session = createSession();
+    session.events.push({ type: "user", text: "写一份教学逐字稿" });
+    expect(checkPolicy("list_files", { prefix: "" }, session, false)).toMatch(/Do not list the workspace/);
+    expect(checkPolicy("list_files", { prefix: "workspace" }, session, false)).toMatch(/Do not list the workspace/);
+  });
+
+  it("allows listing workspace when the user asked", () => {
+    const session = createSession();
+    session.events.push({ type: "user", text: "工作区里有哪些文件" });
+    expect(checkPolicy("list_files", { prefix: "" }, session, false)).toBeNull();
+  });
+
+  it("allows listing agent skill files", () => {
+    const session = createSession();
+    expect(checkPolicy("list_files", { prefix: "skills/" }, session, false)).toBeNull();
+  });
+
+  it("rejects reading unrelated workspace files", () => {
+    const session = createSession();
+    session.events.push({ type: "user", text: "写一份新课稿" });
+    expect(checkPolicy("read_file", { path: "workspace/新文件.md" }, session, true)).toMatch(/Do not read/);
+    expect(checkPolicy("read_file", { path: "workspace/摄像头模块-教学逐字稿.md" }, session, true)).toMatch(/Do not read/);
+  });
+
+  it("allows reading the pinned file or a named file", () => {
+    const session = createSession();
+    session.events.push({ type: "user", text: "改一下封面" });
+    expect(checkPolicy("read_file", { path: "workspace/课稿.md" }, session, true, { focusFile: "workspace/课稿.md" })).toBeNull();
+    session.events.push({ type: "user", text: "改 #麦克风模块-教学逐字稿.md 的引入" });
+    expect(checkPolicy("read_file", { path: "workspace/麦克风模块-教学逐字稿.md" }, session, true)).toBeNull();
+  });
+
+  it("does not reread a previous workspace file when another is pinned this turn", () => {
+    const session = createSession();
+    markObserved(session, "workspace/AI的身体-教案.md");
+    session.events.push({ type: "user", text: "用户本轮指定文档：workspace/逐字稿.md\n写教案" });
+    expect(checkPolicy("read_file", { path: "workspace/逐字稿.md" }, session, true, { focusFile: "workspace/逐字稿.md" })).toBeNull();
+    expect(checkPolicy("read_file", { path: "workspace/AI的身体-教案.md" }, session, true, { focusFile: "workspace/逐字稿.md" })).toMatch(/Do not read/);
+  });
+
+  it("allows reading agent memory files", () => {
+    const session = createSession();
+    expect(checkPolicy("read_file", { path: "memory/青少年认知适配.md" }, session, true)).toBeNull();
+  });
+
+  it("rejects skill_load before memory files are read", () => {
+    const session = createSession();
+    const ctx = { memoryIndex: [{ path: "memory/world.md" }, { path: "memory/grade.md" }] };
+    expect(checkPolicy("skill_load", { name: "lesson" }, session, false, ctx)).toMatch(/Read relevant memory/);
+    markObserved(session, "memory/world.md");
+    expect(checkPolicy("skill_load", { name: "lesson" }, session, false, ctx)).toMatch(/memory\/grade.md/);
+    markObserved(session, "memory/grade.md");
+    expect(checkPolicy("skill_load", { name: "lesson" }, session, false, ctx)).toBeNull();
+  });
+
+  it("allows skill_load when there is no memory index", () => {
+    const session = createSession();
+    expect(checkPolicy("skill_load", { name: "lesson" }, session, false, { memoryIndex: [] })).toBeNull();
+  });
+
+  it("rejects writes to memory/MEMORY.md", () => {
+    const session = createSession();
+    markObserved(session, "memory/MEMORY.md");
+    expect(checkPolicy("edit_file", { path: "memory/MEMORY.md" }, session, true)).toMatch(/written by the user/);
+    expect(checkPolicy("write_file", { path: "memory/MEMORY.md" }, session, false)).toMatch(/written by the user/);
+  });
+
+  it("allows edit_file on memory/USER.md after observe", () => {
+    const session = createSession();
+    markObserved(session, "memory/USER.md");
+    expect(checkPolicy("edit_file", { path: "memory/USER.md" }, session, true)).toBeNull();
   });
 });
 
@@ -142,6 +217,63 @@ describe("session log", () => {
     expect(prompt).toContain("Use 7 sections.");
   });
 
+  it("lists memory files before skills and requires reading them before skill_load", () => {
+    const prompt = buildSystemPrompt({
+      ...emptyPrompt,
+      memoryIndex: [{ path: "memory/world.md", summary: "worldview" }],
+    }, createSession());
+    const mem = prompt.indexOf("## Memory Files");
+    const skills = prompt.indexOf("## Available Skills");
+    expect(mem).toBeGreaterThan(-1);
+    expect(skills).toBeGreaterThan(mem);
+    expect(prompt).toMatch(/before skill_load/);
+    expect(prompt).toMatch(/USER\.md, and MEMORY\.md are already fully loaded/);
+  });
+
+  it("adds a focus-file instruction when a document is pinned", () => {
+    const prompt = buildSystemPrompt(emptyPrompt, createSession(), "workspace/课稿.md");
+    expect(prompt).toContain("## 指定文档");
+    expect(prompt).toContain("workspace/课稿.md");
+    expect(prompt).toMatch(/edit_file/);
+    expect(prompt).toMatch(/另写新文件/);
+    expect(prompt).toMatch(/本轮/);
+  });
+
+  it("names the direct-chat assistant Yumi", () => {
+    const prompt = buildYumiPrompt();
+    expect(prompt).toMatch(/Yumi/);
+    expect(prompt).toMatch(/不要自称/);
+  });
+
+  it("embeds a pinned workspace file into the Yumi prompt", () => {
+    const prompt = buildYumiPrompt({ path: "workspace/逐字稿.md", content: "| 环节 | 任务卡 |\n封面 | 开场 |" });
+    expect(prompt).toContain("workspace/逐字稿.md");
+    expect(prompt).toContain("| 环节 | 任务卡 |");
+    expect(prompt).toMatch(/不要说没有权限/);
+  });
+
+  it("does not claim missing permission when the pinned file is absent", () => {
+    const prompt = buildYumiPrompt({ path: "workspace/没有.md", missing: true });
+    expect(prompt).toContain("workspace/没有.md");
+    expect(prompt).toMatch(/没有这份文件/);
+  });
+
+  it("states USER.md is writable conventions and MEMORY.md is user-authored", () => {
+    const prompt = buildSystemPrompt({
+      ...emptyPrompt,
+      userMd: "- 封面用大白话",
+      memoryMd: "- 禁用某梗",
+    }, createSession());
+    expect(prompt).toContain("## User Memory");
+    expect(prompt).toContain("封面用大白话");
+    expect(prompt).toMatch(/memory\/USER\.md/);
+    expect(prompt).toContain("## Agent Memory");
+    expect(prompt).toContain("禁用某梗");
+    expect(prompt).toMatch(/Do not edit `memory\/MEMORY\.md`/);
+    expect(prompt).toMatch(/skill_load at most one/);
+    expect(prompt).toMatch(/Forbidden on memory\/MEMORY\.md/);
+  });
+
   it("compact truncates old tool results and keeps recent ones", () => {
     const session = createSession();
     for (let i = 0; i < 10; i++) {
@@ -197,6 +329,7 @@ describe("runLoop", () => {
       session,
       promptCtx: emptyPrompt,
       modelConfig,
+      focusFile: "workspace/a.md",
       runtime: {
         callLLM: scriptedLLM([
           {
@@ -271,6 +404,7 @@ describe("runLoop", () => {
       session,
       promptCtx: emptyPrompt,
       modelConfig,
+      focusFile: "workspace/a.md",
       runtime: {
         callLLM: scriptedLLM([
           {
@@ -390,6 +524,27 @@ describe("runLoop", () => {
 
     expect(events.some((e) => e.type === "delta" && e.phase === "write")).toBe(false);
     expect(events.some((e) => e.type === "delta" && e.phase === "text" && "text" in e && e.text.includes("教学目标覆盖说明"))).toBe(true);
+  });
+
+  it("does not write (unsaved) when model dumps a document without write_file", async () => {
+    const body = "# 课稿\n\n" + "内容".repeat(200);
+    const fs = new MemoryFileStore();
+    const session = createSession();
+    session.events.push({ type: "user", text: "写一课" });
+
+    const { events } = await yieldCollect(runLoop({
+      session,
+      promptCtx: emptyPrompt,
+      modelConfig,
+      runtime: {
+        callLLM: scriptedLLM([{ textContent: body, reasoningContent: "", toolCalls: [] }]),
+        fs,
+      },
+    }));
+
+    expect(events.some((e) => e.meta?.path === "(unsaved)")).toBe(false);
+    expect(events.some((e) => e.type === "delta" && e.phase === "write")).toBe(false);
+    expect(events.some((e) => e.type === "delta" && e.phase === "text" && "text" in e && e.text === body)).toBe(true);
   });
 });
 

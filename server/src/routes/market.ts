@@ -2,14 +2,20 @@ import { Hono } from "hono";
 import { db } from "edgespark";
 import { auth } from "edgespark/http";
 import { eq, and, desc, inArray } from "drizzle-orm";
-import { marketListings, tools, domains, projects } from "@defs";
+import { marketListings, tools, domains, projects, marketAgentFiles, userAgents, agentFiles } from "@defs";
+import { nextUniqueAgentName } from "../lib/agent-name";
+import { pickRandomAvatar } from "../lib/agent-avatar";
 
 export const marketRoutes = new Hono()
   .get("/api/public/market", async (c) => {
     const featuredOnly = c.req.query("featured") === "true";
+    const type = c.req.query("type") || "tool";
+    const typeFilter = type === "talent"
+      ? eq(marketListings.type, "talent")
+      : inArray(marketListings.type, ["tool", "url"]);
     const where = featuredOnly
-      ? and(eq(marketListings.status, "approved"), eq(marketListings.featured, true))
-      : eq(marketListings.status, "approved");
+      ? and(eq(marketListings.status, "approved"), eq(marketListings.featured, true), typeFilter)
+      : and(eq(marketListings.status, "approved"), typeFilter);
     const rows = await db
       .select()
       .from(marketListings)
@@ -58,7 +64,8 @@ export const marketRoutes = new Hono()
       return domain ? `https://${domain}` : null;
     };
 
-    return c.json(rows.map(r => ({ ...r, link: toLink(r) })));
+    const me = auth.user?.id;
+    return c.json(rows.map(r => ({ ...r, link: toLink(r), mine: Boolean(me && r.sellerId === me) })));
   })
 
   .get("/api/public/market/:id", async (c) => {
@@ -68,8 +75,85 @@ export const marketRoutes = new Hono()
     return c.json(row);
   })
 
+  .post("/api/market/talent/install", async (c) => {
+    const userId = auth.user!.id;
+    const body = await c.req.json<{ listingIds?: number[] }>();
+    const listingIds = (body.listingIds || []).filter((id) => Number.isInteger(id) && id > 0);
+    if (listingIds.length === 0) return c.json({ error: "listingIds required" }, 400);
+
+    const listings = await db.select().from(marketListings).where(inArray(marketListings.id, listingIds));
+    const installed: Array<{ listingId: number; name: string }> = [];
+
+    const existingAgents = await db.select({
+      name: userAgents.name,
+      sourceListingId: userAgents.sourceListingId,
+    }).from(userAgents).where(eq(userAgents.userId, userId));
+    const usedNames = existingAgents.map((a) => a.name);
+    const alreadyInstalled = new Set(
+      existingAgents.map((a) => a.sourceListingId).filter((id): id is number => id != null),
+    );
+    let skippedExisting = false;
+    let skippedOwn = false;
+
+    for (const listing of listings) {
+      if (listing.status !== "approved" || listing.type !== "talent") continue;
+      if (listing.sellerId === userId) {
+        skippedOwn = true;
+        continue;
+      }
+      if (alreadyInstalled.has(listing.id)) {
+        skippedExisting = true;
+        continue;
+      }
+      const base = listing.sourceAgentName || listing.title;
+      const name = nextUniqueAgentName(usedNames, base);
+      usedNames.push(name);
+
+      const snapshot = await db.select().from(marketAgentFiles).where(eq(marketAgentFiles.listingId, listing.id));
+      const agentsMd = snapshot.find((f) => f.path === "AGENTS.md")?.content || "";
+      const userMd = snapshot.find((f) => f.path === "memory/USER.md")?.content || "";
+      const memoryMd = snapshot.find((f) => f.path === "memory/MEMORY.md")?.content || "";
+
+      await db.insert(userAgents).values({
+        userId,
+        name,
+        title: listing.title || name,
+        agentsMd,
+        userMd,
+        memoryMd,
+        sourceListingId: listing.id,
+        avatar: pickRandomAvatar(),
+      });
+      for (const f of snapshot) {
+        await db.insert(agentFiles).values({
+          userId,
+          agentName: name,
+          path: f.path,
+          content: f.content || "",
+          isFolder: f.isFolder || 0,
+        });
+      }
+      await db.update(marketListings).set({
+        downloads: (listing.downloads || 0) + 1,
+      }).where(eq(marketListings.id, listing.id));
+      alreadyInstalled.add(listing.id);
+      installed.push({ listingId: listing.id, name });
+    }
+
+    if (installed.length === 0) {
+      if (skippedOwn) return c.json({ error: "这是你发布的 Agent，无需添加" }, 409);
+      if (skippedExisting) return c.json({ error: "已经添加过，请先在 Work 中删除" }, 409);
+      return c.json({ error: "没有可安装的人才（需已审核通过）" }, 400);
+    }
+    return c.json({ ok: true, installed });
+  })
+
   .get("/api/projects/:projectId/publish-status", async (c) => {
+    const userId = auth.user!.id;
     const projectId = parseInt(c.req.param("projectId"), 10);
+    const [project] = await db.select({ id: projects.id }).from(projects)
+      .where(and(eq(projects.id, projectId), eq(projects.userId, userId)));
+    if (!project) return c.json({ error: "Not found" }, 404);
 
     const [tool] = await db
       .select()
@@ -93,6 +177,8 @@ export const marketRoutes = new Hono()
       published: true,
       id: listing.id,
       title: listing.title,
+      description: listing.description || "",
+      category: listing.category || "",
       status: listing.status,
       version: listing.version,
     });
@@ -101,6 +187,9 @@ export const marketRoutes = new Hono()
   .post("/api/projects/:projectId/publish", async (c) => {
     const userId = auth.user!.id;
     const projectId = parseInt(c.req.param("projectId"), 10);
+    const [project] = await db.select({ id: projects.id }).from(projects)
+      .where(and(eq(projects.id, projectId), eq(projects.userId, userId)));
+    if (!project) return c.json({ error: "Not found" }, 404);
 
     const body = await c.req.json<{ title: string; description?: string; category?: string }>();
     if (!body.title) return c.json({ error: "title required" }, 400);

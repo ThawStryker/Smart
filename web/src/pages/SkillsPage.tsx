@@ -146,13 +146,7 @@ export function SkillsPage() {
                         {statusBadge(s)}
                       </div>
                       <p className="text-xs text-secondary mb-1">{s.description}</p>
-                      <p className="text-xs text-tertiary mb-3">来源: {s.sourceType}</p>
-                      <div className="flex items-center gap-2">
-                        <button onClick={() => toggleSkill(s.id, s.enabled)} className={`text-xs px-3 py-1 rounded-lg transition-colors ${s.enabled ? "bg-green-50 text-green-600 hover:bg-green-100" : "bg-neutral-100 text-neutral-400 hover:bg-neutral-200"}`}>
-                          {s.enabled ? "已启用" : "已禁用"}
-                        </button>
-                        <button onClick={() => deleteSkill(s.id)} className="text-xs text-red-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors px-2 py-1">删除</button>
-                      </div>
+                      <p className="text-xs text-tertiary">来源: {s.sourceType}</p>
                     </div>
                   ))}
                 </div>

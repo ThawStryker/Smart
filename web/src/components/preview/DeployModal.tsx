@@ -1,4 +1,9 @@
-import { useState } from "react";
+import { useRef, useState } from "react";
+
+function toolPublicHref(domain: string): string {
+  if (domain.startsWith("http")) return domain;
+  return `https://${domain.replace(/^https?:\/\//, "")}`;
+}
 
 const steps = [
   { key: "db", label: "数据上传" },
@@ -27,15 +32,20 @@ export function DeployModal({
   onClose,
 }: DeployModalProps) {
   const [subdomain, setSubdomain] = useState("");
+  const [submitting, setSubmitting] = useState(false);
+  const clickedRef = useRef(false);
 
-  const isDeploying = deployStep > 0 && deployStep < 4;
-  const isDone = deployStep === 4;
   const isError = deployError !== "";
-  const isIdle = deployStep === 0 && !isError;
+  const isDone = !isError && deployStep === 4;
+  const isDeploying = !isError && deployStep > 0 && deployStep < 4;
+  const isIdle = !isError && deployStep === 0;
 
   const handleDeploy = () => {
-    if (!subdomain.trim()) return;
-    onDeploy(subdomain.trim());
+    const name = subdomain.trim();
+    if (!name || clickedRef.current) return;
+    clickedRef.current = true;
+    setSubmitting(true);
+    onDeploy(name);
   };
 
   const handleCancel = () => {
@@ -74,7 +84,7 @@ export function DeployModal({
               </button>
               <button
                 onClick={handleDeploy}
-                disabled={!subdomain.trim()}
+                disabled={!subdomain.trim() || submitting}
                 className="px-4 py-2 text-sm bg-gradient-to-r from-amber-500 to-orange-500 text-white rounded-lg font-medium shadow-sm hover:shadow-md hover:shadow-amber-100 transition-all disabled:opacity-40"
               >
                 部署
@@ -143,12 +153,12 @@ export function DeployModal({
           <div className="text-center py-4">
             <div className="text-green-600 text-sm mb-2">部署成功</div>
             <a
-              href={`https://${deployDomain}`}
+              href={toolPublicHref(deployDomain)}
               target="_blank"
               rel="noopener noreferrer"
               className="text-amber-600 text-sm hover:underline break-all"
             >
-              https://{deployDomain}
+              {toolPublicHref(deployDomain)}
             </a>
             <div className="mt-4">
               <button
@@ -174,6 +184,8 @@ export function DeployModal({
               </button>
               <button
                 onClick={() => {
+                  clickedRef.current = false;
+                  setSubmitting(false);
                   setSubdomain("");
                   onDeploy("");
                 }}
@@ -202,12 +214,12 @@ export function DeployedModal({
       <div className="bg-white rounded-xl shadow-xl w-full max-w-md p-6">
         <h2 className="text-lg font-semibold text-neutral-900 mb-4">已部署</h2>
         <a
-          href={`https://${domain}`}
+          href={toolPublicHref(domain)}
           target="_blank"
           rel="noopener noreferrer"
           className="text-amber-600 text-sm hover:underline break-all"
         >
-          https://{domain}
+          {toolPublicHref(domain)}
         </a>
         <div className="mt-4 flex justify-end">
           <button

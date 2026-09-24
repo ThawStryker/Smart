@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef, useCallback } from "react";
+import { createPortal } from "react-dom";
 import { MonacoEditor } from "@/components/preview/MonacoEditor";
 import { DeployModal, DeployedModal } from "@/components/preview/DeployModal";
 import { PublishModal } from "@/components/preview/PublishModal";
@@ -17,9 +18,20 @@ interface PreviewPanelProps {
 }
 
 const tabs = [
-  { key: "preview", label: "预览" },
   { key: "code", label: "代码" },
+  { key: "preview", label: "预览" },
 ];
+
+function FullscreenIcon() {
+  return (
+    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M8 3H5a2 2 0 0 0-2 2v3" />
+      <path d="M16 3h3a2 2 0 0 1 2 2v3" />
+      <path d="M8 21H5a2 2 0 0 1-2-2v-3" />
+      <path d="M16 21h3a2 2 0 0 0 2-2v-3" />
+    </svg>
+  );
+}
 
 function stepFromStatus(status: string): number {
   switch (status) {
@@ -37,7 +49,10 @@ export function PreviewPanel({ projectId, toolId, generatedFiles = [] }: Preview
   const [previewKey, setPreviewKey] = useState(0);
   const iframeRef = useRef<HTMLIFrameElement>(null);
   const previewContainerRef = useRef<HTMLDivElement>(null);
+  const previewPaneRef = useRef<HTMLDivElement>(null);
+  const nativeFullscreen = useRef(false);
   const pollRef = useRef<AbortController | null>(null);
+  const [isPreviewFullscreen, setIsPreviewFullscreen] = useState(false);
 
   // Deploy state
   const [showDeploy, setShowDeploy] = useState(false);
@@ -101,18 +116,25 @@ export function PreviewPanel({ projectId, toolId, generatedFiles = [] }: Preview
     })();
   }, [projectId]);
 
+  const deployLockRef = useRef(false);
+
   const handleDeploy = useCallback(async (subdomain: string) => {
     if (!subdomain) {
-      // User clicked retry from error screen
+      // 错误页点重试：回到填前缀
+      deployLockRef.current = false;
       setDeployError("");
       setDeployStep(0);
       setDeployDomain("");
       return;
     }
 
-    setDeployStep(0);
+    if (deployLockRef.current) return;
+    deployLockRef.current = true;
+
+    const domainHint = `${subdomain}.torresx.cn`;
+    setDeployDomain(domainHint);
+    setDeployStep(1);
     setDeployError("");
-    setDeployDomain("");
 
     try {
       const res = await client.api.fetch(`/api/projects/${projectId}/deploy`, {
@@ -123,20 +145,37 @@ export function PreviewPanel({ projectId, toolId, generatedFiles = [] }: Preview
 
       const data = await res.json();
       if (!res.ok) {
+        if (res.status === 409 && data.domain) {
+          setDeployDomain(data.domain);
+          if (data.error && /already has an active/i.test(data.error)) {
+            setDeployStep(4);
+            setExistingDomain(data.domain);
+            return;
+          }
+          startPolling(data.domain);
+          return;
+        }
         setDeployError(data.error || "部署失败");
+        deployLockRef.current = false;
         return;
       }
 
-      const domain = data.domain;
+      const domain = data.domain || domainHint;
       setDeployDomain(domain);
-      setDeployStep(1); // DB stored
+      if (data.status === "active") {
+        setDeployStep(4);
+        setExistingDomain(domain);
+        return;
+      }
       startPolling(domain);
     } catch (err) {
       setDeployError(err instanceof Error ? err.message : "网络错误");
+      deployLockRef.current = false;
     }
   }, [projectId, startPolling]);
 
   const handleCancel = useCallback(async () => {
+    deployLockRef.current = false;
     if (pollRef.current) pollRef.current.abort();
 
     try {
@@ -172,6 +211,65 @@ export function PreviewPanel({ projectId, toolId, generatedFiles = [] }: Preview
     }
   }, [generatedFiles.length]);
 
+  useEffect(() => {
+    const sync = () => {
+      const el = previewPaneRef.current;
+      if (document.fullscreenElement === el) {
+        nativeFullscreen.current = true;
+        setIsPreviewFullscreen(true);
+        return;
+      }
+      if (nativeFullscreen.current) {
+        nativeFullscreen.current = false;
+        setIsPreviewFullscreen(false);
+      }
+    };
+    document.addEventListener("fullscreenchange", sync);
+    return () => document.removeEventListener("fullscreenchange", sync);
+  }, []);
+
+  useEffect(() => {
+    if (!isPreviewFullscreen || document.fullscreenElement) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setIsPreviewFullscreen(false);
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [isPreviewFullscreen]);
+
+  const enterPreviewFullscreen = useCallback(async () => {
+    const el = previewPaneRef.current;
+    if (!el) {
+      setIsPreviewFullscreen((v) => !v);
+      return;
+    }
+    try {
+      if (document.fullscreenElement === el) {
+        await document.exitFullscreen();
+        return;
+      }
+      if (isPreviewFullscreen && !document.fullscreenElement) {
+        setIsPreviewFullscreen(false);
+        return;
+      }
+      await el.requestFullscreen();
+      if (document.fullscreenElement === el) {
+        nativeFullscreen.current = true;
+        setIsPreviewFullscreen(true);
+        return;
+      }
+      setIsPreviewFullscreen(true);
+    } catch {
+      setIsPreviewFullscreen((v) => !v);
+    }
+  }, [isPreviewFullscreen]);
+
+  const openPreviewFullscreen = () => {
+    if (!previewUrl) return;
+    if (activeTab !== "preview") setActiveTab("preview");
+    void enterPreviewFullscreen();
+  };
+
   const hasFiles = generatedFiles.length > 0;
   const currentFile = hasFiles
     ? generatedFiles[Math.min(selectedFileIdx, generatedFiles.length - 1)]
@@ -181,6 +279,41 @@ export function PreviewPanel({ projectId, toolId, generatedFiles = [] }: Preview
     tsx: "typescript", jsx: "javascript", json: "json",
     py: "python", rs: "rust", go: "go", java: "java", sql: "sql",
   };
+
+  const cssFallback = isPreviewFullscreen && typeof document !== "undefined" && !document.fullscreenElement;
+
+  const previewPane = previewUrl ? (
+    <div
+      ref={previewPaneRef}
+      className={cssFallback ? "fixed inset-0 z-[200] bg-white" : "w-full h-full bg-white"}
+    >
+      {cssFallback && (
+        <button
+          type="button"
+          title="退出全屏"
+          aria-label="退出全屏"
+          onClick={() => setIsPreviewFullscreen(false)}
+          className="absolute top-3 right-3 z-[201] w-8 h-8 rounded-lg bg-black/50 text-white flex items-center justify-center hover:bg-black/70"
+        >
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
+            <path d="M18 6L6 18M6 6l12 12" />
+          </svg>
+        </button>
+      )}
+      <iframe
+        key={previewKey}
+        ref={iframeRef}
+        src={previewUrl}
+        style={{
+          width: "100%",
+          height: "100%",
+          border: 0,
+        }}
+        sandbox="allow-scripts allow-forms allow-same-origin"
+        title="Preview"
+      />
+    </div>
+  ) : null;
 
   const isDeploying = deployStep > 0 && deployStep < 4;
   const deployButtonLabel = existingDomain ? "已部署" : isDeploying ? "部署中..." : "部署";
@@ -207,6 +340,16 @@ export function PreviewPanel({ projectId, toolId, generatedFiles = [] }: Preview
             {tab.label}
           </button>
         ))}
+        <button
+          type="button"
+          title="全屏预览"
+          aria-label="全屏预览"
+          disabled={!previewUrl}
+          onClick={openPreviewFullscreen}
+          className="w-8 h-8 rounded-lg flex items-center justify-center text-neutral-500 hover:bg-neutral-100 hover:text-neutral-800 disabled:opacity-30 disabled:hover:bg-transparent"
+        >
+          <FullscreenIcon />
+        </button>
         <div className="flex-1" />
         <span className="text-xs text-neutral-400">
           {hasFiles ? `${generatedFiles.length} 个文件` : ""}
@@ -222,29 +365,21 @@ export function PreviewPanel({ projectId, toolId, generatedFiles = [] }: Preview
       {/* Content area */}
       <div
         ref={previewContainerRef}
-        className={`flex-1 ${activeTab === "code" ? "overflow-hidden" : "overflow-auto"}`}
+        className={`flex-1 relative ${activeTab === "code" ? "overflow-hidden" : "overflow-auto"}`}
       >
-        {activeTab === "preview" ? (
-          previewUrl ? (
-            <div style={{ width: "100%", height: "100%" }}>
-              <iframe
-                key={previewKey}
-                ref={iframeRef}
-                src={previewUrl}
-                style={{
-                  width: "100%",
-                  height: "100%",
-                  border: 0,
-                }}
-                sandbox="allow-scripts allow-forms allow-same-origin"
-                title="Preview"
-              />
-            </div>
-          ) : (
+        {previewUrl && (
+          cssFallback
+            ? createPortal(previewPane, document.body)
+            : (
+              <div className={activeTab === "preview" ? "w-full h-full" : "absolute inset-0 invisible pointer-events-none"}>
+                {previewPane}
+              </div>
+            )
+        )}
+        {activeTab === "preview" && !previewUrl ? (
             <div className="flex items-center justify-center h-full text-neutral-400 text-sm">
               <p>暂无 HTML 文件可预览</p>
             </div>
-          )
         ) : activeTab === "code" ? (
           hasFiles ? (
             <div className="flex h-full">

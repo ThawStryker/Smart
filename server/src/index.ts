@@ -35,8 +35,20 @@ import { adminRoutes } from "./routes/admin";
 import { resetPasswordRoutes } from "./routes/resetPassword";
 import { workRoutes } from "./routes/work";
 import { userAgentRoutes } from "./routes/agents";
+import { parseToolHost } from "./lib/tool-host";
+import { serveDeployedTool } from "./lib/serve-tool";
 
 const app = new Hono()
+  // xxx.torresx.cn：页面走工具静态文件，/api 仍走下面的路由
+  .use("*", async (c, next) => {
+    const sub = parseToolHost(c.req.header("host"));
+    if (!sub) return next();
+    const path = new URL(c.req.url).pathname;
+    if (path.startsWith("/api/")) return next();
+    const served = await serveDeployedTool(sub, path);
+    if (served) return served;
+    return next();
+  })
   .get("/api/public/hello", (c) =>
     c.json({ message: "Hello from EdgeSpark! Spark your idea to the Edge." })
   )

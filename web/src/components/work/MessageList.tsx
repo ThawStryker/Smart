@@ -1,33 +1,41 @@
 import type { ChatMessage } from "@/types/work";
-import { MarkdownContent } from "./StreamingMessage";
+import { AssistantTurn, MarkdownContent, type PhaseCard } from "./StreamingMessage";
 import type { ReactNode } from "react";
 
 interface MessageListProps {
   messages: ChatMessage[];
   streamingMessage: ReactNode;
+  avatarOf?: (name: string | null | undefined) => string | undefined;
 }
 
-export function MessageList({ messages, streamingMessage }: MessageListProps) {
+function UserTurn({ content }: { content: string }) {
+  return (
+    <div className="flex justify-end">
+      <div
+        className="max-w-[88%] rounded-2xl rounded-tr-md px-3.5 py-2 text-[13px] leading-[1.65] text-[var(--app-text)] break-words"
+        style={{ background: "var(--app-accent-bg)" }}
+      >
+        <MarkdownContent content={content} />
+      </div>
+    </div>
+  );
+}
+
+export function MessageList({ messages, streamingMessage, avatarOf }: MessageListProps) {
   return (
     <>
       {messages.map((msg) => (
         <div key={msg.id} className="animate-pageIn">
-          <div className="flex items-center gap-2 mb-1">
-            {msg.role === "user" ? (
-              <span className="text-xs font-bold uppercase tracking-wider text-[var(--app-accent)]">You</span>
-            ) : (
-              <>
-                <span className="w-1.5 h-1.5 rounded-full" style={{ background: msg.agentName ? "#a78bfa" : "var(--app-text-secondary)" }} />
-                <span className="text-xs font-bold uppercase tracking-wider" style={{ color: msg.agentName ? "#a78bfa" : "var(--app-text-secondary)" }}>
-                  {msg.agentName || "Yumi"}
-                </span>
-              </>
-            )}
-          </div>
-          <div className="text-sm leading-relaxed rounded-xl px-4 py-3 text-[var(--app-text)]"
-            style={{ background: msg.role === "user" ? "rgba(255,255,255,0.04)" : "transparent", border: msg.role === "user" ? "1px solid var(--app-border)" : "none" }}>
-            <MarkdownContent content={msg.content} />
-          </div>
+          {msg.role === "user" ? (
+            <UserTurn content={msg.content} />
+          ) : (
+            <AssistantTurn
+              agentName={msg.agentName}
+              avatar={avatarOf?.(msg.agentName)}
+              timeline={msg.timeline as PhaseCard[] | undefined}
+              content={msg.content}
+            />
+          )}
         </div>
       ))}
       {streamingMessage}

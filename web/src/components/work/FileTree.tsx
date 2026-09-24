@@ -1,5 +1,5 @@
 import React from "react";
-import { getFileIcon, DefaultFolderIcon, MemoryFolderIcon, SkillsFolderIcon, ContextFolderIcon, HeartbeatFolderIcon } from "./icons";
+import { getFileIcon, DefaultFolderIcon, MemoryFolderIcon, SkillsFolderIcon, ContextFolderIcon } from "./icons";
 import { FolderMenu, FileMenu } from "./ContextMenu";
 
 interface FileEntry {
@@ -69,10 +69,11 @@ export interface FileTreeRenderOptions {
   onStartRename: (path: string, name: string) => void;
   onRenameChange: (value: string) => void;
   onFinishRename: (path: string, oldName: string) => void;
+  onCancelRename: () => void;
 }
 
 export function renderFileChildren(opts: FileTreeRenderOptions): React.ReactNode[] {
-  const { prefix, tree, expanded, toggleExpand, onFileSelect, selectedFile, depth, createFile, createFolder, deleteFolder, deleteFile, renamingPath, renameValue, onStartRename, onRenameChange, onFinishRename } = opts;
+  const { prefix, tree, expanded, toggleExpand, onFileSelect, selectedFile, depth, createFile, createFolder, deleteFolder, deleteFile, renamingPath, renameValue, onStartRename, onRenameChange, onFinishRename, onCancelRename } = opts;
   const parts = prefix.split("/");
   let node = tree;
   for (const part of parts) {
@@ -118,11 +119,14 @@ export function renderFileChildren(opts: FileTreeRenderOptions): React.ReactNode
                 <polyline points="6 9 12 15 18 9" />
               </svg>
             </span>
-            {name === "context" ? <ContextFolderIcon /> : name === "memory" ? <MemoryFolderIcon /> : name === "skills" ? <SkillsFolderIcon /> : name === "heartbeat" ? <HeartbeatFolderIcon /> : <DefaultFolderIcon open={isOpen} />}
+            {name === "context" ? <ContextFolderIcon /> : name === "memory" ? <MemoryFolderIcon /> : name === "skills" ? <SkillsFolderIcon /> : <DefaultFolderIcon open={isOpen} />}
             {renamingPath === cp ? (
               <input value={renameValue} onChange={(e) => onRenameChange(e.target.value)}
                 onBlur={() => onFinishRename(cp, name)}
-                onKeyDown={(e) => { if (e.key === "Enter") onFinishRename(cp, name); if (e.key === "Escape") onRenameChange(name); }}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") { e.preventDefault(); onFinishRename(cp, name); }
+                  if (e.key === "Escape") { e.preventDefault(); onCancelRename(); }
+                }}
                 className="flex-1 bg-[var(--app-surface)] border border-[var(--app-accent)] rounded px-2 py-0.5 text-xs outline-none text-[var(--app-text)] min-w-0 ml-1.5"
                 autoFocus onFocus={(e) => e.target.select()}
                 onClick={(e) => e.stopPropagation()}
@@ -162,7 +166,10 @@ export function renderFileChildren(opts: FileTreeRenderOptions): React.ReactNode
         {renamingPath === cp ? (
           <input value={renameValue} onChange={(e) => onRenameChange(e.target.value)}
             onBlur={() => onFinishRename(cp, name)}
-            onKeyDown={(e) => { if (e.key === "Enter") onFinishRename(cp, name); if (e.key === "Escape") onRenameChange(name); }}
+            onKeyDown={(e) => {
+              if (e.key === "Enter") { e.preventDefault(); onFinishRename(cp, name); }
+              if (e.key === "Escape") { e.preventDefault(); onCancelRename(); }
+            }}
             className="flex-1 bg-[var(--app-surface)] border border-[var(--app-accent)] rounded px-2 py-0.5 text-xs outline-none text-[var(--app-text)] min-w-0 ml-1.5"
             autoFocus onFocus={(e) => e.target.select()}
             onClick={(e) => e.stopPropagation()}

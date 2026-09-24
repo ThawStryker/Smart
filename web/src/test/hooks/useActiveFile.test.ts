@@ -6,6 +6,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { renderHook, act } from '@testing-library/react';
 import { useActiveFile } from '@/hooks/useActiveFile';
+import { blockFileSaves, unblockFileSaves } from '@/lib/file-api';
 
 describe('useActiveFile', () => {
   beforeEach(() => {
@@ -14,6 +15,8 @@ describe('useActiveFile', () => {
 
   afterEach(() => {
     vi.unstubAllGlobals();
+    unblockFileSaves("workspace/逐字稿.md");
+    unblockFileSaves("agents/通识课教研/context/agent-layout.md");
   });
 
   it('starts with no active file', () => {
@@ -53,17 +56,36 @@ describe('useActiveFile', () => {
     expect(result.current.activeFile?.content).toBe('modified');
   });
 
-  it('closes the active file', () => {
+  it("closes the active file", () => {
     const { result } = renderHook(() => useActiveFile());
 
     act(() => {
-      result.current.open('/test.ts', 'content');
+      result.current.open("/test.ts", "content");
     });
     act(() => {
       result.current.close();
     });
 
     expect(result.current.activeFile).toBeNull();
+  });
+
+  it("reopens the last saved content instead of the stale tree snapshot", () => {
+    const { result } = renderHook(() => useActiveFile());
+
+    act(() => {
+      result.current.open("workspace/doc.md", "original");
+    });
+    act(() => {
+      result.current.updateContent("edited-in-preview");
+    });
+    act(() => {
+      result.current.close();
+    });
+    act(() => {
+      result.current.open("workspace/doc.md", "original");
+    });
+
+    expect(result.current.activeFile?.content).toBe("edited-in-preview");
   });
 
   it('updates content and sets streaming state', () => {
@@ -83,6 +105,26 @@ describe('useActiveFile', () => {
     expect(result.current.activeFile?.content).toBe('# Hello');
   });
 
+  it('bypassCache starts a stream write from empty, then appends', () => {
+    const { result } = renderHook(() => useActiveFile());
+
+    act(() => {
+      result.current.open('/doc.md', 'original');
+    });
+    act(() => {
+      result.current.updateContent('modified');
+    });
+    act(() => {
+      result.current.open('/doc.md', '', { bypassCache: true });
+      result.current.setIsStreaming(true);
+      result.current.appendContent('# Hello');
+      result.current.appendContent('\nworld');
+    });
+
+    expect(result.current.activeFile?.content).toBe('# Hello\nworld');
+    expect(result.current.isStreaming).toBe(true);
+  });
+
   it('renames a file and updates active file path', () => {
     const { result } = renderHook(() => useActiveFile());
 
@@ -97,7 +139,30 @@ describe('useActiveFile', () => {
     expect(result.current.activeFile?.content).toBe('# content');
   });
 
-  it('rename is a no-op if oldPath does not match active file', () => {
+  it("blocks PUT to the old path after rename so flush cannot recreate it", async () => {
+    const fetchMock = vi.fn().mockResolvedValue({ ok: true });
+    vi.stubGlobal("fetch", fetchMock);
+    const { result } = renderHook(() => useActiveFile());
+
+    act(() => {
+      result.current.open("workspace/逐字稿.md", "lesson", { bypassCache: true });
+    });
+    fetchMock.mockClear();
+    act(() => {
+      result.current.rename("workspace/逐字稿.md", "workspace/新文件 3.md");
+    });
+    await act(async () => {
+      await result.current.save("workspace/逐字稿.md", "lesson", 1);
+    });
+
+    expect(fetchMock).not.toHaveBeenCalled();
+    expect(result.current.activeFile).toEqual({
+      path: "workspace/新文件 3.md",
+      content: "lesson",
+    });
+  });
+
+  it("rename is a no-op if oldPath does not match active file", () => {
     const { result } = renderHook(() => useActiveFile());
 
     act(() => {
@@ -109,6 +174,58 @@ describe('useActiveFile', () => {
 
     // active file unchanged
     expect(result.current.activeFile?.path).toBe('/active.md');
+  });
+
+  it("ignores stale editor flush for a file that is no longer active", () => {
+    const { result } = renderHook(() => useActiveFile());
+
+    act(() => {
+      result.current.open("agents/教研/skills/write-lesson-plan/SKILL.md", "# 写教案");
+    });
+    act(() => {
+      result.current.open("workspace/新文件.md", "", { bypassCache: true });
+    });
+    act(() => {
+      result.current.updateContent("# 写教案", "agents/教研/skills/write-lesson-plan/SKILL.md");
+    });
+
+    expect(result.current.activeFile).toEqual({
+      path: "workspace/新文件.md",
+      content: "",
+    });
+  });
+
+  it("does not PUT a file that is being deleted", async () => {
+    const fetchMock = vi.fn().mockResolvedValue({ ok: true });
+    vi.stubGlobal("fetch", fetchMock);
+    const path = "agents/通识课教研/context/agent-layout.md";
+    blockFileSaves(path);
+    const { result } = renderHook(() => useActiveFile());
+    await act(async () => {
+      await result.current.save(path, "revived", 1);
+    });
+    expect(fetchMock).not.toHaveBeenCalled();
+    unblockFileSaves(path);
+  });
+
+  it("clears cache on close when the file is being deleted", () => {
+    const path = "agents/通识课教研/context/agent-layout.md";
+    const { result } = renderHook(() => useActiveFile());
+    act(() => {
+      result.current.open(path, "original");
+    });
+    act(() => {
+      result.current.updateContent("edited");
+    });
+    blockFileSaves(path);
+    act(() => {
+      result.current.close();
+    });
+    unblockFileSaves(path);
+    act(() => {
+      result.current.open(path, "from-tree");
+    });
+    expect(result.current.activeFile?.content).toBe("from-tree");
   });
 
   it('saves file via correct API endpoint for workspace path', async () => {

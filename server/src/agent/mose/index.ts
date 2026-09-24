@@ -1,10 +1,11 @@
-// Mose：单循环 + session log + 先读后改。对外吐 PhaseEvent。
+// Work 服务层：文档/技能/记忆。循环在 agent/engine。
 import type { PhaseEvent, EngineInput } from "./phases";
 import type { SavedState } from "./types";
 import { createSession } from "./core/session";
 import { runLoop } from "./core/loop";
 import { createD1FileStore } from "./core/d1-fs";
 import { loadPromptContext } from "./capabilities/context";
+import { buildYumiPrompt } from "./core/prompt";
 import { callLLM } from "./utils/llm-client";
 
 export type { SavedState, EngineInput };
@@ -36,6 +37,7 @@ export async function* run(
       modelConfig,
       runtime: { callLLM, fs },
       onSaveState,
+      focusFile: input.focusFile,
     });
 
     if (!suppressSave && input.onSaveMessage && output.assistantText) {
@@ -57,8 +59,17 @@ export async function* run(
 }
 
 async function* runDirect(input: EngineInput): AsyncGenerator<PhaseEvent, void, undefined> {
-  const { sessionId, userMessage, modelConfig } = input;
+  const { sessionId, userId, userMessage, modelConfig, focusFile } = input;
+  let pinned: Parameters<typeof buildYumiPrompt>[0] = null;
+  if (focusFile && userId) {
+    const fs = createD1FileStore(userId, "");
+    const rec = await fs.read(focusFile);
+    pinned = rec.exists
+      ? { path: rec.displayPath, content: rec.content }
+      : { path: rec.displayPath, missing: true };
+  }
   const messages: Array<Record<string, unknown>> = [
+    { role: "system", content: buildYumiPrompt(pinned) },
     { role: "user", content: userMessage },
   ];
 
@@ -66,10 +77,12 @@ async function* runDirect(input: EngineInput): AsyncGenerator<PhaseEvent, void, 
   const gen = callLLM(messages, [], modelConfig);
   let result = await gen.next();
   while (!result.done) {
-    yield result.value;
+    const ev = result.value;
+    if (ev.type === "delta" && ev.phase === "text" && ev.text) fullResponse += ev.text;
+    yield ev;
     result = await gen.next();
   }
-  if (result.value?.textContent) fullResponse = result.value.textContent;
+  if (!fullResponse && result.value?.textContent) fullResponse = result.value.textContent;
 
   if (input.onSaveMessage && fullResponse) {
     await input.onSaveMessage({ sessionId, agentName: null, role: "assistant", content: fullResponse });

@@ -20,7 +20,7 @@ export const agentRoutes = new Hono()
     const projectId = parseInt(c.req.param("projectId"), 10);
 
     const [project] = await db.select().from(projects).where(eq(projects.id, projectId));
-    if (!project) return c.json({ error: "Project not found" }, 404);
+    if (!project || project.userId !== userId) return c.json({ error: "Project not found" }, 404);
 
     const body = await c.req.json<{ message: string; images?: string[]; mcps?: string[]; skills?: string[] }>();
     if (!body.message?.trim() && (!body.images || body.images.length === 0)) {

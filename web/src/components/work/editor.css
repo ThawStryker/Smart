@@ -1,0 +1,310 @@
+/* Work 文档编辑器：暖色纸面 + 居中栏宽 + 中文阅读字号。
+ * Crepe 交互（手柄、斜杠、工具条）走下面这组变量，和纸面同一套颜色。 */
+
+.work-editor-canvas {
+  background: var(--app-bg);
+  color: var(--app-text);
+}
+
+.work-editor-paper {
+  width: calc(100% - 4rem);
+  max-width: 56rem;
+  min-height: calc(100% - 4rem);
+  margin: 2rem auto;
+  background: var(--app-surface);
+  color: var(--app-text);
+  border-radius: 16px;
+  box-shadow: 0 1px 2px rgba(28, 27, 25, 0.04), 0 16px 48px rgba(28, 27, 25, 0.07);
+  overflow: clip;
+  cursor: text;
+}
+
+.work-editor-source-paper {
+  overflow: visible;
+  display: flex;
+  flex-direction: column;
+}
+
+.work-editor-source-paper textarea {
+  display: block;
+  width: 100%;
+  min-height: calc(100vh - 10rem);
+  box-sizing: border-box;
+}
+
+div.milkdown {
+  min-height: 100%;
+  background: var(--app-surface);
+  color: var(--app-text);
+  -webkit-font-smoothing: antialiased;
+
+  --crepe-color-background: var(--app-surface);
+  --crepe-color-on-background: var(--app-text);
+  --crepe-color-surface: var(--app-surface);
+  --crepe-color-surface-low: var(--app-surface-alt);
+  --crepe-color-on-surface: var(--app-text);
+  --crepe-color-on-surface-variant: var(--app-text-secondary);
+  --crepe-color-outline: var(--app-border-hover);
+  --crepe-color-primary: #3f5d78;
+  --crepe-color-secondary: #e7eef5;
+  --crepe-color-on-secondary: #1c1b19;
+  --crepe-color-inverse: var(--app-text);
+  --crepe-color-on-inverse: var(--app-surface);
+  --crepe-color-inline-code: #b42318;
+  --crepe-color-error: var(--app-red);
+  --crepe-color-hover: #f0eeea;
+  --crepe-color-selected: #ebe8e2;
+  --crepe-color-inline-area: #efece7;
+  --crepe-font-title: Inter, "PingFang SC", "Hiragino Sans GB", "Noto Sans SC", sans-serif;
+  --crepe-font-default: Inter, "PingFang SC", "Hiragino Sans GB", "Noto Sans SC", sans-serif;
+  --crepe-font-code: "JetBrains Mono", Menlo, Monaco, monospace;
+  --crepe-shadow-1: 0 1px 2px rgba(28, 27, 25, 0.06), 0 4px 16px rgba(28, 27, 25, 0.06);
+}
+
+div.milkdown .ProseMirror {
+  margin: 0;
+  padding: 48px 48px 96px;
+  min-height: 100%;
+  font-family: var(--crepe-font-default);
+  font-size: 16px;
+  line-height: 1.75;
+  color: var(--app-text);
+  background: transparent;
+  caret-color: var(--app-text);
+  cursor: text;
+}
+
+/* 关掉虚拟光标后仍可能残留 class；原生插入条必须看得见 */
+div.milkdown .ProseMirror.virtual-cursor-enabled,
+div.milkdown .ProseMirror.ProseMirror-hideselection {
+  caret-color: var(--app-text);
+}
+
+div.milkdown .ProseMirror,
+div.milkdown .ProseMirror-focused {
+  --prosemirror-virtual-cursor-color: var(--app-text);
+}
+
+div.milkdown .ProseMirror-gapcursor:after {
+  border-top: 1px solid var(--app-text);
+}
+
+div.milkdown .ProseMirror h1,
+div.milkdown .ProseMirror h2,
+div.milkdown .ProseMirror h3,
+div.milkdown .ProseMirror h4,
+div.milkdown .ProseMirror h5,
+div.milkdown .ProseMirror h6 {
+  font-family: var(--crepe-font-title);
+  font-weight: 600;
+  color: var(--app-text);
+  letter-spacing: -0.025em;
+}
+
+div.milkdown .ProseMirror h1 { font-size: 30px; line-height: 1.3; margin-top: 40px; }
+div.milkdown .ProseMirror h2 { font-size: 22px; line-height: 1.35; margin-top: 36px; }
+div.milkdown .ProseMirror h3 { font-size: 18px; line-height: 1.4; margin-top: 28px; }
+div.milkdown .ProseMirror h4 { font-size: 16px; line-height: 1.45; margin-top: 22px; }
+div.milkdown .ProseMirror h5 { font-size: 15px; line-height: 1.5; margin-top: 18px; }
+div.milkdown .ProseMirror h6 { font-size: 13px; line-height: 1.5; margin-top: 16px; font-weight: 600; letter-spacing: 0.04em; color: var(--app-text-secondary); }
+
+/* 虚拟光标是 pos=0 的 widget，会抢走 :first-child。光标在标题时有 40px 顶边，
+ * 点表头变成 NodeSelection 后 widget 消失，顶边被清掉，整页上跳 40px。 */
+div.milkdown .ProseMirror > h1:first-child,
+div.milkdown .ProseMirror > h2:first-child,
+div.milkdown .ProseMirror > h3:first-child,
+div.milkdown .ProseMirror > .prosemirror-virtual-cursor + h1,
+div.milkdown .ProseMirror > .prosemirror-virtual-cursor + h2,
+div.milkdown .ProseMirror > .prosemirror-virtual-cursor + h3,
+div.milkdown .ProseMirror > .ProseMirror-gapcursor + h1,
+div.milkdown .ProseMirror > .ProseMirror-gapcursor + h2,
+div.milkdown .ProseMirror > .ProseMirror-gapcursor + h3 {
+  margin-top: 0;
+}
+
+div.milkdown .ProseMirror p {
+  font-size: 16px;
+  line-height: 1.75;
+  padding: 2px 0;
+}
+
+div.milkdown .ProseMirror a {
+  color: #3f5d78;
+  text-decoration-color: color-mix(in srgb, #3f5d78 35%, transparent);
+  text-underline-offset: 3px;
+}
+
+div.milkdown .ProseMirror *::selection {
+  background: color-mix(in srgb, #3f5d78 14%, transparent);
+}
+
+div.milkdown .ProseMirror code {
+  font-size: 0.86em;
+}
+
+div.milkdown .milkdown-block-handle,
+div.milkdown .milkdown-slash-menu,
+div.milkdown .milkdown-toolbar {
+  position: absolute;
+  z-index: 20;
+}
+
+/* 不要 transition: all，否则手柄 top/left 会带动整页错觉 */
+div.milkdown .milkdown-block-handle {
+  transition: opacity 0.2s ease;
+}
+
+/* 表格：左对齐、细线、可读单元格 */
+div.milkdown .milkdown-table-block,
+div.milkdown .milkdown-table-block > div,
+div.milkdown .milkdown-table-block .table-wrapper {
+  width: 100%;
+  max-width: 100%;
+  padding: 0;
+  margin-left: 0;
+  margin-right: 0;
+}
+
+div.milkdown .milkdown-table-block {
+  margin: 20px 0 28px;
+}
+
+div.milkdown .milkdown-table-block > div,
+div.milkdown .milkdown-table-block .table-wrapper {
+  position: relative;
+  overflow: visible;
+}
+
+div.milkdown .milkdown-table-block .handle {
+  position: absolute;
+}
+
+/* Crepe 默认把单元格手柄停在 -999px，会撑高纸面，鼠标移到表头时整页上跳 */
+div.milkdown .milkdown-table-block .cell-handle {
+  top: 0;
+  left: 0;
+}
+
+div.milkdown .milkdown-table-block .handle[data-show="false"] {
+  display: none;
+  pointer-events: none;
+}
+
+/* 边线悬停高亮会先闪到错误位置再跳过来，整段关掉 */
+div.milkdown .milkdown-table-block .line-handle {
+  display: none !important;
+  pointer-events: none !important;
+}
+
+div.milkdown .ProseMirror table,
+div.milkdown .milkdown-table-block table {
+  table-layout: fixed;
+  width: 100%;
+  max-width: 100%;
+  border-collapse: collapse;
+}
+
+div.milkdown .milkdown-table-block th,
+div.milkdown .milkdown-table-block td {
+  min-width: 0;
+  white-space: normal;
+  overflow-wrap: break-word;
+  padding: 11px 14px;
+  border: 1px solid color-mix(in srgb, var(--app-border-hover) 85%, transparent);
+  vertical-align: top;
+  background: var(--app-surface);
+  cursor: text;
+  user-select: text;
+  caret-color: var(--app-text);
+}
+
+div.milkdown .milkdown-table-block th {
+  font-weight: 600;
+  font-size: 12.5px;
+  letter-spacing: 0.04em;
+  color: var(--app-text-secondary);
+  background: color-mix(in srgb, var(--app-bg) 65%, var(--app-surface));
+}
+
+div.milkdown .milkdown-table-block td > p,
+div.milkdown .milkdown-table-block th > p {
+  padding: 0;
+  margin: 0;
+  min-height: 1.7em;
+  font-size: 14.5px;
+  line-height: 1.7;
+  overflow-wrap: break-word;
+}
+
+div.milkdown .milkdown-table-block td br,
+div.milkdown .milkdown-table-block th br {
+  display: block;
+  content: "";
+}
+
+div.milkdown .milkdown-table-block .selectedCell::after {
+  background: color-mix(in srgb, #3f5d78 8%, transparent);
+  opacity: 1;
+}
+
+div.milkdown .milkdown-table-block td:focus,
+div.milkdown .milkdown-table-block th:focus,
+div.milkdown .milkdown-table-block p:focus,
+div.milkdown .milkdown-table-block td:focus-visible,
+div.milkdown .milkdown-table-block th:focus-visible,
+div.milkdown .milkdown-table-block p:focus-visible {
+  outline: none;
+}
+
+/* 单元格里的段落被整块选中时不要描边，那是点文字时的误选，不是真正的格子选中 */
+div.milkdown .milkdown-table-block th:has(> .ProseMirror-selectednode),
+div.milkdown .milkdown-table-block td:has(> .ProseMirror-selectednode) {
+  outline: none;
+}
+
+div.milkdown .milkdown-table-block .ProseMirror-selectednode {
+  background: transparent;
+}
+
+[data-theme="dark"] .work-editor-canvas {
+  background: var(--app-bg);
+}
+
+[data-theme="dark"] .work-editor-paper {
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.2), 0 16px 48px rgba(0, 0, 0, 0.28);
+}
+
+[data-theme="dark"] div.milkdown {
+  background: var(--app-surface);
+}
+
+[data-theme="dark"] div.milkdown {
+  --crepe-color-background: var(--app-surface);
+  --crepe-color-on-background: var(--app-text);
+  --crepe-color-surface: var(--app-surface);
+  --crepe-color-surface-low: var(--app-surface-alt);
+  --crepe-color-on-surface: var(--app-text);
+  --crepe-color-on-surface-variant: var(--app-text-secondary);
+  --crepe-color-outline: var(--app-border-hover);
+  --crepe-color-primary: #9bb8d4;
+  --crepe-color-secondary: #3c4858;
+  --crepe-color-on-secondary: #d7e3f8;
+  --crepe-color-hover: var(--app-surface-alt);
+  --crepe-color-selected: #323029;
+  --crepe-color-inline-area: #1a1916;
+  --crepe-color-inline-code: #ffb4ab;
+}
+
+[data-theme="dark"] div.milkdown .milkdown-table-block th,
+[data-theme="dark"] div.milkdown .milkdown-table-block td {
+  background: var(--app-surface);
+  border-color: var(--app-border);
+}
+
+[data-theme="dark"] div.milkdown .ProseMirror,
+[data-theme="dark"] div.milkdown .ProseMirror.virtual-cursor-enabled,
+[data-theme="dark"] div.milkdown .ProseMirror.ProseMirror-hideselection,
+[data-theme="dark"] div.milkdown .milkdown-table-block th,
+[data-theme="dark"] div.milkdown .milkdown-table-block td {
+  caret-color: var(--app-text);
+}

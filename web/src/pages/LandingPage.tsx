@@ -44,7 +44,7 @@ export function LandingPage() {
 
   useEffect(() => {
     client.api
-      .fetch("/api/public/market?featured=true")
+      .fetch("/api/public/market?featured=true&type=tool")
       .then((r) => r.json())
       .then((data) => setListings(data as Listing[]))
       .catch(() => {})

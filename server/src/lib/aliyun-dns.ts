@@ -60,16 +60,67 @@ export async function deleteDnsRecord(recordId: string): Promise<void> {
   });
 }
 
-export async function listDnsRecords(rr: string): Promise<Array<{ recordId: string; type: string }>> {
+export interface AliyunDnsRecord {
+  recordId: string;
+  type: string;
+  rr: string;
+  value: string;
+  status: string;
+}
+
+function readAliyunRecords(result: Record<string, unknown>): AliyunDnsRecord[] {
+  const raw = (result as { DomainRecords?: { Record?: unknown } }).DomainRecords?.Record || [];
+  const list = Array.isArray(raw) ? raw : raw ? [raw] : [];
+  return list.map((item) => {
+    const r = item as Record<string, unknown>;
+    return {
+      recordId: String(r.RecordId || ""),
+      type: String(r.Type || ""),
+      rr: String(r.RR || ""),
+      value: String(r.Value || ""),
+      status: String(r.Status || "ENABLE").toUpperCase(),
+    };
+  }).filter((r) => r.recordId);
+}
+
+export async function listDnsRecords(rr: string): Promise<Array<{ recordId: string; type: string; rr: string }>> {
   const result = await callAliyunApi({
     Action: "DescribeDomainRecords",
     DomainName: "torresx.cn",
     RRKeyWord: rr,
   });
-  const records = (result as any).DomainRecords?.Record || [];
-  if (!Array.isArray(records)) return [];
-  return records.map((r: any) => ({
-    recordId: r.RecordId as string,
-    type: r.Type as string,
+  return readAliyunRecords(result).map((r) => ({
+    recordId: r.recordId,
+    type: r.type,
+    rr: r.rr,
   }));
+}
+
+/** 分页拉齐 torresx.cn 全部解析 */
+export async function listAllDnsRecords(): Promise<AliyunDnsRecord[]> {
+  const out: AliyunDnsRecord[] = [];
+  let page = 1;
+  const pageSize = 500;
+  while (page <= 20) {
+    const result = await callAliyunApi({
+      Action: "DescribeDomainRecords",
+      DomainName: "torresx.cn",
+      PageNumber: String(page),
+      PageSize: String(pageSize),
+    });
+    const batch = readAliyunRecords(result);
+    out.push(...batch);
+    const total = Number((result as { TotalCount?: unknown }).TotalCount ?? out.length);
+    if (out.length >= total || batch.length === 0) break;
+    page += 1;
+  }
+  return out;
+}
+
+/** 一次性保证 *.torresx.cn CNAME 指向应用主机，之后每个工具不必再写 DNS */
+export async function ensureWildcardCname(targetHost: string): Promise<void> {
+  const target = targetHost.replace(/\.$/, "").toLowerCase();
+  const existing = await listDnsRecords("*");
+  if (existing.some((r) => r.rr === "*" && r.type === "CNAME")) return;
+  await addDnsRecord("CNAME", "*", target);
 }

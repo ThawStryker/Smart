@@ -1,3 +1,9 @@
+export interface WorkAgent {
+  name: string;
+  avatar: string;
+  sourceListingId?: number | null;
+}
+
 export interface WorkSession {
   id: number;
   title: string;
@@ -17,6 +23,7 @@ export interface ChatMessage {
   role: string;
   content: string;
   createdAt: string;
+  timeline?: Array<{ phase: string; meta?: Record<string, unknown>; content: string }>;
 }
 
 export interface StreamingState {

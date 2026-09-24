@@ -1,4 +1,5 @@
 import { useState, useCallback } from "react";
+import { createPortal } from "react-dom";
 
 interface ConfirmOptions {
   message: string;
@@ -44,10 +45,10 @@ export function useConfirm() {
     setState(null);
   };
 
-  const Dialog = state ? (
+  const Dialog = state ? createPortal(
     <>
-      <div className="fixed inset-0 z-50 bg-black/30" onClick={handleCancel} />
-      <div className="fixed inset-0 z-50 flex items-center justify-center">
+      <div className="fixed inset-0 z-[80] bg-black/30" onClick={handleCancel} />
+      <div className="fixed inset-0 z-[80] flex items-center justify-center">
         <div className="rounded-2xl shadow-2xl border p-5 w-72 max-w-[85vw] bg-[var(--app-surface)] border-[var(--app-border)]" onClick={(e) => e.stopPropagation()}>
           <p className="text-sm text-[var(--app-text)] mb-5 leading-relaxed">{state.message}</p>
           <div className="flex gap-2">
@@ -63,7 +64,8 @@ export function useConfirm() {
           </div>
         </div>
       </div>
-    </>
+    </>,
+    document.body,
   ) : null;
 
   return { confirm, ConfirmDialog: Dialog };

@@ -1,7 +1,7 @@
 import { Hono } from "hono";
 import { db } from "edgespark";
 import { auth } from "edgespark/http";
-import { eq, desc } from "drizzle-orm";
+import { eq, desc, and } from "drizzle-orm";
 import { workSessions, workMessages } from "@defs";
 
 export const sessionsRoutes = new Hono();
@@ -22,29 +22,39 @@ sessionsRoutes.post("/", async (c) => {
 });
 
 sessionsRoutes.get("/:id", async (c) => {
+  const userId = auth.user!.id;
   const id = parseInt(c.req.param("id"));
-  const sessions = await db.select().from(workSessions).where(eq(workSessions.id, id));
+  const sessions = await db.select().from(workSessions)
+    .where(and(eq(workSessions.id, id), eq(workSessions.userId, userId)));
   const session = sessions[0];
-  if (!session) return c.json({ error: "Not found" }, 404);
+  if (!session || session.deletedAt) return c.json({ error: "Not found" }, 404);
   return c.json(session);
 });
 
 sessionsRoutes.patch("/:id", async (c) => {
+  const userId = auth.user!.id;
   const id = parseInt(c.req.param("id"));
+  const [owned] = await db.select({ id: workSessions.id }).from(workSessions)
+    .where(and(eq(workSessions.id, id), eq(workSessions.userId, userId)));
+  if (!owned) return c.json({ error: "Not found" }, 404);
   const body = await c.req.json<{ title?: string; stateJson?: string }>();
   const updates: Record<string, any> = {};
   if (body.title !== undefined) updates.title = body.title;
   if (body.stateJson !== undefined) updates.stateJson = body.stateJson;
   if (Object.keys(updates).length > 0) {
     updates.updatedAt = new Date().toISOString();
-    await db.update(workSessions).set(updates).where(eq(workSessions.id, id));
+    await db.update(workSessions).set(updates).where(and(eq(workSessions.id, id), eq(workSessions.userId, userId)));
   }
   return c.json({ ok: true });
 });
 
 sessionsRoutes.delete("/:id", async (c) => {
+  const userId = auth.user!.id;
   const id = parseInt(c.req.param("id"));
-  // 软删除：标记 deletedAt，不清除数据
-  await db.update(workSessions).set({ deletedAt: new Date().toISOString() }).where(eq(workSessions.id, id));
+  const [owned] = await db.select({ id: workSessions.id }).from(workSessions)
+    .where(and(eq(workSessions.id, id), eq(workSessions.userId, userId)));
+  if (!owned) return c.json({ error: "Not found" }, 404);
+  await db.update(workSessions).set({ deletedAt: new Date().toISOString() })
+    .where(and(eq(workSessions.id, id), eq(workSessions.userId, userId)));
   return c.json({ ok: true });
 });

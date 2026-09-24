@@ -1,16 +1,6 @@
-// ── Phase 枚举 ──
-export type PhaseName =
-  | "thinking"
-  | "agent_start"
-  | "agent_done"
-  | "read"
-  | "memory"
-  | "skill"
-  | "search"
-  | "write"
-  | "text";
+export type { PhaseEvent, PhaseName } from "../engine/events";
+import type { PhaseName } from "../engine/events";
 
-// ── 工具 → Phase 映射 ──
 export const DEFAULT_TOOL_PHASE: Record<string, PhaseName> = {
   read_file: "read",
   list_files: "read",
@@ -21,21 +11,12 @@ export const DEFAULT_TOOL_PHASE: Record<string, PhaseName> = {
   ask_user: "text",
 };
 
-// ── Phase 事件类型 ──
-export type PhaseEvent =
-  | { type: "phase"; phase: PhaseName; meta?: Record<string, unknown> }
-  | { type: "delta"; phase: PhaseName; text: string; meta?: Record<string, unknown> }
-  | { type: "done" }
-  | { type: "error"; message: string };
-
-// ── 工具处理器（由 chat.ts 组装注入） ──
 export interface ToolHandler {
   execute: (args: Record<string, unknown>) => Promise<string>;
   phase: PhaseName;
   meta?: (args: Record<string, unknown>) => Record<string, unknown>;
 }
 
-// ── Engine 输入 ──
 export interface EngineInput {
   sessionId: number;
   userId: string;
@@ -51,9 +32,8 @@ export interface EngineInput {
   };
   toolHandlers: Record<string, ToolHandler>;
   toolDefs: Array<Record<string, unknown>>;
-  /** 保存消息回调（由上层注入，engine 不直接操作 DB） */
   onSaveMessage?: (msg: { sessionId: number; agentName: string | null; role: string; content: string }) => Promise<void>;
+  focusFile?: string | null;
 }
 
-// ── Engine 输出类型 ──
-export type EngineOutput = AsyncGenerator<PhaseEvent, void, undefined>;
+export type EngineOutput = AsyncGenerator<import("../engine/events").PhaseEvent, void, undefined>;

@@ -43,12 +43,14 @@ export async function loadPromptContext(userId: string, agentName: string): Prom
   for (const f of files) map.set(f.path, f.content || "");
 
   const context: string[] = [];
+  const contextPaths: string[] = [];
   const skillCatalog: PromptContext["skillCatalog"] = [];
   const memoryIndex: PromptContext["memoryIndex"] = [];
 
   for (const [path, content] of map) {
     if (path.startsWith("context/") && path.endsWith(".md")) {
       context.push(content);
+      contextPaths.push(path);
     }
     const skillMatch = path.match(/^skills\/([^/]+)\/SKILL\.md$/);
     if (skillMatch) {
@@ -68,6 +70,7 @@ export async function loadPromptContext(userId: string, agentName: string): Prom
   return {
     agentsMd: map.get("AGENTS.md") || "",
     context,
+    contextPaths,
     skillCatalog,
     memoryIndex,
     userMd: map.get("memory/USER.md") || "",

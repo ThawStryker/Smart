@@ -2,6 +2,8 @@ import { useEffect, useState } from "react";
 import { useProfile } from "@/hooks/useProfile";
 import { client } from "@/lib/edgespark";
 import { LoadingSpinner } from "@/components/shared/LoadingSpinner";
+import { DomainManager } from "@/components/admin/DomainManager";
+import { PLATFORM_VERSION } from "@/lib/version";
 
 export function AdminPage() {
   const { isAdmin, loading: profileLoading } = useProfile();
@@ -37,14 +39,16 @@ export function AdminPage() {
   const fetchPending = async () => {
     setLoadingPending(true);
     const res = await client.api.fetch("/api/admin/market/pending");
-    setPending(await res.json());
+    const data = await res.json();
+    setPending(Array.isArray(data) ? data : []);
     setLoadingPending(false);
   };
 
   const fetchApproved = async () => {
     setLoadingApproved(true);
     const res = await client.api.fetch("/api/admin/market/approved");
-    setApproved(await res.json());
+    const data = await res.json();
+    setApproved(Array.isArray(data) ? data : []);
     setLoadingApproved(false);
   };
 
@@ -76,31 +80,43 @@ export function AdminPage() {
   };
 
   const addUrlTool = async () => {
-    await client.api.fetch("/api/admin/market/url", {
+    const res = await client.api.fetch("/api/admin/market/url", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ title: urlTitle, description: urlDesc, url: urlLink, category: urlCategory }),
     });
+    if (!res.ok) { alert("添加失败"); return; }
     setUrlTitle(""); setUrlDesc(""); setUrlLink(""); setUrlCategory("");
     alert("添加成功");
   };
 
   const addGlobalSkill = async () => {
-    await client.api.fetch("/api/admin/skills", {
+    const res = await client.api.fetch("/api/admin/skills", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ name: skillName, description: skillDesc, gitUrl: skillGitUrl || undefined, hidden: skillHidden }),
     });
+    if (!res.ok) { alert("添加失败"); return; }
+    const row = await res.json();
+    if (skillGitUrl && row.id) {
+      await client.api.fetch(`/api/skills/${row.id}/process`, { method: "POST" });
+    }
     setSkillName(""); setSkillDesc(""); setSkillGitUrl(""); setSkillHidden(false);
     alert("添加成功");
   };
 
   const addGlobalMcp = async () => {
-    await client.api.fetch("/api/admin/mcps", {
+    let config: Record<string, unknown> | undefined;
+    if (mcpConfig.trim()) {
+      try { config = JSON.parse(mcpConfig); }
+      catch { alert("Config JSON 格式不正确"); return; }
+    }
+    const res = await client.api.fetch("/api/admin/mcps", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ name: mcpName, description: mcpDesc, config: mcpConfig ? JSON.parse(mcpConfig) : undefined, hidden: mcpHidden }),
+      body: JSON.stringify({ name: mcpName, description: mcpDesc, config, hidden: mcpHidden }),
     });
+    if (!res.ok) { alert("添加失败"); return; }
     setMcpName(""); setMcpDesc(""); setMcpConfig(""); setMcpHidden(false);
     alert("添加成功");
   };
@@ -114,14 +130,18 @@ export function AdminPage() {
     { key: "url", label: "外部链接" },
     { key: "skill", label: "全局 Skill" },
     { key: "mcp", label: "全局 MCP" },
+    { key: "domains", label: "域名管理" },
   ];
 
   return (
     <div className="p-6 animate-pageIn bg-[#fafafa]">
-      <div className="max-w-3xl mx-auto">
-          <h1 className="text-xl font-semibold text-neutral-900 mb-4">管理后台</h1>
+      <div className="max-w-4xl mx-auto">
+          <div className="flex items-baseline justify-between mb-4">
+            <h1 className="text-xl font-semibold text-neutral-900">管理后台</h1>
+            <span className="text-xs text-neutral-400">v{PLATFORM_VERSION}</span>
+          </div>
 
-          <div className="flex gap-2 mb-6">
+          <div className="flex flex-wrap gap-2 mb-6">
             {tabs.map(t => (
               <button key={t.key} onClick={() => setTab(t.key)} className={`px-4 py-2 rounded-lg text-sm ${tab === t.key ? "bg-amber-500 text-white" : "bg-neutral-100 text-neutral-600"}`}>{t.label}</button>
             ))}
@@ -135,7 +155,11 @@ export function AdminPage() {
                 pending.map(p => (
                   <div key={p.id} className="p-3 bg-white border border-[#f0f0f0] rounded-xl mb-2">
                     <div className="font-semibold text-sm text-neutral-900">{p.title}</div>
+                    <div className="text-[10px] text-neutral-400 mb-1">{p.type === "talent" ? "人才" : p.type === "url" ? "外部链接" : "Smart 工具"}</div>
                     <div className="text-xs text-neutral-400 mb-2">{p.description}</div>
+                    {p.type === "talent" && p.agentsMdPreview && (
+                      <pre className="text-[11px] text-neutral-600 bg-neutral-50 rounded-lg p-2 mb-2 whitespace-pre-wrap max-h-24 overflow-auto">{p.agentsMdPreview}</pre>
+                    )}
                     <div className="flex gap-2 items-center">
                       {p.projectId && p._toolId && (
                         <a
@@ -160,21 +184,27 @@ export function AdminPage() {
             <div>
               <button onClick={fetchApproved} className="text-sm text-amber-600 mb-3 hover:text-amber-700">刷新</button>
               {loadingApproved ? <p className="text-sm text-neutral-400">加载中...</p> :
-                approved.length === 0 ? <p className="text-sm text-neutral-400">暂无已发布工具</p> :
+                approved.length === 0 ? <p className="text-sm text-neutral-400">暂无已发布内容</p> :
                 approved.map((a: any) => (
-                  <div key={a.id} className="p-3 bg-white border border-[#f0f0f0] rounded-xl mb-2 flex items-center justify-between">
-                    <div>
-                      <div className="font-semibold text-sm text-neutral-900">{a.title}</div>
-                      <div className="text-xs text-neutral-400">
-                        {a.type === "url" ? "外部链接" : "Smart 工具"}
-                        {a.featured && <span className="ml-2 text-amber-500">热门</span>}
+                  <div key={a.id} className="p-3 bg-white border border-[#f0f0f0] rounded-xl mb-2">
+                    <div className="flex items-start justify-between gap-3">
+                      <div className="min-w-0">
+                        <div className="font-semibold text-sm text-neutral-900">{a.title}</div>
+                        <div className="text-[10px] text-neutral-400 mb-1">
+                          {a.type === "talent" ? "人才" : a.type === "url" ? "外部链接" : "Smart 工具"}
+                          {a.featured && <span className="ml-2 text-amber-500">热门</span>}
+                        </div>
+                        {a.description && <div className="text-xs text-neutral-400 mb-2">{a.description}</div>}
+                        {a.type === "talent" && a.agentsMdPreview && (
+                          <pre className="text-[11px] text-neutral-600 bg-neutral-50 rounded-lg p-2 mb-2 whitespace-pre-wrap max-h-24 overflow-auto">{a.agentsMdPreview}</pre>
+                        )}
                       </div>
-                    </div>
-                    <div className="flex items-center gap-2">
-                      <button onClick={() => toggleFeatured(a.id, a.featured)} className={`text-xs px-2 py-1 rounded ${a.featured ? "bg-amber-50 text-amber-600" : "bg-neutral-100 text-neutral-400"}`}>
-                        {a.featured ? "取消热门" : "热门"}
-                      </button>
-                      <button onClick={() => delist(a.id)} className="text-xs bg-red-500 text-white px-3 py-1 rounded hover:bg-red-600">下架</button>
+                      <div className="flex items-center gap-2 shrink-0">
+                        <button onClick={() => toggleFeatured(a.id, a.featured)} className={`text-xs px-2 py-1 rounded ${a.featured ? "bg-amber-50 text-amber-600" : "bg-neutral-100 text-neutral-400"}`}>
+                          {a.featured ? "取消热门" : "热门"}
+                        </button>
+                        <button onClick={() => delist(a.id)} className="text-xs bg-red-500 text-white px-3 py-1 rounded hover:bg-red-600">下架</button>
+                      </div>
                     </div>
                   </div>
                 ))
@@ -204,6 +234,8 @@ export function AdminPage() {
               <button onClick={addGlobalSkill} className="bg-gradient-to-r from-amber-500 to-orange-500 text-white rounded-lg font-medium shadow-sm hover:shadow-md hover:shadow-amber-100 transition-all px-4 py-2 text-sm">添加全局 Skill</button>
             </div>
           )}
+
+          {tab === "domains" && <DomainManager />}
 
           {tab === "mcp" && (
             <div className="space-y-3">

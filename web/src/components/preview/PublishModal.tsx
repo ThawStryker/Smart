@@ -14,6 +14,7 @@ export function PublishModal({ projectId, onClose }: PublishModalProps) {
   const [desc, setDesc] = useState("");
   const [category, setCategory] = useState("");
   const [error, setError] = useState("");
+  const [listingId, setListingId] = useState<number | null>(null);
   // Check deploy and publish status
   useEffect(() => {
     Promise.all([
@@ -22,7 +23,10 @@ export function PublishModal({ projectId, onClose }: PublishModalProps) {
     ]).then(([deploy, publish]: any[]) => {
       if (!deploy.deployed) { setStatus("not_deployed"); return; }
       if (publish.published) {
+        setListingId(publish.id || null);
         setTitle(publish.title || "");
+        setDesc(publish.description || "");
+        setCategory(publish.category || "");
         if (publish.status === "pending_review") setStatus("pending_review");
         else if (publish.status === "approved") setStatus("approved");
         else if (publish.status === "rejected") setStatus("rejected");
@@ -47,6 +51,28 @@ export function PublishModal({ projectId, onClose }: PublishModalProps) {
       } else {
         const data = await res.json();
         setError(data.error || "发布失败");
+        setStatus("error");
+      }
+    } catch {
+      setError("网络错误");
+      setStatus("error");
+    }
+  };
+
+  const handleUpdate = async () => {
+    if (!title.trim() || !listingId) return;
+    setStatus("submitting");
+    try {
+      const res = await client.api.fetch(`/api/market/${listingId}/update`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ title: title.trim(), description: desc, category }),
+      });
+      if (res.ok) {
+        setStatus("pending_review");
+      } else {
+        const data = await res.json();
+        setError(data.error || "更新失败");
         setStatus("error");
       }
     } catch {
@@ -117,11 +143,32 @@ export function PublishModal({ projectId, onClose }: PublishModalProps) {
         )}
 
         {status === "approved" && (
-          <div className="text-center py-4">
-            <div className="text-green-600 text-sm mb-2">已发布</div>
-            <p className="text-xs text-neutral-400">你的工具已经在市场中上线</p>
-            <button onClick={onClose} className="mt-4 px-4 py-2 text-sm bg-gradient-to-r from-amber-500 to-orange-500 text-white rounded-lg font-medium shadow-sm hover:shadow-md hover:shadow-amber-100 transition-all">完成</button>
-          </div>
+          <>
+            <div className="text-green-600 text-sm mb-3">已发布，提交更新将重新审核</div>
+            <label className="block text-sm text-neutral-600 mb-2">工具名称</label>
+            <input
+              value={title}
+              onChange={e => setTitle(e.target.value)}
+              className="w-full px-3 py-2 border border-neutral-200 rounded-lg text-sm mb-3 outline-none focus:border-amber-400 focus:ring-1 focus:ring-amber-100"
+            />
+            <label className="block text-sm text-neutral-600 mb-2">描述</label>
+            <textarea
+              value={desc}
+              onChange={e => setDesc(e.target.value)}
+              rows={3}
+              className="w-full px-3 py-2 border border-neutral-200 rounded-lg text-sm mb-3 outline-none focus:border-amber-400 focus:ring-1 focus:ring-amber-100 resize-none"
+            />
+            <label className="block text-sm text-neutral-600 mb-2">分类</label>
+            <input
+              value={category}
+              onChange={e => setCategory(e.target.value)}
+              className="w-full px-3 py-2 border border-neutral-200 rounded-lg text-sm mb-4 outline-none focus:border-amber-400 focus:ring-1 focus:ring-amber-100"
+            />
+            <div className="flex gap-3 justify-end">
+              <button onClick={onClose} className="px-4 py-2 text-sm bg-neutral-100 text-neutral-600 rounded-lg hover:bg-neutral-200 transition-colors">取消</button>
+              <button onClick={handleUpdate} disabled={!title.trim() || !listingId} className="px-4 py-2 text-sm bg-gradient-to-r from-amber-500 to-orange-500 text-white rounded-lg font-medium shadow-sm hover:shadow-md hover:shadow-amber-100 transition-all disabled:opacity-40">提交更新</button>
+            </div>
+          </>
         )}
 
         {status === "rejected" && (

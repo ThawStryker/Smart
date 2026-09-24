@@ -4,6 +4,7 @@ import { auth } from "edgespark/http";
 import { eq, desc, and, inArray } from "drizzle-orm";
 import { projects, tools, domains, executionSteps, conversations, conversationStates, versions, marketListings, toolData, toolUsers, buckets } from "@defs";
 import { listDnsRecords, deleteDnsRecord } from "../lib/aliyun-dns";
+import { platformRemoveDomain } from "../lib/edgespark-domain";
 
 export const projectsRoutes = new Hono()
   .get("/", async (c) => {
@@ -108,25 +109,24 @@ export const projectsRoutes = new Hono()
       .where(eq(tools.projectId, projectId));
     const toolIds = projectTools.map(t => t.id);
 
-    // 2. Clean up domains — delete Alibaba Cloud DNS records, then mark as removing
+    // 2. 卸下该项目的 xxxx.torresx.cn（平台 + 阿里云解析 + 库行）
     const projectDomains = await db
       .select()
       .from(domains)
       .where(eq(domains.projectId, projectId));
 
     for (const d of projectDomains) {
-      if (d.status === "dns_ready" || d.status === "active") {
-        // Delete DNS records from Alibaba Cloud
-        const subdomain = d.domain.replace(".torresx.cn", "");
+      const subdomain = d.domain.replace(".torresx.cn", "");
+      if (subdomain && subdomain !== "*") {
+        try { await platformRemoveDomain(d.domain); } catch { /* 平台侧可能已删 */ }
         try {
           const records = await listDnsRecords(subdomain);
           for (const r of records) {
-            await deleteDnsRecord(r.recordId);
+            if (r.rr === subdomain || r.rr.endsWith(`.${subdomain}`)) await deleteDnsRecord(r.recordId);
           }
         } catch { /* DNS cleanup best-effort */ }
       }
-      // Mark as removing so daemon handles edgespark domain remove
-      await db.update(domains).set({ status: "removing" }).where(eq(domains.id, d.id));
+      await db.delete(domains).where(eq(domains.id, d.id));
     }
 
     // 3. Delete related data

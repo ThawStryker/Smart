@@ -21,7 +21,8 @@ export function McpsPage() {
 
   const fetchMcps = async () => {
     const res = await client.api.fetch("/api/mcps");
-    setMcps(await res.json());
+    const data = await res.json();
+    setMcps(Array.isArray(data) ? data : []);
     setLoading(false);
   };
 
@@ -99,13 +100,7 @@ export function McpsPage() {
                           <span className="text-xs px-1.5 py-0.5 rounded-full bg-amber-50 text-amber-600">全局</span>
                         </div>
                         <p className="text-xs text-secondary mb-1">{m.description}</p>
-                        {m.config != null && <p className="text-xs text-tertiary mb-3">已配置</p>}
-                        <div className="flex items-center gap-2">
-                          <button onClick={() => toggleMcp(m.id, m.enabled)} className={`text-xs px-3 py-1 rounded-lg transition-colors ${m.enabled ? "bg-green-50 text-green-600 hover:bg-green-100" : "bg-neutral-100 text-neutral-400 hover:bg-neutral-200"}`}>
-                            {m.enabled ? "已启用" : "已禁用"}
-                          </button>
-                          <button onClick={() => deleteMcp(m.id)} className="text-xs text-red-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors px-2 py-1">删除</button>
-                        </div>
+                        {m.config != null && <p className="text-xs text-tertiary">已配置</p>}
                       </div>
                     ))}
                   </div>

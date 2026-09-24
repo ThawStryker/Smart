@@ -1,11 +1,11 @@
 #!/bin/bash
 # ============================================================
-# Smart Domain Sync — long-running sync daemon
+# Smart Domain Sync — 旧版逐条办证脚本
+#
+# 新部署由 Worker 直接办 xxxx.torresx.cn，不再需要本机常驻。
+# 只用来收拾库里还停在 pending / verifying / removing 的旧记录。
 #
 # Usage:  ./sync-domains.sh
-# Daemon: nohup ./sync-domains.sh >> /tmp/sync-domains.log 2>&1 &
-#
-# Requires: edgespark CLI (authenticated), curl, jq
 # ============================================================
 
 INTERVAL="${INTERVAL:-10}"

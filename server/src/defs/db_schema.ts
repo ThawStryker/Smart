@@ -88,12 +88,24 @@ export const marketListings = sqliteTable("market_listings", {
   downloads: integer("downloads").default(0),
   ratingAvg: real("rating_avg"),
   status: text("status").default("pending_review"),
-  type: text("type").default("tool"),          // NEW: "tool" | "url"
+  type: text("type").default("tool"),          // "tool" | "url" | "talent"
   url: text("url"),                             // NEW: external URL
   version: integer("version").default(1),       // NEW: version number
   featured: integer("featured", { mode: "boolean" }).default(false),
+  sourceAgentName: text("source_agent_name"), // 人才：作者本地 Agent 名
   createdAt: text("created_at").default(sql`(datetime('now'))`),
 });
+
+// 人才市场上架快照（提交审核时冻结）
+export const marketAgentFiles = sqliteTable("market_agent_files", {
+  id: integer("id").primaryKey({ autoIncrement: true }),
+  listingId: integer("listing_id").notNull(),
+  path: text("path").notNull(),
+  content: text("content").default(""),
+  isFolder: integer("is_folder").default(0),
+}, (table) => ({
+  listingPathUnique: uniqueIndex("market_agent_files_listing_path_unique").on(table.listingId, table.path),
+}));
 
 // 工具运行时数据（内置数据 API）
 export const toolData = sqliteTable("tool_data", {
@@ -107,6 +119,15 @@ export const toolData = sqliteTable("tool_data", {
 }, (table) => ({
   uniqueProjectUserKey: uniqueIndex("tool_data_project_user_key").on(table.projectId, table.userId, table.key),
 }));
+
+// 平台域名 API 登录态（refresh 轮换后写回，避免每次人工贴 token）
+export const platformAuth = sqliteTable("platform_auth", {
+  id: integer("id").primaryKey(),
+  refreshToken: text("refresh_token").notNull(),
+  accessToken: text("access_token"),
+  expiresAt: text("expires_at"),
+  updatedAt: text("updated_at").default(sql`(datetime('now'))`),
+});
 
 // 自定义域名部署
 export const domains = sqliteTable("domains", {
@@ -245,6 +266,7 @@ export const workMessages = sqliteTable("work_messages", {
   agentName: text("agent_name"),
   role: text("role").notNull(),
   content: text("content").default(""),
+  timelineJson: text("timeline_json"), // thinking / read / write 等过程
   createdAt: text("created_at").default(sql`(datetime('now'))`),
 });
 
@@ -257,6 +279,8 @@ export const userAgents = sqliteTable("user_agents", {
   agentsMd: text("agents_md").default(""),
   userMd: text("user_md").default(""),
   memoryMd: text("memory_md").default(""),
+  sourceListingId: integer("source_listing_id"), // 从市场安装：禁止再发布
+  avatar: text("avatar"), // 创建时随机 emoji，之后不随改名变化
   createdAt: text("created_at").default(sql`(datetime('now'))`),
   updatedAt: text("updated_at").default(sql`(datetime('now'))`),
 }, (table) => ({

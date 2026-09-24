@@ -110,7 +110,23 @@ export async function getFileContent(treePath: string): Promise<string | null> {
   return null;
 }
 
+/** 删除后编辑器卸载仍会 flush 一次 PUT，挡住这次回写以免文件复活 */
+const blockedSaves = new Set<string>();
+
+export function blockFileSaves(treePath: string) {
+  blockedSaves.add(treePath);
+}
+
+export function unblockFileSaves(treePath: string) {
+  blockedSaves.delete(treePath);
+}
+
+export function isFileSaveBlocked(treePath: string) {
+  return blockedSaves.has(treePath);
+}
+
 export async function saveFileContent(treePath: string, content: string): Promise<boolean> {
+  if (blockedSaves.has(treePath)) return true;
   const api = resolveApiUrl(treePath, 0);
   if (!api) return false;
   const res = await fetch(api.url, {

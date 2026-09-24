@@ -5,6 +5,7 @@ import { eq, and, or, ne } from "drizzle-orm";
 import { skills, buckets } from "@defs";
 import { getSkillCommands } from "../agent/tools/skill";
 import { ZipReader, BlobReader, Uint8ArrayWriter } from "@zip.js/zip.js";
+import { canManageShared } from "../lib/admin-check";
 
 async function extractSkillFiles(buf: ArrayBuffer): Promise<Map<string, Uint8Array> | null> {
   const reader = new ZipReader(new BlobReader(new Blob([buf])));
@@ -68,9 +69,13 @@ export const skillsRoutes = new Hono()
   })
 
   .post("/api/skills/:id/process", async (c) => {
+    const userId = auth.user!.id;
     const id = parseInt(c.req.param("id"), 10);
     const [row] = await db.select().from(skills).where(eq(skills.id, id));
     if (!row) return c.json({ error: "Not found" }, 404);
+    if (!(await canManageShared(row.visibility, row.ownerId, userId))) {
+      return c.json({ error: "Not authorized" }, 403);
+    }
     if (row.status !== "installing") return c.json({ status: row.status, errorMessage: row.errorMessage });
 
     let zipUrl = row.sourceUrl || "";
@@ -165,7 +170,7 @@ export const skillsRoutes = new Hono()
     const id = parseInt(c.req.param("id"), 10);
     const [existing] = await db.select().from(skills).where(eq(skills.id, id));
     if (!existing) return c.json({ error: "Skill not found" }, 404);
-    if (existing.visibility === "private" && existing.ownerId !== userId) {
+    if (!(await canManageShared(existing.visibility, existing.ownerId, userId))) {
       return c.json({ error: "Not authorized" }, 403);
     }
 
@@ -179,7 +184,7 @@ export const skillsRoutes = new Hono()
     const id = parseInt(c.req.param("id"), 10);
     const [existing] = await db.select().from(skills).where(eq(skills.id, id));
     if (!existing) return c.json({ error: "Skill not found" }, 404);
-    if (existing.visibility === "private" && existing.ownerId !== userId) {
+    if (!(await canManageShared(existing.visibility, existing.ownerId, userId))) {
       return c.json({ error: "Not authorized" }, 403);
     }
 

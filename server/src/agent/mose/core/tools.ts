@@ -9,7 +9,7 @@ export const TOOL_DEFS: Array<Record<string, unknown>> = [
     type: "function",
     function: {
       name: "read_file",
-      description: "Read a workspace or agent file. Must be called before edit_file on that path.",
+      description: "Read matching memory/ files before skill_load, or the workspace file you will edit. Do not read context/ (already loaded). Do not browse other workspace files.",
       parameters: {
         type: "object",
         properties: { path: { type: "string", description: "File path, e.g. workspace/lesson.md" } },
@@ -21,7 +21,7 @@ export const TOOL_DEFS: Array<Record<string, unknown>> = [
     type: "function",
     function: {
       name: "list_files",
-      description: "List files. Empty prefix lists the workspace. Use skills/ or memory/ for agent files.",
+      description: "List agent files under skills/ or memory/. Do not list the workspace unless the user asked to see existing documents.",
       parameters: {
         type: "object",
         properties: { prefix: { type: "string", description: "Path prefix filter" } },
@@ -65,7 +65,7 @@ export const TOOL_DEFS: Array<Record<string, unknown>> = [
     type: "function",
     function: {
       name: "skill_load",
-      description: "Load full instructions for one skill by name. Call before writing if a listed skill matches the task.",
+      description: "Load full instructions for one skill by name. Call only after relevant memory/ files have been read.",
       parameters: {
         type: "object",
         properties: { name: { type: "string", description: "Skill name from the catalog" } },

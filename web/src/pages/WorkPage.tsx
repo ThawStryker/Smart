@@ -1,9 +1,9 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useWorkPage } from "@/hooks/useWorkPage";
 import { AgentPanel } from "@/components/work/AgentPanel";
 import { WorkspacePanel } from "@/components/work/WorkspacePanel";
 import { DocumentEditor } from "@/components/work/DocumentEditor";
-import { ChatPanel, type PhaseEvent } from "@/components/work/ChatPanel";
+import { ChatPanel, isPhantomWritePath, type PhaseEvent } from "@/components/work/ChatPanel";
 
 function useMediaQuery(query: string): boolean {
   const [match, setMatch] = useState(false);
@@ -31,20 +31,6 @@ function WelcomePage({ onStart }: { onStart: () => void }) {
           创建 AI 写作 Agent，配置角色和技能，<br />
           然后在工作区中协作完成文档创作。
         </p>
-        <div className="flex flex-col items-center gap-3">
-          <div className="flex items-center gap-2 text-xs text-[var(--app-text-tertiary)]">
-            <span className="w-6 h-6 rounded-full bg-[var(--app-accent-bg)] text-[var(--app-accent)] flex items-center justify-center font-bold text-sm">1</span>
-            在左侧创建一个 Agent
-          </div>
-          <div className="flex items-center gap-2 text-xs text-[var(--app-text-tertiary)]">
-            <span className="w-6 h-6 rounded-full bg-[var(--app-accent-bg)] text-[var(--app-accent)] flex items-center justify-center font-bold text-sm">2</span>
-            在 AGENTS.md 中定义它的角色
-          </div>
-          <div className="flex items-center gap-2 text-xs text-[var(--app-text-tertiary)]">
-            <span className="w-6 h-6 rounded-full bg-[var(--app-accent-bg)] text-[var(--app-accent)] flex items-center justify-center font-bold text-sm">3</span>
-            在聊天框输入 <code className="px-1 py-0.5 rounded bg-[var(--app-surface)]">@Agent名 帮我写...</code>
-          </div>
-        </div>
         <button onClick={onStart}
           className="px-6 py-2.5 rounded-xl text-sm font-bold transition-all hover:scale-105"
           style={{ background: "linear-gradient(135deg, var(--app-accent), var(--app-accent-deep))", color: "#1d1c19" }}>
@@ -59,17 +45,19 @@ export function WorkPage() {
   const {
     sessionId, sessions, agents, loading, loadingTimeout,
     activeFile, isStreaming, setIsStreaming,
-    openFile, closeFile, updateContent, appendContent, save,
+    openFile, openExisting, closeFile, updateContent, appendContent, save, rename,
     reloadCounter, setReloadCounter,
-    handleCreateSession, handleRetry,
-    renameSession, deleteSession, createSession,
-    setSearchParams,
+    handleCreateSession, handleSelectSession, handleEmptyChange, handleRetry,
+    renameSession, deleteSession, createSession, setIsCurrentEmpty,
+    setSearchParams, loadAgents,
   } = useWorkPage();
 
   const isSmallScreen = useMediaQuery("(max-width: 1024px)");
   const [showLeft, setShowLeft] = useState(!isSmallScreen);
   const [showRight, setShowRight] = useState(!isSmallScreen);
   useEffect(() => { setShowLeft(!isSmallScreen); setShowRight(!isSmallScreen); }, [isSmallScreen]);
+  const activePathRef = useRef<string | null>(null);
+  activePathRef.current = activeFile?.path ?? null;
 
   if (loading) {
     if (loadingTimeout) {
@@ -89,27 +77,15 @@ export function WorkPage() {
     return <div className="flex items-center justify-center h-full bg-[var(--app-bg)]"><div className="flex items-center gap-2 text-sm text-[var(--app-text-tertiary)] animate-pulse"><span className="w-1.5 h-1.5 rounded-full bg-[var(--app-accent)]" />正在连接...</div></div>;
   }
 
-  if (sessions.length === 0 || !sessionId) {
+  if (sessions.length === 0) {
     return <WelcomePage onStart={handleCreateSession} />;
+  }
+  if (!sessionId) {
+    return <div className="flex items-center justify-center h-full bg-[var(--app-bg)]"><div className="flex items-center gap-2 text-sm text-[var(--app-text-tertiary)] animate-pulse"><span className="w-1.5 h-1.5 rounded-full bg-[var(--app-accent)]" />正在连接...</div></div>;
   }
 
   return (
     <div className="flex h-full bg-[var(--app-bg)] relative">
-      {isSmallScreen && (
-        <div className="absolute top-2 left-1/2 -translate-x-1/2 z-30 flex gap-2">
-          <button onClick={() => setShowLeft(!showLeft)}
-            className="w-7 h-7 rounded-lg flex items-center justify-center text-[10px] font-bold shadow-lg bg-[var(--app-surface)] border border-[var(--app-border)] text-[var(--app-text-secondary)] hover:bg-[var(--app-accent-bg)] transition-colors"
-            title={showLeft ? "隐藏侧栏" : "显示侧栏"}>
-            {showLeft ? "◀" : "▶"}
-          </button>
-          <button onClick={() => setShowRight(!showRight)}
-            className="w-7 h-7 rounded-lg flex items-center justify-center text-[10px] font-bold shadow-lg bg-[var(--app-surface)] border border-[var(--app-border)] text-[var(--app-text-secondary)] hover:bg-[var(--app-accent-bg)] transition-colors"
-            title={showRight ? "隐藏聊天" : "显示聊天"}>
-            💬
-          </button>
-        </div>
-      )}
-
       {showLeft && (
       <div className="w-64 flex-shrink-0 flex flex-col overflow-hidden border-r border-[var(--app-border)]">
         <div className="flex flex-col" style={{ flex: "1 1 0", minHeight: 0 }}>
@@ -118,9 +94,11 @@ export function WorkPage() {
               sessionId={sessionId}
               onFileSelect={openFile}
               selectedFile={activeFile?.path || null}
-              onAgentListChange={() => {}}
+              onAgentListChange={loadAgents}
               reloadTrigger={reloadCounter}
               onCloseFile={closeFile}
+              onOpenNewFile={(path) => openFile(path, "", { bypassCache: true })}
+              onFileRenamed={rename}
             />
           </div>
           <WorkspacePanel
@@ -129,10 +107,18 @@ export function WorkPage() {
             selectedFile={activeFile?.path || null}
             reloadTrigger={reloadCounter}
             onCloseFile={closeFile}
+            onOpenNewFile={(path) => openFile(path, "", { bypassCache: true })}
+            onFileRenamed={rename}
           />
         </div>
       </div>
       )}
+      <EdgeHandle
+        side="left"
+        open={showLeft}
+        onClick={() => setShowLeft(!showLeft)}
+        label={showLeft ? "隐藏侧栏" : "显示侧栏"}
+      />
       <div className="flex-1 overflow-hidden">
         <DocumentEditor
           key={activeFile?.path || "empty"}
@@ -153,7 +139,9 @@ export function WorkPage() {
           sessions={sessions}
           onFirstMessage={async (msg: string) => { const s = sessions.find((s: any) => s.id === sessionId); if (s?.title === "新对话") renameSession(sessionId, truncateTitle(msg)); }}
           onCreateSession={handleCreateSession}
-          onSelectSession={(id: number) => setSearchParams({ session: String(id) })}
+          onSelectSession={handleSelectSession}
+          onEmptyChange={handleEmptyChange}
+          onFocusFile={(path) => { void openExisting(path, sessionId); }}
           onRenameSession={renameSession}
           onDeleteSession={async (id: number) => {
             const s = sessions.find((s) => s.id === id);
@@ -162,22 +150,29 @@ export function WorkPage() {
             const remaining = sessions.filter((s) => s.id !== id);
             if (id === sessionId) {
               if (remaining.length > 0) setSearchParams({ session: String(remaining[0].id) });
-              else { const s = await createSession(); if (s) setSearchParams({ session: String(s.id) }); }
+              else {
+                const s = await createSession();
+                if (s) {
+                  setIsCurrentEmpty(true);
+                  setSearchParams({ session: String(s.id) });
+                }
+              }
             }
           }}
           onPhase={(event: PhaseEvent) => {
-            if (event.phase === "write" && event.meta?.path) {
-              const path = event.meta.path as string;
-              const mode = event.meta.mode as string | undefined;
-              if (event.text !== undefined) {
-                if (mode === "edit") updateContent(event.text);
-                else if (activeFile && activeFile.path === path) appendContent(event.text);
-              } else {
-                if (mode !== "edit" || !activeFile || activeFile.path !== path) {
-                  openFile(path, mode === "edit" ? (activeFile?.content ?? "") : "");
-                }
-                setIsStreaming(true);
+            if (event.phase !== "write") return;
+            const path = String(event.meta?.path || "").trim();
+            if (isPhantomWritePath(path)) return;
+            const mode = event.meta?.mode as string | undefined;
+            if (event.text !== undefined) {
+              // 不读闭包里的 activeFile：phase 与首段 delta 常在同一 SSE 块里，此时尚未重渲染
+              if (mode === "edit") updateContent(event.text);
+              else appendContent(event.text);
+            } else {
+              if (mode !== "edit" || activePathRef.current !== path) {
+                openFile(path, "", { bypassCache: mode !== "edit" });
               }
+              setIsStreaming(true);
             }
           }}
           onStreamEnd={() => {
@@ -187,7 +182,49 @@ export function WorkPage() {
         />
       </div>
       )}
+      <EdgeHandle
+        side="right"
+        open={showRight}
+        onClick={() => setShowRight(!showRight)}
+        label={showRight ? "隐藏聊天" : "显示聊天"}
+      />
     </div>
+  );
+}
+
+function EdgeHandle({
+  side,
+  open,
+  onClick,
+  label,
+}: {
+  side: "left" | "right";
+  open: boolean;
+  onClick: () => void;
+  label: string;
+}) {
+  const collapseLeft = side === "left" ? open : !open;
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      title={label}
+      className={`absolute top-1/2 z-30 h-10 w-4 flex items-center justify-center text-[var(--app-text-tertiary)] hover:text-[var(--app-text)] hover:bg-[var(--app-accent-bg)] bg-[var(--app-surface)] border border-[var(--app-border)] transition-colors ${
+        side === "left"
+          ? open
+            ? "left-64 -translate-x-1/2 -translate-y-1/2 rounded-md"
+            : "left-0 -translate-y-1/2 rounded-r-md border-l-0"
+          : open
+            ? "right-80 translate-x-1/2 -translate-y-1/2 rounded-md"
+            : "right-0 -translate-y-1/2 rounded-l-md border-r-0"
+      }`}
+    >
+      <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+        {collapseLeft
+          ? <polyline points="15 18 9 12 15 6" />
+          : <polyline points="9 18 15 12 9 6" />}
+      </svg>
+    </button>
   );
 }
 

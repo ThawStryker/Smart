@@ -3,7 +3,10 @@ import { SessionBar } from "./SessionBar";
 import { StreamingMessage, type PhaseCard, type PhaseName } from "./StreamingMessage";
 import { MessageList } from "./MessageList";
 import { MentionInput } from "./MentionInput";
-import type { ChatMessage, WorkSession } from "@/types/work";
+import { AgentAvatar, YumiAvatar } from "./icons";
+import type { ChatMessage, WorkSession, WorkAgent } from "@/types/work";
+import { extractMention, extractFileMention, activeMention, fileLabel, lastHashTrigger, type MentionKind } from "@/lib/mention";
+import { loadWorkspaceFiles } from "@/lib/file-api";
 
 export interface PhaseEvent {
   phase: PhaseName;
@@ -13,9 +16,41 @@ export interface PhaseEvent {
 
 export type { PhaseName, PhaseCard };
 
+/** 模型没调 write_file 时不要打开/展示 (unsaved) 假文档 */
+export function isPhantomWritePath(path: unknown): boolean {
+  const p = String(path || "").trim();
+  return !p || p === "(unsaved)";
+}
+
+function chatModeKey(sessionId: number) {
+  return `work-chat-mode:${sessionId}`;
+}
+
+function chatFileKey(sessionId: number) {
+  return `work-chat-file:${sessionId}`;
+}
+
+function readChatMode(sessionId: number): string | null | undefined {
+  try {
+    const v = sessionStorage.getItem(chatModeKey(sessionId));
+    if (v === null) return undefined;
+    return v || null;
+  } catch {
+    return undefined;
+  }
+}
+
+function readChatFile(sessionId: number): string | null {
+  try {
+    return sessionStorage.getItem(chatFileKey(sessionId)) || null;
+  } catch {
+    return null;
+  }
+}
+
 interface ChatPanelProps {
   sessionId: number;
-  agents: string[];
+  agents: WorkAgent[];
   sessions: WorkSession[];
   onFirstMessage?: (message: string) => void;
   onCreateSession: () => void;
@@ -24,12 +59,14 @@ interface ChatPanelProps {
   onDeleteSession: (id: number) => void;
   onPhase?: (event: PhaseEvent) => void;
   onStreamEnd?: () => void;
+  onEmptyChange?: (empty: boolean) => void;
+  onFocusFile?: (path: string) => void;
 }
 
 export function ChatPanel({
   sessionId, agents, sessions,
   onFirstMessage, onCreateSession, onSelectSession, onRenameSession, onDeleteSession,
-  onPhase, onStreamEnd,
+  onPhase, onStreamEnd, onEmptyChange, onFocusFile,
 }: ChatPanelProps) {
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [input, setInput] = useState("");
@@ -39,40 +76,106 @@ export function ChatPanel({
   const [streamThinking, setStreamThinking] = useState("");
   const [streamAgent, setStreamAgent] = useState<string | null>(null);
   const [showMentions, setShowMentions] = useState(false);
+  const [mentionKind, setMentionKind] = useState<MentionKind | null>(null);
   const [mentionFilter, setMentionFilter] = useState("");
   const [mentionIndex, setMentionIndex] = useState(0);
-  const [chatMode, setChatMode] = useState<string | null>(null);
+  const [chatMode, setChatMode] = useState<string | null>(() => readChatMode(sessionId) ?? null);
+  const [focusFile, setFocusFile] = useState<string | null>(() => readChatFile(sessionId));
+  const [wsFiles, setWsFiles] = useState<string[]>([]);
   const [hasCards, setHasCards] = useState(false);
+  const [messagesReady, setMessagesReady] = useState(false);
+  const [loadFailed, setLoadFailed] = useState(false);
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
-  const messagesContainerRef = useRef<HTMLDivElement>(null);
-  const userScrolledUpRef = useRef(false);
   const inputRef = useRef<HTMLTextAreaElement>(null);
   const abortRef = useRef<AbortController | null>(null);
-  const onStreamEndRef = useRef(onStreamEnd);
-  onStreamEndRef.current = onStreamEnd;
-  const mountedRef = useRef(false);
   const streamTextRef = useRef("");
   const streamThinkingRef = useRef("");
   const phaseCardsRef = useRef<PhaseCard[]>([]);
   const preStreamMaxIdRef = useRef(0);
 
-  const loadMessages = useCallback(async () => {
-    const res = await fetch(`/api/work/sessions/${sessionId}/messages`);
-    if (res.ok) {
-      const msgs: ChatMessage[] = await res.json();
-      setMessages(msgs);
-    }
+  const agentNames = agents.map((a) => a.name);
+  const avatarOf = (name: string | null | undefined) =>
+    name ? agents.find((a) => a.name === name)?.avatar : undefined;
+
+  const persistChatMode = useCallback((name: string | null) => {
+    setChatMode(name);
+    try {
+      sessionStorage.setItem(chatModeKey(sessionId), name || "");
+    } catch { /* ignore */ }
   }, [sessionId]);
 
-  useEffect(() => { if (sessionId) loadMessages(); }, [sessionId, loadMessages]);
+  const persistFocusFile = useCallback((path: string | null) => {
+    const rel = path ? path.replace(/^workspace\//, "") : null;
+    setFocusFile(rel);
+    try {
+      if (rel) sessionStorage.setItem(chatFileKey(sessionId), rel);
+      else sessionStorage.removeItem(chatFileKey(sessionId));
+    } catch { /* ignore */ }
+  }, [sessionId]);
 
-  useEffect(() => {
-    if (!mountedRef.current) { mountedRef.current = true; return; }
-    if (!streamActive) onStreamEndRef.current?.();
-  }, [streamActive]);
+  const reloadWsFiles = useCallback(async () => {
+    try {
+      const files = await loadWorkspaceFiles();
+      setWsFiles(files.filter((f) => Number(f.isFolder) !== 1).map((f) => f.path.replace(/^workspace\//, "")));
+    } catch { /* 列表失败时保留旧的 */ }
+  }, []);
 
+  useEffect(() => { void reloadWsFiles(); }, [sessionId, reloadWsFiles]);
+
+  const applyMessages = useCallback((msgs: ChatMessage[]) => {
+    setMessages(msgs);
+    const stored = readChatMode(sessionId);
+    if (stored === undefined) {
+      const last = [...msgs].reverse().find((m) => m.role === "assistant");
+      persistChatMode(last?.agentName || null);
+    }
+  }, [sessionId, persistChatMode]);
+
+  const fetchMessages = useCallback(async (): Promise<ChatMessage[] | null> => {
+    const res = await fetch(`/api/work/sessions/${sessionId}/messages`);
+    if (!res.ok) return null;
+    const data = await res.json();
+    return Array.isArray(data) ? data : null;
+  }, [sessionId]);
+
+  const loadMessages = useCallback(async (opts?: { retries?: number }) => {
+    const attempts = Math.max(1, opts?.retries ?? 1);
+    try {
+      for (let i = 0; i < attempts; i++) {
+        if (i > 0) await new Promise((r) => setTimeout(r, 280));
+        const msgs = await fetchMessages();
+        if (!msgs) {
+          if (i === attempts - 1) {
+            setLoadFailed(true);
+            setMessagesReady(true);
+          }
+          continue;
+        }
+        setLoadFailed(false);
+        applyMessages(msgs);
+        setMessagesReady(true);
+        if (opts?.retries && i < attempts - 1) {
+          const hasAssistant = msgs.some((m) => m.role === "assistant");
+          if (!hasAssistant) continue;
+        }
+        return;
+      }
+    } catch {
+      setLoadFailed(true);
+      setMessagesReady(true);
+    }
+  }, [fetchMessages, applyMessages]);
+
+  const fetchMessagesRef = useRef(fetchMessages);
+  fetchMessagesRef.current = fetchMessages;
+  const applyMessagesRef = useRef(applyMessages);
+  applyMessagesRef.current = applyMessages;
+
+  // 切会话时：清空和拉取必须在同一个 effect 里，避免「先拉到消息再被另一个 effect 清掉」
   useEffect(() => {
+    if (!sessionId) return;
+    let cancelled = false;
     setMessages([]);
     setPhaseCards([]);
     phaseCardsRef.current = [];
@@ -82,39 +185,85 @@ export function ChatPanel({
     streamThinkingRef.current = "";
     setStreamAgent(null);
     setHasCards(false);
+    setLoadFailed(false);
+    setMessagesReady(false);
+
+    (async () => {
+      try {
+        const msgs = await fetchMessagesRef.current();
+        if (cancelled) return;
+        if (!msgs) {
+          setLoadFailed(true);
+          setMessagesReady(true);
+          return;
+        }
+        applyMessagesRef.current(msgs);
+        setLoadFailed(false);
+        setMessagesReady(true);
+      } catch {
+        if (cancelled) return;
+        setLoadFailed(true);
+        setMessagesReady(true);
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+      abortRef.current?.abort();
+    };
   }, [sessionId]);
 
-  const scrollToBottom = (smooth = true) => {
-    userScrolledUpRef.current = false;
-    messagesEndRef.current?.scrollIntoView({ behavior: smooth ? "smooth" : "auto" });
-  };
+  const onEmptyChangeRef = useRef(onEmptyChange);
+  onEmptyChangeRef.current = onEmptyChange;
   useEffect(() => {
-    if (!userScrolledUpRef.current) {
-      messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
-    }
-  }, [messages, phaseCards]);
-  const handleScroll = (e: React.UIEvent<HTMLDivElement>) => {
-    const el = e.currentTarget;
-    const isNearBottom = el.scrollHeight - el.scrollTop - el.clientHeight < 100;
-    userScrolledUpRef.current = !isNearBottom;
-  };
+    if (!messagesReady || loadFailed) return;
+    onEmptyChangeRef.current?.(messages.length === 0 && !input.trim());
+  }, [messagesReady, messages.length, input, loadFailed]);
 
-  const handleInput = (value: string) => {
+  useEffect(() => {
+    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
+  }, [messages, phaseCards]);
+
+  const handleInput = (value: string, cursor?: number | null) => {
     setInput(value);
-    const cursorPos = inputRef.current?.selectionStart || value.length;
+    const cursorPos = cursor ?? inputRef.current?.selectionStart ?? value.length;
     const beforeCursor = value.slice(0, cursorPos);
-    const atMatch = beforeCursor.match(/@(\S*)$/);
-    if (atMatch) { setMentionFilter(atMatch[1]); setShowMentions(true); setMentionIndex(0); }
-    else setShowMentions(false);
+    const active = activeMention(beforeCursor, agentNames, wsFiles);
+    if (active) {
+      setMentionKind(active.kind);
+      setMentionFilter(active.query);
+      setShowMentions(true);
+      setMentionIndex(0);
+    } else {
+      setShowMentions(false);
+      setMentionKind(null);
+    }
   };
 
   const insertMention = (agentName: string) => {
     const cursorPos = inputRef.current?.selectionStart || input.length;
     const beforeCursor = input.slice(0, cursorPos);
     const afterCursor = input.slice(cursorPos);
-    const atMatch = beforeCursor.match(/@(\S*)$/);
-    if (atMatch) setInput(beforeCursor.slice(0, beforeCursor.length - atMatch[0].length) + `@${agentName} ` + afterCursor);
+    const at = beforeCursor.lastIndexOf("@");
+    if (at < 0) return;
+    setInput(beforeCursor.slice(0, at) + `@${agentName} ` + afterCursor);
+    persistChatMode(agentName);
     setShowMentions(false);
+    setMentionKind(null);
+    inputRef.current?.focus();
+  };
+
+  const insertFileMention = (fileName: string) => {
+    const cursorPos = inputRef.current?.selectionStart || input.length;
+    const beforeCursor = input.slice(0, cursorPos);
+    const afterCursor = input.slice(cursorPos);
+    const hash = lastHashTrigger(beforeCursor);
+    if (hash < 0) return;
+    setInput(beforeCursor.slice(0, hash) + `#${fileName} ` + afterCursor);
+    persistFocusFile(fileName);
+    onFocusFile?.(`workspace/${fileName.replace(/^workspace\//, "")}`);
+    setShowMentions(false);
+    setMentionKind(null);
     inputRef.current?.focus();
   };
 
@@ -127,11 +276,12 @@ export function ChatPanel({
     const optimisticMsg: ChatMessage = { id: tempId, role: "user", content: message, agentName: null, createdAt: new Date().toISOString() };
     setMessages((prev) => { preStreamMaxIdRef.current = prev.length > 0 ? Math.max(...prev.map(m => m.id)) : 0; return [...prev, optimisticMsg]; });
 
-    const isDirectChat = !message.includes("@");
-    if (!isDirectChat) {
-      const atName = message.match(/@(\S+)/)?.[1] || null;
-      if (atName) setChatMode(atName);
-    }
+    const atName = extractMention(message, agentNames);
+    const fileName = extractFileMention(message, wsFiles);
+    const nextMode = atName || chatMode;
+    if (atName) persistChatMode(atName);
+    if (fileName) persistFocusFile(fileName);
+    setStreamAgent(nextMode);
     setStreamActive(true);
     setPhaseCards([]);
     phaseCardsRef.current = [];
@@ -139,40 +289,60 @@ export function ChatPanel({
     streamTextRef.current = "";
     setStreamThinking("");
     streamThinkingRef.current = "";
-    setStreamAgent(null);
     setHasCards(true);
 
     const controller = new AbortController(); abortRef.current = controller;
+    let aborted = false;
     try {
       const res = await fetch("/api/work/chat", {
         method: "POST", headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ sessionId, message }), signal: controller.signal,
+        body: JSON.stringify({
+          sessionId,
+          message,
+          agentName: atName ? undefined : (nextMode || undefined),
+          focusFile: (fileName || focusFile)
+            ? `workspace/${(fileName || focusFile)!.replace(/^workspace\//, "")}`
+            : undefined,
+        }), signal: controller.signal,
       });
-      if (!res.ok) { setStreamActive(false); return; }
-      const reader = res.body?.getReader();
-      if (!reader) { setStreamActive(false); return; }
-      const decoder = new TextDecoder(); let buffer = "";
-      while (true) {
-        const { done, value } = await reader.read();
-        if (done) break;
-        buffer += decoder.decode(value, { stream: true });
-        const lines = buffer.split("\n"); buffer = lines.pop() || "";
-        for (const line of lines) {
-          if (!line.startsWith("data: ")) continue;
-          try {
-            const event = JSON.parse(line.slice(6));
-            handleSSE(event);
-          } catch {}
+      if (res.ok) {
+        const reader = res.body?.getReader();
+        if (reader) {
+          const decoder = new TextDecoder(); let buffer = "";
+          while (true) {
+            const { done, value } = await reader.read();
+            if (done) break;
+            buffer += decoder.decode(value, { stream: true });
+            const lines = buffer.split("\n"); buffer = lines.pop() || "";
+            for (const line of lines) {
+              if (!line.startsWith("data: ")) continue;
+              try {
+                const event = JSON.parse(line.slice(6));
+                handleSSE(event);
+              } catch {}
+            }
+          }
         }
       }
     } catch (err: any) {
-      if (err.name !== "AbortError") {
+      if (err.name === "AbortError") aborted = true;
+      else {
         const errCard: PhaseCard = { key: `err-${Date.now()}`, phase: "text", content: `Error: ${err.message}` };
         setPhaseCards((p) => { const next = [...p, errCard]; phaseCardsRef.current = next; return next; });
       }
     }
+    abortRef.current = null;
+    setStreamActive(false);
+    await loadMessages({ retries: aborted ? 4 : 1 });
+    void reloadWsFiles();
+    setStreamText("");
+    streamTextRef.current = "";
+    setStreamThinking("");
+    streamThinkingRef.current = "";
+    setPhaseCards([]);
+    phaseCardsRef.current = [];
+    setHasCards(false);
     if (onStreamEnd) onStreamEnd();
-    setStreamActive(false); abortRef.current = null;
   };
 
   const handleSSE = (event: any) => {
@@ -202,8 +372,10 @@ export function ChatPanel({
         return;
       }
       if (p === "agent_done") return;
-      if (p === "write" && event.meta?.path && onPhase) {
-        onPhase({ phase: "write", meta: event.meta });
+      if (p === "read" && String(event.meta?.path || "").startsWith("context/")) return;
+      if (p === "write") {
+        if (isPhantomWritePath(event.meta?.path)) return;
+        if (onPhase) onPhase({ phase: "write", meta: event.meta });
       }
       pushCard({
         key: `card-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
@@ -236,9 +408,8 @@ export function ChatPanel({
           return next;
         });
       } else if (p === "write") {
-        if (onPhase && event.meta?.path) {
-          onPhase({ phase: "write", meta: event.meta, text: event.text });
-        }
+        if (isPhantomWritePath(event.meta?.path)) return;
+        if (onPhase) onPhase({ phase: "write", meta: event.meta, text: event.text });
       } else if (p) {
         setPhaseCards((prev) => {
           const next = [...prev];
@@ -259,18 +430,29 @@ export function ChatPanel({
 
   const stopStreaming = () => {
     abortRef.current?.abort();
-    setStreamActive(false);
-    if (onStreamEnd) onStreamEnd();
   };
 
   const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
+    if (e.nativeEvent.isComposing || e.key === "Process") return;
+
     if (showMentions) {
-      const filtered = agents.filter((a) => a.toLowerCase().startsWith(mentionFilter.toLowerCase()));
-      if (e.key === "ArrowDown") { e.preventDefault(); setMentionIndex((i) => Math.min(i + 1, filtered.length - 1)); }
-      else if (e.key === "ArrowUp") { e.preventDefault(); setMentionIndex((i) => Math.max(i - 1, 0)); }
-      else if (e.key === "Enter" || e.key === "Tab") { e.preventDefault(); if (filtered[mentionIndex]) insertMention(filtered[mentionIndex]); }
-      else if (e.key === "Escape") setShowMentions(false);
-      return;
+      const pool = mentionKind === "file" ? wsFiles : agentNames;
+      const filtered = pool.filter((a) => a.toLowerCase().includes(mentionFilter.toLowerCase()));
+      if (filtered.length > 0) {
+        if (e.key === "ArrowDown") { e.preventDefault(); setMentionIndex((i) => Math.min(i + 1, filtered.length - 1)); return; }
+        if (e.key === "ArrowUp") { e.preventDefault(); setMentionIndex((i) => Math.max(i - 1, 0)); return; }
+        if (e.key === "Enter" || e.key === "Tab") {
+          e.preventDefault();
+          const pick = filtered[mentionIndex];
+          if (pick) mentionKind === "file" ? insertFileMention(pick) : insertMention(pick);
+          return;
+        }
+        if (e.key === "Escape") { setShowMentions(false); setMentionKind(null); return; }
+      } else if (e.key === "Escape") {
+        setShowMentions(false);
+        setMentionKind(null);
+        return;
+      }
     }
     if ((e.key === "Enter" && !e.shiftKey) || ((e.metaKey || e.ctrlKey) && e.key === "Enter")) { e.preventDefault(); sendMessage(); }
   };
@@ -286,31 +468,77 @@ export function ChatPanel({
         sessions={sessions} sessionId={sessionId}
         onCreateSession={onCreateSession} onSelectSession={onSelectSession}
         onRenameSession={onRenameSession} onDeleteSession={onDeleteSession}
+        canCreate={messagesReady && !loadFailed && messages.length > 0}
       />
 
-      <div className="px-3 pt-2 pb-0 flex items-center gap-2">
-        <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-[10px] font-bold uppercase tracking-wider"
-          style={{
-            background: chatMode ? "rgba(167,139,250,0.1)" : "var(--app-accent-bg)",
-            color: chatMode ? "#a78bfa" : "var(--app-accent)",
-          }}>
-          {chatMode ? `🤖 @${chatMode}` : "💬 Yumi"}
+      <div className="px-3 pt-2 pb-1 grid grid-cols-2 gap-2 shrink-0">
+        <div className="flex items-center gap-0.5 min-w-0">
+          <div className="flex items-center gap-1.5 px-2 py-0.5 rounded-full text-[11px] font-medium min-w-0"
+            style={{
+              background: chatMode ? "rgba(139,123,184,0.12)" : "var(--app-accent-bg)",
+              color: chatMode ? "#8b7bb8" : "var(--app-accent)",
+            }}>
+            {chatMode ? (
+              <>
+                <AgentAvatar name={chatMode} emoji={avatarOf(chatMode)} size={14} />
+                <span className="truncate">@{chatMode}</span>
+              </>
+            ) : (
+              <>
+                <YumiAvatar size={14} />
+                Yumi
+              </>
+            )}
+          </div>
+          {chatMode && (
+            <button type="button" onClick={() => persistChatMode(null)}
+              className="w-4 h-4 rounded-full flex items-center justify-center text-[10px] leading-none text-[var(--app-text-tertiary)] hover:text-[var(--app-red)] hover:bg-[var(--app-red-bg)] transition-colors shrink-0"
+              title="取消选中，回到 Yumi">
+              ✕
+            </button>
+          )}
         </div>
-        {chatMode && (
-          <button onClick={() => setChatMode(null)}
-            className="text-[10px] text-[var(--app-text-tertiary)] hover:text-[var(--app-text-secondary)] transition-colors"
-            title="切换回 Yumi 模式">
-            切换
-          </button>
-        )}
+        <div className="flex items-center gap-0.5 min-w-0 justify-end">
+          {focusFile && (
+            <>
+              <div className="flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-medium min-w-0"
+                style={{ background: "var(--app-accent-bg)", color: "var(--app-accent)" }}>
+                <span className="font-mono text-[10px]">#</span>
+                <span className="truncate">{fileLabel(focusFile)}</span>
+              </div>
+              <button type="button" onClick={() => persistFocusFile(null)}
+                className="w-4 h-4 rounded-full flex items-center justify-center text-[10px] leading-none text-[var(--app-text-tertiary)] hover:text-[var(--app-red)] hover:bg-[var(--app-red-bg)] transition-colors shrink-0"
+                title="取消指定文档">
+                ✕
+              </button>
+            </>
+          )}
+        </div>
       </div>
 
-      <div className="flex-1 overflow-auto px-4 py-3 space-y-3" ref={messagesContainerRef} onScroll={handleScroll}>
+      <div className="flex-1 overflow-auto px-3 py-4 space-y-5">
+        {!messagesReady && !loadFailed && (
+          <div className="text-[12px] text-[var(--app-text-tertiary)] animate-pulse">加载对话…</div>
+        )}
+        {loadFailed && (
+          <div className="text-center space-y-2 py-8">
+            <p className="text-[12px] text-[var(--app-text-secondary)]">对话记录加载失败</p>
+            <button
+              type="button"
+              onClick={() => { setLoadFailed(false); setMessagesReady(false); void loadMessages(); }}
+              className="px-3 py-1 rounded-lg text-[12px] font-medium bg-[var(--app-accent-bg)] text-[var(--app-accent)] hover:scale-105 transition-all"
+            >
+              重试
+            </button>
+          </div>
+        )}
         <MessageList
           messages={visibleMessages}
+          avatarOf={avatarOf}
           streamingMessage={
             <StreamingMessage
               streamAgent={streamAgent}
+              streamAvatar={avatarOf(streamAgent)}
               streamText={streamText}
               streamThinking={streamThinking}
               phaseCards={phaseCards}
@@ -322,29 +550,23 @@ export function ChatPanel({
           }
         />
         <div ref={messagesEndRef} />
-        {userScrolledUpRef.current && (
-          <div className="flex justify-center pb-2">
-            <button onClick={() => scrollToBottom(true)}
-              className="px-3 py-1.5 rounded-full text-[10px] font-bold shadow-lg transition-all hover:scale-105"
-              style={{ background: "var(--app-accent-bg)", color: "var(--app-accent)" }}>
-              ↓ 跳到底部
-            </button>
-          </div>
-        )}
       </div>
 
       <MentionInput
         input={input}
         onInputChange={handleInput}
         onKeyDown={handleKeyDown}
-        agents={agents}
+        inputRef={inputRef}
+        agents={agentNames}
+        files={wsFiles}
         showMentions={showMentions}
+        mentionKind={mentionKind}
         mentionFilter={mentionFilter}
         mentionIndex={mentionIndex}
         streamActive={streamActive}
         onSend={sendMessage}
         onStop={stopStreaming}
-        onInsertMention={insertMention}
+        onInsertMention={(name) => mentionKind === "file" ? insertFileMention(name) : insertMention(name)}
       />
     </div>
   );

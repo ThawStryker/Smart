@@ -1,37 +1,26 @@
-// 唯一循环：拼 prompt → 调模型 → 策略拦截 → 执行工具 → 写回日志
+// Work 服务层：文档可见性、先读后改、技能/记忆。循环本身在 engine。
 import type { PhaseEvent, PhaseName } from "../phases";
 import type { FileStore, PromptContext, SavedState, Session } from "../types";
-import { compactIfNeeded, deriveMessages, toSavedState } from "./session";
+import { deriveMessages, markObserved } from "./session";
 import { buildSystemPrompt } from "./prompt";
 import { TOOL_DEFS, dispatchTool } from "./tools";
 import { checkPolicy } from "../policy/observe";
-import { callLLM, type LLMConfig, type LLMResult } from "../utils/llm-client";
+import { callLLM, type LLMConfig } from "../utils/llm-client";
 import { resolvePath } from "./fs";
 import { looksLikeMetaNotes, splitMetaNotes } from "./deliverable";
-
-const MAX_ROUNDS = 20;
-const WRITE_CHUNK = 2000;
-const SHORT_REPLY_LIMIT = 400;
+import { runEngineLoop, type LoopOutput } from "../../engine/loop";
 
 export interface LoopRuntime {
   callLLM: typeof callLLM;
   fs: FileStore;
 }
 
-export interface LoopOutput {
-  assistantText: string;
-  waitingForUser: boolean;
-}
+export type { LoopOutput };
 
-function parseArgs(raw: string): Record<string, unknown> {
-  try {
-    return JSON.parse(raw || "{}");
-  } catch {
-    return {};
-  }
-}
+const WRITE_CHUNK = 2000;
+const SHORT_REPLY_LIMIT = 400;
 
-export function looksLikeDocument(s: string): boolean {
+function looksLikeDocument(s: string): boolean {
   if (looksLikeMetaNotes(s)) return false;
   const t = (s || "").trim();
   if (!t) return false;
@@ -41,6 +30,8 @@ export function looksLikeDocument(s: string): boolean {
   if (t.includes("| ---") || t.includes("|---")) return true;
   return false;
 }
+
+export { looksLikeDocument };
 
 function shouldYieldAsText(text: string, hasTools: boolean): boolean {
   if (!text.trim()) return false;
@@ -53,21 +44,19 @@ function shouldYieldAsText(text: string, hasTools: boolean): boolean {
 async function* emitUserVisible(text: string, hasTools: boolean): AsyncGenerator<PhaseEvent> {
   const split = splitMetaNotes(text);
   if (split.notes && split.document && looksLikeDocument(split.document)) {
-    if (!hasTools) {
-      yield { type: "phase", phase: "write", meta: { path: "(unsaved)", mode: "create" } };
-      yield* yieldWrite(split.document, { path: "(unsaved)", mode: "create" });
-    }
-    yield { type: "delta", phase: "text", text: split.notes };
+    yield { type: "delta", phase: "text", text: hasTools ? split.notes : text };
     return;
   }
-  if (shouldYieldAsText(text, hasTools)) {
-    yield { type: "delta", phase: "text", text };
-    return;
+  if (shouldYieldAsText(text, hasTools) || (!hasTools && looksLikeDocument(text))) {
+    if (text.trim()) yield { type: "delta", phase: "text", text };
   }
-  if (!hasTools && looksLikeDocument(text)) {
-    yield { type: "phase", phase: "write", meta: { path: "(unsaved)", mode: "create" } };
-    yield* yieldWrite(text, { path: "(unsaved)", mode: "create" });
-  }
+}
+
+function hiddenRead(name: string, args: Record<string, unknown>): boolean {
+  if (name !== "read_file") return false;
+  const rec = resolvePath(String(args.path || ""));
+  return rec.displayPath.startsWith("context/") ||
+    ["AGENTS.md", "MEMORY.md", "USER.md", "memory/MEMORY.md", "memory/USER.md"].includes(rec.displayPath);
 }
 
 function toolProcessEvent(name: string, args: Record<string, unknown>): PhaseEvent | null {
@@ -116,121 +105,88 @@ export async function* runLoop(opts: {
   modelConfig: LLMConfig;
   runtime: LoopRuntime;
   onSaveState?: (state: SavedState) => Promise<void>;
+  focusFile?: string | null;
 }): AsyncGenerator<PhaseEvent, LoopOutput, undefined> {
-  const { session, promptCtx, modelConfig, runtime, onSaveState } = opts;
-  session.waitingForUser = false;
-  let assistantText = "";
+  const { session, promptCtx, modelConfig, runtime, onSaveState, focusFile } = opts;
+  for (const p of promptCtx.contextPaths || []) markObserved(session, p);
+  markObserved(session, "memory/USER.md");
+  markObserved(session, "memory/MEMORY.md");
 
-  for (let round = 0; round < MAX_ROUNDS; round++) {
-    compactIfNeeded(session);
-    const messages: Array<Record<string, unknown>> = [
-      { role: "system", content: buildSystemPrompt(promptCtx, session) },
-      ...deriveMessages(session),
-    ];
+  let lastDispatch: Awaited<ReturnType<typeof dispatchTool>> | null = null;
 
-    const gen = runtime.callLLM(messages, TOOL_DEFS, modelConfig);
-    let step = await gen.next();
-    while (!step.done) {
-      const ev = step.value;
-      // 正文等本轮结束后再分流：有写文件工具时不把文档体流到 text 通道
-      if (!(ev && ev.type === "delta" && ev.phase === "text")) {
-        yield ev;
-      }
-      step = await gen.next();
-    }
-    const result = (step.value || { textContent: "", reasoningContent: "", toolCalls: [] }) as LLMResult;
-
-    if (!result.toolCalls || result.toolCalls.length === 0) {
-      if (result.textContent) {
-        yield* emitUserVisible(result.textContent, false);
-        assistantText += result.textContent;
-        session.events.push({ type: "assistant", text: result.textContent });
-      }
-      break;
-    }
-
-    if (result.textContent) {
-      yield* emitUserVisible(result.textContent, true);
-    }
-    assistantText += result.textContent || "";
-    session.events.push({
-      type: "assistant",
-      text: result.textContent || "",
-      toolCalls: result.toolCalls.map((tc) => ({
-        id: tc.id || `call_${round}_${tc.name}`,
-        name: tc.name,
-        args: tc.args,
-      })),
-    });
-
-    let stop = false;
-    for (const tc of result.toolCalls) {
-      const id = tc.id || `call_${round}_${tc.name}`;
-      const args = parseArgs(tc.args);
-
-      let exists = false;
-      if (tc.name === "write_file" || tc.name === "edit_file") {
-        const rec = await runtime.fs.stat(String(args.path || ""));
-        exists = rec.exists;
-      }
-      const denied = checkPolicy(tc.name, args, session, exists);
-
-      const processEv = toolProcessEvent(tc.name, args);
-      if (processEv && processEv.type === "phase") {
-        yield {
-          type: "phase",
-          phase: processEv.phase,
-          meta: { ...(processEv.meta || {}), ...(denied ? { error: denied } : {}) },
-        };
-      }
-
-      if (denied) {
-        session.events.push({ type: "tool", id, name: tc.name, content: denied });
-        // 拦截写入时仍把拟写内容送到文档通道，避免正文只出现在 text 里
-        if (tc.name === "write_file" && args.content) {
-          const path = String(args.path || "(unsaved)");
-          const split = splitMetaNotes(String(args.content));
-          if (split.notes) {
-            yield { type: "delta", phase: "text", text: split.notes };
-          }
-          if (split.document) {
-            yield* yieldWrite(split.document, {
-              path: path === "(unsaved)" ? path : resolvePath(path).displayPath,
-              mode: "create",
-              preview: true,
-              error: denied,
-            });
-          }
+  return yield* runEngineLoop({
+    session,
+    modelConfig,
+    callLLM: runtime.callLLM,
+    onSaveState,
+    host: {
+      toolDefs: TOOL_DEFS,
+      maxRounds: 20,
+      buildMessages: (s) => [
+        { role: "system", content: buildSystemPrompt(promptCtx, s, focusFile) },
+        ...deriveMessages(s),
+      ],
+      shouldYieldModelEvent: (ev) => !(ev.type === "delta" && ev.phase === "text"),
+      afterAssistant: async function* ({ result, hasTools }) {
+        if (result.textContent) yield* emitUserVisible(result.textContent, hasTools);
+      },
+      checkPolicy: async (name, args, s) => {
+        let exists = false;
+        if (name === "write_file" || name === "edit_file") {
+          const rec = await runtime.fs.stat(String(args.path || ""));
+          exists = rec.exists;
         }
-        continue;
-      }
-
-      const exec = await dispatchTool(tc.name, args, runtime.fs, session);
-      session.events.push({ type: "tool", id, name: tc.name, content: exec.result });
-
-      if (!processEv && exec.phase !== "text") {
-        const showRead = exec.phase !== "read" || !!exec.meta;
-        if (showRead) {
-          yield { type: "phase", phase: exec.phase as PhaseName, meta: exec.meta };
+        return checkPolicy(name, args, s, exists, {
+          focusFile,
+          memoryIndex: promptCtx.memoryIndex,
+        });
+      },
+      executeTool: async (name, args, s) => {
+        lastDispatch = await dispatchTool(name, args, runtime.fs, s);
+        return { result: lastDispatch.result, stop: lastDispatch.stop };
+      },
+      afterTool: async function* ({ name, args, denied }) {
+        const processEv = hiddenRead(name, args) ? null : toolProcessEvent(name, args);
+        if (processEv && processEv.type === "phase") {
+          yield {
+            type: "phase",
+            phase: processEv.phase,
+            meta: { ...(processEv.meta || {}), ...(denied ? { error: denied } : {}) },
+          };
         }
-      }
-      if (exec.writeContent && exec.meta) {
-        yield* yieldWrite(exec.writeContent, exec.meta);
-      }
-      if (exec.notes) {
-        yield { type: "delta", phase: "text", text: exec.notes };
-      }
-      if (exec.stop) {
-        yield { type: "delta", phase: "text", text: exec.result };
-        assistantText += exec.result;
-        stop = true;
-        break;
-      }
-    }
 
-    if (stop) break;
-  }
+        if (denied) {
+          if (name === "write_file" && args.content) {
+            const rawPath = String(args.path || "").trim();
+            const split = splitMetaNotes(String(args.content));
+            if (split.notes) yield { type: "delta", phase: "text", text: split.notes };
+            if (split.document) {
+              if (!rawPath) {
+                yield { type: "delta", phase: "text", text: split.document };
+              } else {
+                yield* yieldWrite(split.document, {
+                  path: resolvePath(rawPath).displayPath,
+                  mode: "create",
+                  preview: true,
+                  error: denied,
+                });
+              }
+            }
+          }
+          return;
+        }
 
-  if (onSaveState) await onSaveState(toSavedState(session));
-  return { assistantText, waitingForUser: session.waitingForUser };
+        const full = lastDispatch;
+        if (!full) return;
+
+        if (!processEv && full.phase !== "text") {
+          const showRead = full.phase !== "read" || !!full.meta;
+          if (showRead) yield { type: "phase", phase: full.phase as PhaseName, meta: full.meta };
+        }
+        if (full.writeContent && full.meta) yield* yieldWrite(full.writeContent, full.meta);
+        if (full.notes) yield { type: "delta", phase: "text", text: full.notes };
+        if (full.stop) yield { type: "delta", phase: "text", text: full.result };
+      },
+    },
+  });
 }

@@ -3,6 +3,7 @@ import { db } from "edgespark";
 import { auth } from "edgespark/http";
 import { eq, and, or, ne } from "drizzle-orm";
 import { mcps } from "@defs";
+import { canManageShared } from "../lib/admin-check";
 
 export const mcpsRoutes = new Hono()
   .get("/api/mcps", async (c) => {
@@ -44,7 +45,7 @@ export const mcpsRoutes = new Hono()
     const id = parseInt(c.req.param("id"), 10);
     const [existing] = await db.select().from(mcps).where(eq(mcps.id, id));
     if (!existing) return c.json({ error: "MCP not found" }, 404);
-    if (existing.visibility === "private" && existing.ownerId !== userId) {
+    if (!(await canManageShared(existing.visibility, existing.ownerId, userId))) {
       return c.json({ error: "Not authorized" }, 403);
     }
 
@@ -65,7 +66,7 @@ export const mcpsRoutes = new Hono()
     const id = parseInt(c.req.param("id"), 10);
     const [existing] = await db.select().from(mcps).where(eq(mcps.id, id));
     if (!existing) return c.json({ error: "MCP not found" }, 404);
-    if (existing.visibility === "private" && existing.ownerId !== userId) {
+    if (!(await canManageShared(existing.visibility, existing.ownerId, userId))) {
       return c.json({ error: "Not authorized" }, 403);
     }
 
