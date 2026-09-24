@@ -11,12 +11,6 @@ export const DEFAULT_TOOL_PHASE: Record<string, PhaseName> = {
   ask_user: "text",
 };
 
-export interface ToolHandler {
-  execute: (args: Record<string, unknown>) => Promise<string>;
-  phase: PhaseName;
-  meta?: (args: Record<string, unknown>) => Record<string, unknown>;
-}
-
 export interface EngineInput {
   sessionId: number;
   userId: string;
@@ -30,10 +24,6 @@ export interface EngineInput {
     apiKey: string;
     modelName: string;
   };
-  toolHandlers: Record<string, ToolHandler>;
-  toolDefs: Array<Record<string, unknown>>;
   onSaveMessage?: (msg: { sessionId: number; agentName: string | null; role: string; content: string }) => Promise<void>;
   focusFile?: string | null;
 }
-
-export type EngineOutput = AsyncGenerator<import("../engine/events").PhaseEvent, void, undefined>;

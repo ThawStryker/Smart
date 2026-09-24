@@ -84,16 +84,3 @@ export async function advancePhase(
 
   return currentPhase;
 }
-
-export function getPhasePromptAddon(phase: Phase): string {
-  switch (phase) {
-    case "brainstorm":
-      return "\n\n---\n**你的任务：先分析用户需求，告诉我你理解的需求是什么、打算怎么做。如果是复杂项目，给出 2-3 种方案并推荐一种。先不要写代码。**";
-    case "plan":
-      return "\n\n---\n**你的任务：用 Markdown 写一份开发计划，列出每一步要做什么、改哪些文件。让用户确认后再开始。不要写代码。**";
-    case "execute":
-      return "\n\n---\n**你的任务：按计划或用户需求逐步实施，每步完成后验证。**";
-    case "verify":
-      return "\n\n---\n**你的任务：验证所有修改是否正确，报告验证结果。**";
-  }
-}

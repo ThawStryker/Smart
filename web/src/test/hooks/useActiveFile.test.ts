@@ -266,18 +266,18 @@ describe('useActiveFile', () => {
     );
   });
 
-  it('saves file via correct API endpoint for session path', async () => {
+  it('saves file via correct API endpoint for workspace nested path', async () => {
     const fetchMock = vi.fn().mockResolvedValue({ ok: true });
     vi.stubGlobal('fetch', fetchMock);
 
     const { result } = renderHook(() => useActiveFile());
 
     await act(async () => {
-      await result.current.save('notes/ideas.md', '# ideas', 42);
+      await result.current.save('workspace/notes/ideas.md', '# ideas', 42);
     });
 
     expect(fetchMock).toHaveBeenCalledWith(
-      '/api/work/sessions/42/files/notes/ideas.md',
+      '/api/work/workspace/notes/ideas.md',
       expect.objectContaining({
         method: 'PUT',
         body: JSON.stringify({ content: '# ideas' }),
@@ -292,11 +292,11 @@ describe('useActiveFile', () => {
     const { result } = renderHook(() => useActiveFile());
 
     await act(async () => {
-      await result.current.save('中文/文件.md', '# 测试', 1);
+      await result.current.save('workspace/中文/文件.md', '# 测试', 1);
     });
 
     expect(fetchMock).toHaveBeenCalledWith(
-      '/api/work/sessions/1/files/%E4%B8%AD%E6%96%87/%E6%96%87%E4%BB%B6.md',
+      '/api/work/workspace/%E4%B8%AD%E6%96%87/%E6%96%87%E4%BB%B6.md',
       expect.anything(),
     );
   });

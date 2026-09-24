@@ -15,8 +15,6 @@ export interface LoopRuntime {
   fs: FileStore;
 }
 
-export type { LoopOutput };
-
 const WRITE_CHUNK = 2000;
 const SHORT_REPLY_LIMIT = 400;
 
@@ -30,8 +28,6 @@ function looksLikeDocument(s: string): boolean {
   if (t.includes("| ---") || t.includes("|---")) return true;
   return false;
 }
-
-export { looksLikeDocument };
 
 function shouldYieldAsText(text: string, hasTools: boolean): boolean {
   if (!text.trim()) return false;

@@ -16,12 +16,12 @@ function describeStreamError(err: unknown): string {
   return msg || "Stream error";
 }
 
-// 向后兼容：旧代码仍使用 eventQueue 数组模式
+// Coding vibe：往数组队列塞事件，createSSEStream 再轮询吐出
 export function emit(queue: Array<Record<string, unknown>>, data: Record<string, unknown>) {
   queue.push(data);
 }
 
-// 向后兼容：旧 eventQueue 轮询模式（Coding/Market 模块使用）
+// Coding vibe 的 eventQueue 轮询流
 export function createSSEStream(eventQueue: Array<Record<string, unknown>>): ReadableStream {
   return new ReadableStream({
     async start(controller) {

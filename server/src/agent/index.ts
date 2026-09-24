@@ -11,7 +11,7 @@ import { buildMcpPrompt } from "./tools/mcp";
 import { buildSystemMessage } from "./prompt/builder";
 import { getPhase, advancePhase, setPhase, type Phase } from "./workflow";
 import { buildMemoryContext, extractMemories } from "./memory/store";
-import { agentLoop } from "./loop";
+import { agentLoop } from "./coding/loop";
 import type { ExecContext } from "./executor";
 
 export const agentRoutes = new Hono()

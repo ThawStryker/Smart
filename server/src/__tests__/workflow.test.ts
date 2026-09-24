@@ -8,7 +8,7 @@
  * - verify 阶段的 complex task / light task / follow-up
  */
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { advancePhase, getPhasePromptAddon } from '../agent/workflow';
+import { advancePhase } from '../agent/workflow';
 import { mockDb } from './setup';
 
 describe('advancePhase', () => {
@@ -153,31 +153,5 @@ describe('advancePhase', () => {
       const phase = await advancePhase(1, 'brainstorm', '   ');
       expect(phase).toBe('brainstorm');
     });
-  });
-});
-
-// ── getPhasePromptAddon ──
-
-describe('getPhasePromptAddon', () => {
-  it('returns brainstorm prompt', () => {
-    const prompt = getPhasePromptAddon('brainstorm');
-    expect(prompt).toContain('分析用户需求');
-    expect(prompt).toContain('先不要写代码');
-  });
-
-  it('returns plan prompt', () => {
-    const prompt = getPhasePromptAddon('plan');
-    expect(prompt).toContain('开发计划');
-    expect(prompt).toContain('不要写代码');
-  });
-
-  it('returns execute prompt', () => {
-    const prompt = getPhasePromptAddon('execute');
-    expect(prompt).toContain('逐步实施');
-  });
-
-  it('returns verify prompt', () => {
-    const prompt = getPhasePromptAddon('verify');
-    expect(prompt).toContain('验证所有修改');
   });
 });

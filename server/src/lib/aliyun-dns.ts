@@ -116,11 +116,3 @@ export async function listAllDnsRecords(): Promise<AliyunDnsRecord[]> {
   }
   return out;
 }
-
-/** 一次性保证 *.torresx.cn CNAME 指向应用主机，之后每个工具不必再写 DNS */
-export async function ensureWildcardCname(targetHost: string): Promise<void> {
-  const target = targetHost.replace(/\.$/, "").toLowerCase();
-  const existing = await listDnsRecords("*");
-  if (existing.some((r) => r.rr === "*" && r.type === "CNAME")) return;
-  await addDnsRecord("CNAME", "*", target);
-}

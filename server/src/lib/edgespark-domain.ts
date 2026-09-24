@@ -1,5 +1,4 @@
 import { getPlatformAccessToken } from "./platform-auth";
-export { toAliyunRR } from "./tool-host";
 
 const API_BASE = "https://api.edgespark.dev";
 const PROJECT_ID = "e7f75fcc-cc9f-42f3-b87b-7c542d88f1e2";

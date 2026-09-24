@@ -73,8 +73,6 @@ chatRoutes.post("/", async (c) => {
     targetAgent,
     focusFile,
     modelConfig,
-    toolHandlers: {},
-    toolDefs: [],
     // 不在引擎里存：SSE break/刷新会丢掉 yield 之后的 onSaveMessage
   };
 
