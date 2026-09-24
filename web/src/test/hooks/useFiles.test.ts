@@ -61,7 +61,7 @@ describe("useFiles", () => {
   });
 
   it("creates a file and reloads", async () => {
-    const fetchMock = vi.fn((url: string, options?: RequestInit) => {
+    const fetchMock = vi.fn((_url: string, options?: RequestInit) => {
       if (options?.method === "PUT") {
         return Promise.resolve({ ok: true, json: () => Promise.resolve({}) });
       }
@@ -89,7 +89,7 @@ describe("useFiles", () => {
   });
 
   it("creates a folder", async () => {
-    const fetchMock = vi.fn((url: string, options?: RequestInit) => {
+    const fetchMock = vi.fn((_url: string, options?: RequestInit) => {
       if (options?.method === "PUT") {
         return Promise.resolve({ ok: true, json: () => Promise.resolve({}) });
       }
@@ -113,7 +113,7 @@ describe("useFiles", () => {
   });
 
   it("removes a file and calls DELETE then reloads", async () => {
-    const fetchMock = vi.fn((url: string, options?: RequestInit) => {
+    const fetchMock = vi.fn((_url: string, options?: RequestInit) => {
       if (options?.method === "DELETE") {
         return Promise.resolve({ ok: true, json: () => Promise.resolve({}) });
       }
