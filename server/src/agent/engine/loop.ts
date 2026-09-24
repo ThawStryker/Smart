@@ -19,7 +19,7 @@ export interface AfterToolCtx {
 }
 
 export interface EngineHost {
-  toolDefs: Array<Record<string, unknown>>;
+  toolDefs: unknown[];
   maxRounds?: number;
   buildMessages: (session: Session) => Array<Record<string, unknown>>;
   checkPolicy?: (name: string, args: Record<string, unknown>, session: Session) => string | null | Promise<string | null>;
@@ -58,7 +58,7 @@ export async function* runEngineLoop(opts: {
   for (let round = 0; round < maxRounds; round++) {
     compactIfNeeded(session);
     const messages = host.buildMessages(session);
-    const gen = callLLM(messages, host.toolDefs, modelConfig);
+    const gen = callLLM(messages, host.toolDefs as Array<Record<string, unknown>>, modelConfig);
     let step = await gen.next();
     while (!step.done) {
       const ev = step.value;
