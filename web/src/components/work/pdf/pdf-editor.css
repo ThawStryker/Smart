@@ -1,0 +1,595 @@
+/* 只作用于 Word 编辑页，不改 Markdown 纸张样式 */
+.work-pdf-editor {
+  font-family: "PingFang SC", "Noto Sans SC", "Microsoft YaHei", sans-serif;
+}
+
+.work-pdf-scroll {
+  background: var(--app-bg);
+}
+
+.work-pdf-pages {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 28px;
+  padding: 32px 28px 56px;
+}
+
+.work-pdf-sheet {
+  position: relative;
+  flex: none;
+}
+
+.work-pdf-paper {
+  position: relative;
+  width: 820px;
+  margin: 0;
+  background: var(--app-surface);
+  border: 1px solid var(--app-border);
+  border-radius: 16px;
+  box-shadow: 0 1px 2px rgba(28, 27, 25, 0.04), 0 16px 48px rgba(28, 27, 25, 0.07);
+}
+
+.work-pdf-backdrop {
+  position: absolute;
+  z-index: 0;
+  pointer-events: none;
+  max-width: none;
+}
+
+.work-pdf-header,
+.work-pdf-body {
+  position: relative;
+  z-index: 1;
+}
+
+.work-pdf-header {
+  padding: 16px 48px 0;
+  color: #57534e;
+}
+
+.work-pdf-footer {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 2;
+  margin-top: 0;
+  padding: 0 48px 36px;
+  color: #57534e;
+}
+
+.work-pdf-chrome-text {
+  margin: 0;
+  white-space: pre-wrap;
+}
+
+.work-pdf-image {
+  display: block;
+  max-width: 100%;
+  height: auto;
+}
+
+.work-pdf-band {
+  position: relative;
+  height: 64px;
+  background:
+    radial-gradient(circle at 12% 40%, #ddd6fe 0 7px, transparent 8px),
+    radial-gradient(circle at 28% 70%, #e9d5ff 0 6px, transparent 7px),
+    radial-gradient(circle at 46% 35%, #ddd6fe 0 5px, transparent 6px),
+    linear-gradient(90deg, #eef2ff, #f5f3ff);
+  border-bottom: 1px solid #edeae5;
+}
+
+.work-pdf-logo {
+  position: absolute;
+  top: 16px;
+  right: 18px;
+  width: 32px;
+  height: 32px;
+  border-radius: 8px;
+  background: linear-gradient(90deg, #6366f1, #7c3aed);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.work-pdf-body {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+  flex: 1;
+  padding: 28px 48px 40px 48px;
+}
+
+.work-pdf-block {
+  position: relative;
+  border: 1px dashed transparent;
+  border-radius: 8px;
+  padding: 8px 12px;
+  margin-bottom: 16px;
+}
+
+.work-pdf-block:last-child {
+  margin-bottom: 0;
+}
+
+.work-pdf-block:hover,
+.work-pdf-block:focus-within,
+.work-pdf-block.is-open {
+  border-color: #c8c4be;
+}
+
+.work-pdf-text-wrap {
+  position: relative;
+}
+
+.work-pdf-text {
+  display: block;
+  width: 100%;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  resize: none;
+  outline: none;
+  overflow: hidden;
+  background: transparent;
+  color: #1c1917;
+  font-size: 15px;
+  line-height: 26px;
+  min-height: 26px;
+  box-sizing: border-box;
+}
+
+.work-pdf-table-frame {
+  position: relative;
+}
+
+.work-pdf-table {
+  width: 100%;
+  border-collapse: collapse;
+  table-layout: fixed;
+  font-size: 15px;
+}
+
+.work-pdf-table th,
+.work-pdf-table td {
+  border: 1px solid #d0d5dd;
+  padding: 0;
+  vertical-align: top;
+  position: relative;
+  overflow: visible;
+  background: transparent;
+}
+
+.work-pdf-table textarea {
+  display: block;
+  width: 100%;
+  border: 0;
+  background: transparent;
+  resize: none;
+  outline: none;
+  padding: 8px 12px;
+  font-family: inherit;
+  line-height: 1.45;
+  color: #1c1917;
+  box-sizing: border-box;
+  overflow: hidden;
+}
+
+.work-pdf-plus,
+.work-pdf-remove,
+.work-pdf-row-ops,
+.work-pdf-col-ops,
+.work-pdf-col-resize,
+.work-pdf-row-resize {
+  opacity: 0;
+  pointer-events: none;
+}
+
+.work-pdf-block:hover > .work-pdf-remove,
+.work-pdf-block:hover .work-pdf-plus,
+.work-pdf-block.is-open .work-pdf-plus,
+.work-pdf-row-ops:hover,
+.work-pdf-col-ops:hover,
+.work-pdf-row-ops.is-open,
+.work-pdf-col-ops.is-open,
+.work-pdf-table-frame:hover .work-pdf-col-resize,
+.work-pdf-table-frame:hover .work-pdf-row-resize,
+.work-pdf-table-frame.is-dragging .work-pdf-col-resize,
+.work-pdf-table-frame.is-dragging .work-pdf-row-resize,
+.work-pdf-col-resize.is-active,
+.work-pdf-row-resize.is-active {
+  opacity: 1;
+  pointer-events: auto;
+}
+
+.work-pdf-table-frame.is-menu .work-pdf-row-ops:not(.is-open),
+.work-pdf-table-frame.is-menu .work-pdf-col-ops:not(.is-open),
+.work-pdf-table-frame.is-menu .work-pdf-col-resize,
+.work-pdf-table-frame.is-menu .work-pdf-row-resize,
+.work-pdf-block.is-open .work-pdf-table .work-pdf-row-ops,
+.work-pdf-block.is-open .work-pdf-table .work-pdf-col-ops,
+.work-pdf-block:has(.work-pdf-table-frame.is-menu) > .work-pdf-remove,
+.work-pdf-block:has(.work-pdf-table-frame.is-menu) .work-pdf-plus,
+.work-pdf-body:has(.is-menu) .work-pdf-block:not(:has(.is-menu)) > .work-pdf-remove,
+.work-pdf-body:has(.is-menu) .work-pdf-block:not(:has(.is-menu)) .work-pdf-plus,
+.work-pdf-body:has(.work-pdf-block.is-open) .work-pdf-block:not(.is-open) > .work-pdf-remove,
+.work-pdf-body:has(.work-pdf-block.is-open) .work-pdf-block:not(.is-open) .work-pdf-plus,
+.work-pdf-block.is-open > .work-pdf-remove {
+  opacity: 0;
+  pointer-events: none;
+}
+
+.work-pdf-icon-btn,
+.work-pdf-plus,
+.work-pdf-remove {
+  width: 22px;
+  height: 22px;
+  padding: 0;
+  border: 0;
+  border-radius: 999px;
+  background: #fff;
+  color: #78716c;
+  box-shadow: 0 1px 2px rgba(28, 25, 23, 0.06), 0 0 0 1px rgba(28, 25, 23, 0.08);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+}
+
+.work-pdf-icon-btn:hover,
+.work-pdf-plus:hover,
+.work-pdf-block.is-open .work-pdf-plus {
+  color: #4338ca;
+  box-shadow: 0 6px 16px rgba(67, 56, 202, 0.16), 0 0 0 1px rgba(67, 56, 202, 0.28);
+}
+
+.work-pdf-remove {
+  position: absolute;
+  right: 8px;
+  top: 8px;
+  z-index: 2;
+}
+
+.work-pdf-remove:hover {
+  color: #b91c1c;
+  box-shadow: 0 6px 16px rgba(185, 28, 28, 0.16), 0 0 0 1px rgba(185, 28, 28, 0.28);
+}
+
+.work-pdf-plus-wrap {
+  position: absolute;
+  left: 50%;
+  bottom: 0;
+  transform: translate(-50%, 50%);
+  z-index: 6;
+}
+
+.work-pdf-menu {
+  position: absolute;
+  z-index: 8;
+  min-width: 132px;
+  padding: 6px;
+  border-radius: 12px;
+  background: #fff;
+  border: 0;
+  box-shadow: 0 12px 32px rgba(28, 25, 23, 0.12), 0 0 0 1px rgba(28, 25, 23, 0.05);
+}
+
+.work-pdf-plus-wrap .work-pdf-menu {
+  top: calc(100% + 6px);
+  left: 50%;
+  transform: translateX(-50%);
+}
+
+.work-pdf-menu button {
+  display: block;
+  width: 100%;
+  text-align: left;
+  border: 0;
+  background: transparent;
+  color: #1c1917;
+  font-size: 13px;
+  line-height: 1.2;
+  padding: 8px 10px;
+  border-radius: 8px;
+  cursor: pointer;
+}
+
+.work-pdf-menu button:hover {
+  background: #f5f3ff;
+}
+
+.work-pdf-menu button.is-danger {
+  color: #b91c1c;
+}
+
+.work-pdf-menu button.is-danger:hover {
+  background: #fef2f2;
+}
+
+.work-pdf-menu button:disabled {
+  opacity: 0.35;
+  cursor: default;
+}
+
+.work-pdf-row-ops,
+.work-pdf-col-ops {
+  position: absolute;
+  z-index: 4;
+}
+
+.work-pdf-row-ops,
+.work-pdf-col-ops {
+  pointer-events: auto;
+}
+
+.work-pdf-row-ops {
+  left: -30px;
+  top: 0;
+  bottom: 0;
+  width: 30px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.work-pdf-col-ops {
+  left: 50%;
+  top: 0;
+  width: 72px;
+  height: 24px;
+  transform: translateX(-50%);
+  display: flex;
+  align-items: flex-start;
+  justify-content: center;
+  padding-top: 2px;
+}
+
+.work-pdf-row-ops .work-pdf-menu {
+  top: 50%;
+  left: calc(100% + 6px);
+  transform: translateY(-12px);
+}
+
+.work-pdf-col-ops .work-pdf-menu {
+  top: calc(100% + 6px);
+  left: 50%;
+  transform: translateX(-50%);
+}
+
+.work-pdf-format {
+  display: none;
+  position: absolute;
+  left: 0;
+  bottom: calc(100% + 8px);
+  z-index: 7;
+  align-items: center;
+  gap: 1px;
+  padding: 3px;
+  border-radius: 999px;
+  background: #fff;
+  border: 0;
+  box-shadow: 0 10px 28px rgba(28, 25, 23, 0.12), 0 0 0 1px rgba(28, 25, 23, 0.06);
+  white-space: nowrap;
+}
+
+.work-pdf-format::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 100%;
+  height: 14px;
+}
+
+.work-pdf-cell:has(textarea:focus),
+.work-pdf-block:has(.work-pdf-text-wrap textarea:focus) {
+  z-index: 5;
+}
+
+.work-pdf-cell:has(textarea:focus) .work-pdf-format,
+.work-pdf-text-wrap:has(textarea:focus) .work-pdf-format {
+  display: flex;
+}
+
+.work-pdf-block:has(.work-pdf-text-wrap textarea:focus) > .work-pdf-remove,
+.work-pdf-block:has(.work-pdf-text-wrap textarea:focus) .work-pdf-plus {
+  opacity: 0;
+  pointer-events: none;
+}
+
+.work-pdf-table-frame.is-menu .work-pdf-cell .work-pdf-format,
+.work-pdf-block.is-open .work-pdf-cell .work-pdf-format,
+.work-pdf-table-frame:has(.work-pdf-row-ops:hover) .work-pdf-format,
+.work-pdf-table-frame:has(.work-pdf-col-ops:hover) .work-pdf-format,
+.work-pdf-block.is-open .work-pdf-text-wrap .work-pdf-format,
+.work-pdf-block:has(.work-pdf-plus:hover) .work-pdf-text-wrap .work-pdf-format,
+.work-pdf-block:has(.work-pdf-remove:hover) .work-pdf-text-wrap .work-pdf-format,
+.work-pdf-body:has(.is-menu) .work-pdf-text-wrap .work-pdf-format,
+.work-pdf-body:has(.work-pdf-block.is-open) .work-pdf-text-wrap .work-pdf-format {
+  display: none;
+}
+
+.work-pdf-format button {
+  min-width: 26px;
+  height: 26px;
+  padding: 0 6px;
+  border: 0;
+  border-radius: 999px;
+  background: transparent;
+  color: #44403c;
+  font-size: 12px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.work-pdf-format button:hover {
+  background: #f5f5f4;
+}
+
+.work-pdf-format button.is-on,
+.work-pdf-format .work-pdf-bold.is-on {
+  background: #eef2ff;
+  color: #4338ca;
+}
+
+.work-pdf-format .work-pdf-bold {
+  font-weight: 700;
+  font-size: 13px;
+}
+
+.work-pdf-format-sep {
+  width: 1px;
+  height: 14px;
+  margin: 0 3px;
+  background: #e7e5e4;
+  flex: none;
+}
+
+.work-pdf-format .work-pdf-swatch {
+  min-width: 26px;
+  padding: 0;
+}
+
+.work-pdf-format .work-pdf-swatch i {
+  display: block;
+  width: 12px;
+  height: 12px;
+  border-radius: 999px;
+  box-shadow: inset 0 0 0 1px rgba(28, 25, 23, 0.12);
+}
+
+.work-pdf-format .work-pdf-swatch.is-on {
+  background: #eef2ff;
+}
+
+.work-pdf-format .work-pdf-swatch.is-on i {
+  box-shadow: 0 0 0 2px #fff, 0 0 0 3px #4338ca;
+}
+
+.work-pdf-col-resize,
+.work-pdf-row-resize {
+  position: absolute;
+  z-index: 3;
+}
+
+.work-pdf-col-resize {
+  top: 0;
+  bottom: 0;
+  width: 8px;
+  margin-left: -4px;
+  cursor: col-resize;
+}
+
+.work-pdf-row-resize {
+  left: 0;
+  right: 0;
+  height: 8px;
+  margin-top: -4px;
+  cursor: row-resize;
+}
+
+.work-pdf-col-resize::after,
+.work-pdf-row-resize::after {
+  content: "";
+  position: absolute;
+  background: transparent;
+}
+
+.work-pdf-col-resize:hover::after,
+.work-pdf-row-resize:hover::after,
+.work-pdf-col-resize.is-active::after,
+.work-pdf-row-resize.is-active::after {
+  background: #6366f1;
+}
+
+.work-pdf-col-resize::after {
+  left: 3px;
+  top: 0;
+  bottom: 0;
+  width: 2px;
+}
+
+.work-pdf-row-resize::after {
+  top: 3px;
+  left: 0;
+  right: 0;
+  height: 2px;
+}
+
+.work-pdf-templates {
+  position: absolute;
+  right: 0;
+  top: calc(100% + 6px);
+  z-index: 30;
+  width: 320px;
+  padding: 8px;
+  border-radius: 12px;
+  background: var(--app-surface);
+  border: 1px solid var(--app-border);
+  box-shadow: 0 10px 28px rgba(28, 25, 23, 0.12), 0 0 0 1px rgba(28, 25, 23, 0.06);
+}
+
+.work-pdf-templates-title {
+  margin: 0 4px 6px;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--app-text-secondary);
+}
+
+.work-pdf-templates-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  grid-auto-rows: 114px;
+  gap: 6px;
+  max-height: 234px;
+  overflow-x: hidden;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+
+.work-pdf-template {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  width: 100%;
+  height: 114px;
+  gap: 4px;
+  padding: 4px;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  cursor: pointer;
+  color: var(--app-text);
+}
+
+.work-pdf-template:hover {
+  background: var(--app-accent-bg);
+}
+
+.work-pdf-template-thumb {
+  display: block;
+  width: 52px;
+  height: 74px;
+  flex: none;
+  object-fit: cover;
+  object-position: top center;
+  border-radius: 3px;
+  border: 1px solid var(--app-border);
+  background: #fff;
+  box-shadow: 0 1px 2px rgba(28, 25, 23, 0.04);
+}
+
+.work-pdf-template-name {
+  width: 100%;
+  font-size: 10px;
+  line-height: 1.2;
+  color: var(--app-text-secondary);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  text-align: center;
+}

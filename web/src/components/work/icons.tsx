@@ -57,6 +57,24 @@ export function GenericFileIcon({ active }: { active?: boolean }) {
   );
 }
 
+export function DocxIcon({ active }: { active?: boolean }) {
+  return (
+    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke={active ? "var(--app-accent)" : "#2b579a"} strokeWidth="2" strokeLinecap="round" className="flex-shrink-0">
+      <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" /><polyline points="14 2 14 8 20 8" />
+      <path d="M7.5 13.5l1.4 4.5 1.6-3 1.6 3 1.4-4.5" />
+    </svg>
+  );
+}
+
+export function PdfIcon({ active }: { active?: boolean }) {
+  return (
+    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke={active ? "var(--app-accent)" : "#e11d48"} strokeWidth="2" strokeLinecap="round" className="flex-shrink-0">
+      <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" /><polyline points="14 2 14 8 20 8" />
+      <path d="M8 13h2.5a1.5 1.5 0 0 1 0 3H8v3" />
+    </svg>
+  );
+}
+
 export function DocIcon({ active }: { active?: boolean }) {
   return (
     <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke={active ? "var(--app-accent)" : "#60a5fa"} strokeWidth="2" strokeLinecap="round" className="flex-shrink-0">
@@ -126,5 +144,7 @@ export function getFileIcon(name: string) {
   if (base === "AGENTS.md") return AgentIcon;
   if (base === "README.md") return ReadmeIcon;
   if (base.endsWith(".md")) return DocIcon;
+  if (base.toLowerCase().endsWith(".docx")) return DocxIcon;
+  if (base.toLowerCase().endsWith(".pdf")) return PdfIcon;
   return GenericFileIcon;
 }

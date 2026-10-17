@@ -7,6 +7,8 @@
  *   - agent files:     /api/agents/:name/files/:path
  */
 
+import { readPdfFilePointer } from "@/lib/pdf/document";
+
 export interface FileEntry {
   id: number;
   path: string;
@@ -91,6 +93,25 @@ export function resolveRenameUrl(treePath: string, _sessionId: number): string |
   return null;
 }
 
+/** 把字节按 Latin-1 还原成字符串，和上传 PDF 时的读法一致。 */
+function bytesToLatin1(bytes: Uint8Array): string {
+  let text = "";
+  const size = 0x8000;
+  for (let index = 0; index < bytes.length; index += size) {
+    text += String.fromCharCode(...bytes.subarray(index, Math.min(index + size, bytes.length)));
+  }
+  return text;
+}
+
+async function materializeContent(url: string, content: string): Promise<string> {
+  const pointer = readPdfFilePointer(content);
+  if (!pointer) return content;
+  const res = await fetch(`${url}?raw=1`);
+  if (!res.ok) return content;
+  const bytes = new Uint8Array(await res.arrayBuffer());
+  return pointer.encoding === "latin1" ? bytesToLatin1(bytes) : new TextDecoder().decode(bytes);
+}
+
 export async function getFileContent(treePath: string): Promise<string | null> {
   const agentMatch = treePath.match(/^agents\/([^/]+)\/(.+)$/);
   if (agentMatch) {
@@ -105,7 +126,7 @@ export async function getFileContent(treePath: string): Promise<string | null> {
     const res = await fetch(url);
     if (!res.ok) return null;
     const data = await res.json();
-    return data.content || "";
+    return materializeContent(url, data.content || "");
   }
   return null;
 }

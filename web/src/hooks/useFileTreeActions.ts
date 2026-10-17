@@ -1,9 +1,23 @@
 import { useState, useCallback, useRef, useEffect } from "react";
 import { useConfirm } from "@/components/shared/useConfirm";
 import { blockFileSaves, resolveApiUrl, resolveDeleteUrl, resolveRenameUrl, unblockFileSaves } from "@/lib/file-api";
+import { createPdfDocument, serializePdfDocument } from "@/lib/pdf/document";
 import { buildTree } from "@/components/work/FileTree";
 import type { FileEntry } from "@/types/work";
 import type { ReactNode } from "react";
+
+/** Word 按字节收成字符串，避免 UTF-8 把压缩包读坏。 */
+function readBinaryFile(file: File): Promise<string> {
+  return file.arrayBuffer().then((buffer) => {
+    const bytes = new Uint8Array(buffer);
+    let text = "";
+    const size = 0x8000;
+    for (let index = 0; index < bytes.length; index += size) {
+      text += String.fromCharCode(...bytes.subarray(index, Math.min(index + size, bytes.length)));
+    }
+    return text;
+  });
+}
 
 interface UseFileTreeActionsInput {
   sessionId: number;
@@ -18,7 +32,9 @@ interface UseFileTreeActionsInput {
 
 interface UseFileTreeActionsOutput {
   createFile: (parentPath: string) => Promise<void>;
+  createNamedFile: (parentPath: string, name: string, ext: "md" | "docx") => Promise<void>;
   createFolder: (parentPath: string) => Promise<void>;
+  uploadFiles: (parentPath: string, files: File[]) => Promise<void>;
   renameFile: (filePath: string, newName: string) => Promise<void>;
   renameFolder: (folderPath: string, newName: string) => Promise<void>;
   deleteFile: (filePath: string) => Promise<void>;
@@ -87,16 +103,73 @@ export function useFileTreeActions({
     setRenameValue("");
   };
 
-  const createFile = useCallback(async (parentPath: string) => {
+  const createNamedFile = useCallback(async (parentPath: string, rawName: string, ext: "md" | "docx") => {
     const prefix = parentPath.endsWith("/") ? parentPath : `${parentPath}/`;
-    const name = `新文件.md`;
-    let path = `${prefix}${name}`;
+    let base = rawName.trim().replace(/[\\/]/g, "").replace(/\.(md|docx)$/i, "");
+    if (!base) base = "新文件";
+    let path = `${prefix}${base}.${ext}`;
     let idx = 1;
-    while (files.some((f) => f.path === path)) { idx++; path = `${prefix}新文件 ${idx}.md`; }
+    while (files.some((f) => f.path === path)) {
+      idx += 1;
+      path = `${prefix}${base} ${idx}.${ext}`;
+    }
+    const content = ext === "docx" ? serializePdfDocument(createPdfDocument()) : "";
     const api = resolveApi(path);
-    if (api) await fetch(api.url, { method: api.method, headers: { "Content-Type": "application/json" }, body: JSON.stringify({ content: "" }) });
+    if (api) {
+      await fetch(api.url, {
+        method: api.method,
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ content }),
+      });
+    }
     onOpenNewFile?.(path);
     reloadFiles();
+  }, [sessionId, files, reloadFiles, onOpenNewFile]);
+
+  const createFile = useCallback(async (parentPath: string) => {
+    await createNamedFile(parentPath, "新文件", "md");
+  }, [createNamedFile]);
+
+  const uploadFiles = useCallback(async (parentPath: string, list: File[]) => {
+    const prefix = parentPath.endsWith("/") ? parentPath : `${parentPath}/`;
+    const taken = new Set(files.map((item) => item.path));
+    let opened = "";
+    let skipped = 0;
+    let failed = 0;
+    for (const file of list) {
+      const lower = file.name.toLowerCase();
+      const isDocx = lower.endsWith(".docx");
+      const isMd = lower.endsWith(".md") || lower.endsWith(".markdown");
+      if (!isDocx && !isMd) { skipped += 1; continue; }
+      let base = file.name.replace(/\.(docx|markdown|md)$/i, "").replace(/[\\/]/g, "").trim();
+      if (!base) base = "新文件";
+      const ext = isDocx ? "docx" : "md";
+      let path = `${prefix}${base}.${ext}`;
+      let index = 1;
+      while (taken.has(path)) {
+        index += 1;
+        path = `${prefix}${base} ${index}.${ext}`;
+      }
+      taken.add(path);
+      const api = resolveApiUrl(path, sessionId);
+      if (!api) { failed += 1; continue; }
+      try {
+        const content = isDocx ? await readBinaryFile(file) : await file.text();
+        const res = await fetch(api.url, {
+          method: api.method,
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ content }),
+        });
+        if (!res.ok) { failed += 1; continue; }
+        opened = path;
+      } catch {
+        failed += 1;
+      }
+    }
+    if (!opened && skipped > 0 && failed === 0) setToast("只能上传 Word 或 Markdown");
+    else if (failed > 0 || skipped > 0) setToast("有文件没能上传");
+    if (opened) onOpenNewFile?.(opened);
+    if (opened || failed > 0) reloadFiles();
   }, [sessionId, files, reloadFiles, onOpenNewFile]);
 
   const createFolder = useCallback(async (parentPath: string) => {
@@ -209,7 +282,9 @@ export function useFileTreeActions({
 
   return {
     createFile,
+    createNamedFile,
     createFolder,
+    uploadFiles,
     renameFile,
     renameFolder,
     deleteFile,

@@ -3,6 +3,7 @@ import type { FileStore, Session } from "../types";
 import { formatFileList, normalizeTableCellBreaks, resolvePath } from "./fs";
 import { markObserved } from "./session";
 import { splitMetaNotes } from "./deliverable";
+import { maybeWrapTongshiLessonDocx } from "../../../lib/pdf/tongshi-lesson";
 
 export const TOOL_DEFS: Array<Record<string, unknown>> = [
   {
@@ -38,7 +39,7 @@ export const TOOL_DEFS: Array<Record<string, unknown>> = [
         type: "object",
         properties: {
           path: { type: "string", description: "File path (workspace/...)" },
-          content: { type: "string", description: "Full markdown content" },
+          content: { type: "string", description: "Full file content. Lesson plans as .docx may be markdown of the five sections." },
         },
         required: ["path", "content"],
       },
@@ -156,7 +157,10 @@ export async function dispatchTool(
       const rec = await fs.stat(path);
       const normalized = rec.kind === "workspace" ? normalizeTableCellBreaks(content) : content;
       const split = splitMetaNotes(normalized);
-      const body = split.document || normalized;
+      const rawBody = split.document || normalized;
+      const body = rec.kind === "workspace"
+        ? maybeWrapTongshiLessonDocx(rec.displayPath, rawBody, session.loadedSkills)
+        : rawBody;
       await fs.write(path, body);
       markObserved(session, rec.displayPath);
       return {

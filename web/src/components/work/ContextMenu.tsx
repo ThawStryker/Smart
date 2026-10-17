@@ -1,4 +1,5 @@
-import React, { useState, useRef, useLayoutEffect } from "react";
+import React, { useEffect, useRef, useState, useLayoutEffect } from "react";
+import { createPortal } from "react-dom";
 
 // ── Menu icon components ──
 
@@ -6,6 +7,14 @@ function NewFileIcon() {
   return (
     <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" className="flex-shrink-0">
       <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" /><polyline points="14 2 14 8 20 8" /><line x1="12" y1="18" x2="12" y2="12" /><line x1="9" y1="15" x2="15" y2="15" />
+    </svg>
+  );
+}
+
+function UploadIcon() {
+  return (
+    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="flex-shrink-0">
+      <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" /><polyline points="17 8 12 3 7 8" /><line x1="12" y1="3" x2="12" y2="15" />
     </svg>
   );
 }
@@ -141,16 +150,92 @@ export function FileMenu({
   );
 }
 
+export function NewFileDialog({
+  onCancel,
+  onConfirm,
+}: {
+  onCancel: () => void;
+  onConfirm: (name: string, ext: "md" | "docx") => void;
+}) {
+  const [name, setName] = useState("");
+  const [ext, setExt] = useState<"md" | "docx">("md");
+  const inputRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => { inputRef.current?.focus(); }, []);
+
+  const submit = () => onConfirm(name, ext);
+
+  return createPortal(
+    <div className="fixed inset-0 z-[80] bg-black/30 flex items-center justify-center" onClick={onCancel}>
+        <form
+          className="rounded-2xl shadow-2xl border p-5 w-80 max-w-[90vw] bg-[var(--app-surface)] border-[var(--app-border)]"
+          onClick={(e) => e.stopPropagation()}
+          onSubmit={(e) => { e.preventDefault(); submit(); }}
+        >
+          <p className="text-sm font-medium text-[var(--app-text)] mb-3">新建文件</p>
+          <div className="flex items-center gap-2">
+            <input
+              ref={inputRef}
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+              onKeyDown={(e) => { if (e.key === "Escape") onCancel(); }}
+              placeholder="新文件"
+              className="flex-1 min-w-0 h-9 px-3 rounded-lg text-sm bg-[var(--app-bg)] border border-[var(--app-border)] text-[var(--app-text)] outline-none focus:border-[var(--app-accent)]"
+            />
+            <select
+              value={ext}
+              onChange={(e) => setExt(e.target.value === "docx" ? "docx" : "md")}
+              aria-label="文件格式"
+              className="h-9 px-2 rounded-lg text-sm bg-[var(--app-bg)] border border-[var(--app-border)] text-[var(--app-text)] outline-none"
+            >
+              <option value="md">md</option>
+              <option value="docx">docx</option>
+            </select>
+          </div>
+          <div className="flex gap-2 mt-4">
+            <button type="button" onClick={onCancel}
+              className="flex-1 h-9 rounded-xl text-xs font-medium border bg-[var(--app-bg)] text-[var(--app-text-secondary)] border-[var(--app-border)]">
+              取消
+            </button>
+            <button type="submit"
+              className="flex-1 h-9 rounded-xl text-xs font-bold text-white"
+              style={{ background: "linear-gradient(135deg, var(--app-accent), var(--app-accent-deep))" }}>
+              创建
+            </button>
+          </div>
+        </form>
+    </div>,
+    document.body,
+  );
+}
+
 // ── Workspace header actions ──
 
-export function WorkspaceActions({ onCreateFile, onCreateFolder }: { onCreateFile: () => void; onCreateFolder: () => void }) {
+export function WorkspaceActions({ onCreateFile, onCreateFolder, onUpload }: {
+  onCreateFile: () => void;
+  onCreateFolder: () => void;
+  onUpload: (files: File[]) => void;
+}) {
   const [open, setOpen] = useState(false);
   const { ref, flip } = useFlip(open);
+  const inputRef = useRef<HTMLInputElement>(null);
 
   return (
     <div className="relative" onClick={(e) => e.stopPropagation()}>
       <button onClick={() => setOpen(!open)}
         className="w-6 h-6 rounded-lg flex items-center justify-center text-sm font-medium transition-all duration-200 hover:scale-110 bg-[var(--app-accent-bg)] text-[var(--app-accent)] leading-none">+</button>
+      <input
+        ref={inputRef}
+        type="file"
+        accept=".docx,.md,.markdown,application/vnd.openxmlformats-officedocument.wordprocessingml.document,text/markdown"
+        multiple
+        className="hidden"
+        onChange={(event) => {
+          const picked = [...(event.target.files || [])];
+          event.target.value = "";
+          if (picked.length > 0) onUpload(picked);
+        }}
+      />
       {open && (
         <>
           <div className="fixed inset-0 z-30" onClick={() => setOpen(false)} />
@@ -158,6 +243,7 @@ export function WorkspaceActions({ onCreateFile, onCreateFolder }: { onCreateFil
             className={`absolute right-0 z-40 w-36 rounded-xl bg-[var(--app-surface)] border border-[var(--app-border)] shadow-xl overflow-hidden py-1 ${flip ? "bottom-full mb-1" : "top-full mt-1"}`}>
             <MenuItem icon={<NewFileIcon />} label="New File" onClick={() => { onCreateFile(); setOpen(false); }} />
             <MenuItem icon={<NewFolderIcon />} label="New Folder" onClick={() => { onCreateFolder(); setOpen(false); }} />
+            <MenuItem icon={<UploadIcon />} label="Upload" onClick={() => { setOpen(false); inputRef.current?.click(); }} />
           </div>
         </>
       )}

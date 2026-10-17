@@ -1,5 +1,6 @@
+import { useState } from "react";
 import { renderFileChildren } from "./FileTree";
-import { WorkspaceActions } from "./ContextMenu";
+import { NewFileDialog, WorkspaceActions } from "./ContextMenu";
 import { useFilePanel } from "@/hooks/useFilePanel";
 
 interface WorkspacePanelProps {
@@ -15,10 +16,11 @@ interface WorkspacePanelProps {
 export function WorkspacePanel({ sessionId, onFileSelect, selectedFile, reloadTrigger, onCloseFile, onOpenNewFile, onFileRenamed }: WorkspacePanelProps) {
   const {
     expanded, toggleExpand, tree,
-    createFile, createFolder, renameFile, renameFolder, deleteFile, deleteFolder,
+    createNamedFile, createFolder, uploadFiles, renameFile, renameFolder, deleteFile, deleteFolder,
     startFileRename, finishFileRename, cancelFileRename, renamingPath, renameValue, setRenameValue,
     toast, ConfirmDialog,
   } = useFilePanel({ sessionId, urlPrefix: "workspace", selectedFile, onCloseFile, reloadTrigger, onOpenNewFile, onFileRenamed });
+  const [newFileParent, setNewFileParent] = useState<string | null>(null);
 
   return (
     <div className="border-t border-[var(--app-border)] flex flex-col" style={{ flex: "1 1 0", minHeight: 0 }}>
@@ -29,11 +31,11 @@ export function WorkspacePanel({ sessionId, onFileSelect, selectedFile, reloadTr
           </svg>
           <span className="text-xs font-bold uppercase tracking-widest text-[var(--app-text-tertiary)]">Workspace</span>
         </div>
-        <WorkspaceActions onCreateFile={() => createFile("workspace")} onCreateFolder={() => createFolder("workspace")} />
+        <WorkspaceActions onCreateFile={() => setNewFileParent("workspace")} onCreateFolder={() => createFolder("workspace")} onUpload={(picked) => { void uploadFiles("workspace", picked); }} />
       </div>
       <div className="flex-1 overflow-auto border-t border-[var(--app-border)]">
         {(() => {
-          const children = renderFileChildren({ prefix: "workspace", tree, expanded, toggleExpand, onFileSelect, selectedFile, depth: 0, createFile, createFolder, renameFolder, deleteFolder, renameFile, deleteFile, renamingPath, renameValue, onStartRename: startFileRename, onRenameChange: setRenameValue, onFinishRename: finishFileRename, onCancelRename: cancelFileRename });
+          const children = renderFileChildren({ prefix: "workspace", tree, expanded, toggleExpand, onFileSelect, selectedFile, depth: 0, createFile: async (parent) => { setNewFileParent(parent); }, createFolder, renameFolder, deleteFolder, renameFile, deleteFile, renamingPath, renameValue, onStartRename: startFileRename, onRenameChange: setRenameValue, onFinishRename: finishFileRename, onCancelRename: cancelFileRename });
           if (children.length === 0) {
             return (
               <div className="px-4 py-6 text-center text-[10px] text-[var(--app-text-tertiary)] leading-relaxed">
@@ -44,6 +46,17 @@ export function WorkspacePanel({ sessionId, onFileSelect, selectedFile, reloadTr
           return children;
         })()}
       </div>
+
+      {newFileParent && (
+        <NewFileDialog
+          onCancel={() => setNewFileParent(null)}
+          onConfirm={(name, ext) => {
+            const parent = newFileParent;
+            setNewFileParent(null);
+            void createNamedFile(parent, name, ext);
+          }}
+        />
+      )}
 
       {ConfirmDialog}
 

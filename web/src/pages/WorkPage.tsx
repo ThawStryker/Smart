@@ -3,6 +3,9 @@ import { useWorkPage } from "@/hooks/useWorkPage";
 import { AgentPanel } from "@/components/work/AgentPanel";
 import { WorkspacePanel } from "@/components/work/WorkspacePanel";
 import { DocumentEditor } from "@/components/work/DocumentEditor";
+import { PdfEditor } from "@/components/work/pdf/PdfEditor";
+import { isWordPath } from "@/lib/pdf/document";
+import { getFileContent } from "@/lib/file-api";
 import { ChatPanel, isPhantomWritePath, type PhaseEvent } from "@/components/work/ChatPanel";
 
 function useMediaQuery(query: string): boolean {
@@ -97,7 +100,12 @@ export function WorkPage() {
               onAgentListChange={loadAgents}
               reloadTrigger={reloadCounter}
               onCloseFile={closeFile}
-              onOpenNewFile={(path) => openFile(path, "", { bypassCache: true })}
+              onOpenNewFile={(path) => {
+                void getFileContent(path).then((fresh) => {
+                  if (fresh == null) return;
+                  openFile(path, fresh, { bypassCache: true });
+                });
+              }}
               onFileRenamed={rename}
             />
           </div>
@@ -107,7 +115,12 @@ export function WorkPage() {
             selectedFile={activeFile?.path || null}
             reloadTrigger={reloadCounter}
             onCloseFile={closeFile}
-            onOpenNewFile={(path) => openFile(path, "", { bypassCache: true })}
+            onOpenNewFile={(path) => {
+              void getFileContent(path).then((fresh) => {
+                if (fresh == null) return;
+                openFile(path, fresh, { bypassCache: true });
+              });
+            }}
             onFileRenamed={rename}
           />
         </div>
@@ -120,15 +133,26 @@ export function WorkPage() {
         label={showLeft ? "隐藏侧栏" : "显示侧栏"}
       />
       <div className="flex-1 overflow-hidden">
-        <DocumentEditor
-          key={activeFile?.path || "empty"}
-          content={activeFile?.content || ""}
-          filePath={activeFile?.path || null}
-          isStreaming={isStreaming}
-          onSave={(path: string, content: string) => save(path, content, sessionId)}
-          onContentChange={updateContent}
-          onClose={closeFile}
-        />
+        {isWordPath(activeFile?.path) && activeFile ? (
+          <PdfEditor
+            key={activeFile.path}
+            content={activeFile.content || ""}
+            filePath={activeFile.path}
+            onSave={(path, content) => save(path, content, sessionId)}
+            onContentChange={updateContent}
+            onClose={closeFile}
+          />
+        ) : (
+          <DocumentEditor
+            key={activeFile?.path || "empty"}
+            content={activeFile?.content || ""}
+            filePath={activeFile?.path || null}
+            isStreaming={isStreaming}
+            onSave={(path: string, content: string) => save(path, content, sessionId)}
+            onContentChange={updateContent}
+            onClose={closeFile}
+          />
+        )}
       </div>
       {showRight && (
       <div className="w-80 flex-shrink-0 overflow-hidden border-l border-[var(--app-border)]">
@@ -162,7 +186,7 @@ export function WorkPage() {
           onPhase={(event: PhaseEvent) => {
             if (event.phase !== "write") return;
             const path = String(event.meta?.path || "").trim();
-            if (isPhantomWritePath(path)) return;
+            if (isPhantomWritePath(path) || isWordPath(path)) return;
             const mode = event.meta?.mode as string | undefined;
             if (event.text !== undefined) {
               // 不读闭包里的 activeFile：phase 与首段 delta 常在同一 SSE 块里，此时尚未重渲染
