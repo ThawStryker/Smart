@@ -182,15 +182,26 @@ export function NewFileDialog({
               placeholder="新文件"
               className="flex-1 min-w-0 h-9 px-3 rounded-lg text-sm bg-[var(--app-bg)] border border-[var(--app-border)] text-[var(--app-text)] outline-none focus:border-[var(--app-accent)]"
             />
-            <select
-              value={ext}
-              onChange={(e) => setExt(e.target.value === "docx" ? "docx" : "md")}
-              aria-label="文件格式"
-              className="h-9 px-2 rounded-lg text-sm bg-[var(--app-bg)] border border-[var(--app-border)] text-[var(--app-text)] outline-none"
-            >
-              <option value="md">md</option>
-              <option value="docx">docx</option>
-            </select>
+            <div className="relative shrink-0">
+              <select
+                value={ext}
+                onChange={(e) => setExt(e.target.value === "docx" ? "docx" : "md")}
+                aria-label="文件格式"
+                className="h-9 w-[4.5rem] appearance-none pl-2.5 pr-7 rounded-lg text-sm leading-9 bg-[var(--app-bg)] border border-[var(--app-border)] text-[var(--app-text)] outline-none focus:border-[var(--app-accent)]"
+              >
+                <option value="md">md</option>
+                <option value="docx">docx</option>
+              </select>
+              <svg
+                className="pointer-events-none absolute right-2 top-1/2 -translate-y-1/2 text-[var(--app-text-secondary)]"
+                width="12"
+                height="12"
+                viewBox="0 0 12 12"
+                aria-hidden
+              >
+                <path d="M3 4.5 6 8l3-3.5" fill="none" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round" />
+              </svg>
+            </div>
           </div>
           <div className="flex gap-2 mt-4">
             <button type="button" onClick={onCancel}
