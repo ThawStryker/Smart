@@ -8,6 +8,9 @@ import type { EditorView } from "@milkdown/kit/prose/view";
 import { replaceAll, getMarkdown } from "@milkdown/utils";
 import { clipboardTextWithBreaks, matrixToGfm, tableMatrixFromClipboard } from "@/lib/paste-table";
 import { brToLineSepInTables, persistTableCellBreaks, restoreLineSepBreaks, applyLiteralBoldInTableCells } from "@/lib/table-breaks";
+import { persistTableLayouts, stripTableLayouts, type MdTableLayout } from "@/lib/table-layout";
+import { attachMdTableResize, type MdTableResizeApi } from "@/lib/md-table-resize";
+import { countTables, handleTableClipboard, layoutFromClipboardHtml, recalledTableLayout, tableIndexAtSelection } from "@/lib/clipboard-table";
 import "@milkdown/crepe/theme/common/style.css";
 import "@milkdown/crepe/theme/nord.css";
 import "./editor.css";
@@ -62,7 +65,7 @@ function isTableUiChrome(target: EventTarget | null) {
   const el = target as HTMLElement | null;
   if (!el) return true;
   return Boolean(el.closest(
-    "a, button, .milkdown-table-block .handle, .cell-handle, .milkdown-icon, .milkdown-toolbar, .milkdown-slash-menu, .milkdown-block-handle",
+    "a, button, .milkdown-table-block .handle, .cell-handle, .work-md-col-resize, .work-md-row-resize, .milkdown-icon, .milkdown-toolbar, .milkdown-slash-menu, .milkdown-block-handle",
   ));
 }
 
@@ -119,20 +122,22 @@ function selectionInClickedCell(
   return tryNear(clamped, bias) || tryNear(clamped, -bias) || tryNear(range.to, -1) || tryNear(range.from, 1);
 }
 
-function persistedMarkdownFrom(crepe: Crepe): string {
+function persistedMarkdownFrom(crepe: Crepe, layouts: MdTableLayout[]): string {
   const md = crepe.editor.action(getMarkdown()) || "";
   try {
-    return persistTableCellBreaks(md, crepe.editor.ctx.get(editorViewCtx).state.doc);
+    return persistTableLayouts(persistTableCellBreaks(md, crepe.editor.ctx.get(editorViewCtx).state.doc), layouts);
   } catch {
-    return md;
+    return persistTableLayouts(md, layouts);
   }
 }
 
-function loadMarkdownInto(crepe: Crepe, md: string) {
-  crepe.editor.action(replaceAll(brToLineSepInTables(md || "")));
+function loadMarkdownInto(crepe: Crepe, md: string): MdTableLayout[] {
+  const parsed = stripTableLayouts(md || "");
+  crepe.editor.action(replaceAll(brToLineSepInTables(parsed.md || "")));
   try {
     restoreLineSepBreaks(crepe.editor.ctx.get(editorViewCtx));
   } catch { /* 视图未就绪 */ }
+  return parsed.layouts;
 }
 
 let lastTableCaret: { pos: number; from: number; to: number } | null = null;
@@ -350,31 +355,82 @@ function insertMarkdownTable(crepe: Crepe, md: string): boolean {
   }
 }
 
-function pasteClipboardTable(view: EditorView, crepe: Crepe, data: DataTransfer | null): boolean {
+function pasteClipboardTable(
+  view: EditorView,
+  crepe: Crepe,
+  data: DataTransfer | null,
+  hooks?: {
+    prepare: (index: number, layout: MdTableLayout) => void;
+    sync: () => void;
+  },
+): boolean {
   const matrix = tableMatrixFromClipboard(data);
   if (!matrix) return false;
+  const layout = layoutFromClipboardHtml(data?.getData("text/html") || "") || recalledTableLayout();
+  const replaceIndex = tableIndexAtSelection(view);
+  const countBefore = countTables(view);
+  const index = replaceIndex ?? countBefore;
+  if (layout?.cols?.length) hooks?.prepare(index, layout);
   const gfm = matrixToGfm(matrix);
-  if (gfm && insertMarkdownTable(crepe, gfm)) return true;
-  return insertTableFromMatrix(view, matrix);
+  const inserted = (gfm && insertMarkdownTable(crepe, gfm)) || insertTableFromMatrix(view, matrix);
+  if (inserted && layout?.cols?.length) hooks?.sync();
+  return inserted;
 }
 
-/** 单击六点手柄后：整表改成单元格全选，其它块选中内部文本，避免 NodeSelection 藏掉划选 */
+function selectWholeTable(view: EditorView, tablePos: number, tableNode: Parameters<typeof TableMap.get>[0]) {
+  try {
+    const map = TableMap.get(tableNode);
+    const cells = map.cellsInRect({ left: 0, right: map.width, top: 0, bottom: map.height });
+    if (!cells.length) return false;
+    const start = tablePos + 1;
+    view.dispatch(
+      view.state.tr.setSelection(
+        CellSelection.create(view.state.doc, start + cells[0], start + cells[cells.length - 1]),
+      ),
+    );
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+/** 手柄还没把选区收成 NodeSelection 时，按六点旁边的表格直接全选 */
+function selectTableBesideHandle(view: EditorView, target: EventTarget | null) {
+  const handle = (target as HTMLElement | null)?.closest(".milkdown-block-handle");
+  if (!handle) return;
+  const hr = handle.getBoundingClientRect();
+  const hit = Array.from(document.querySelectorAll<HTMLElement>(".milkdown-table-block")).find((block) => {
+    const r = block.getBoundingClientRect();
+    return Math.abs(hr.top - r.top) < 48;
+  });
+  const tableEl = hit?.querySelector("table.children") as HTMLElement | null;
+  if (!tableEl) return;
+  try {
+    const $pos = view.state.doc.resolve(Math.max(0, view.posAtDOM(tableEl, 0)));
+    for (let d = $pos.depth; d > 0; d--) {
+      if ($pos.node(d).type.name !== "table") continue;
+      selectWholeTable(view, $pos.before(d), $pos.node(d));
+      return;
+    }
+  } catch { /* 手柄旁没有可解析的表格 */ }
+}
+
+/** 单击六点手柄后：表格改成全格选中，其它块选中内部文本 */
 function selectHandleBlock(view: EditorView) {
   const { selection, doc } = view.state;
   if (!(selection instanceof NodeSelection)) return;
 
-  if (selection.node.type.name === "table") {
-    try {
-      const map = TableMap.get(selection.node);
-      const cells = map.cellsInRect({ left: 0, right: map.width, top: 0, bottom: map.height });
-      if (!cells.length) return;
-      const start = selection.from + 1;
-      view.dispatch(
-        view.state.tr.setSelection(
-          CellSelection.create(doc, start + cells[0], start + cells[cells.length - 1]),
-        ),
-      );
-    } catch { /* 表结构异常时保持原选区 */ }
+  let tableNode = selection.node.type.name === "table" ? selection.node : null;
+  let tablePos = selection.from;
+  if (!tableNode) {
+    selection.node.descendants((node, pos) => {
+      if (tableNode || node.type.name !== "table") return;
+      tableNode = node;
+      tablePos = selection.from + 1 + pos;
+    });
+  }
+  if (tableNode) {
+    selectWholeTable(view, tablePos, tableNode);
     return;
   }
 
@@ -401,6 +457,8 @@ export function DocumentEditor({
 }: DocumentEditorProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const crepeRef = useRef<Crepe | null>(null);
+  const layoutsRef = useRef<MdTableLayout[]>([]);
+  const resizeRef = useRef<MdTableResizeApi | null>(null);
   const isInternalChangeRef = useRef(false);
   const lastEditorMdRef = useRef(content);
   const sourceRef = useRef<HTMLTextAreaElement>(null);
@@ -433,7 +491,7 @@ export function DocumentEditor({
   };
 
   const commitFromEditor = (crepe?: Crepe | null) => {
-    if (hydratingRef.current || isStreamingRef.current) return;
+    if (hydratingRef.current || isStreamingRef.current || resizeRef.current?.dragging()) return;
     const fp = filePathRef.current;
     if (!fp) return;
     let md = "";
@@ -443,7 +501,7 @@ export function DocumentEditor({
       } else {
         const editor = crepe ?? crepeRef.current;
         if (!editor) return;
-        md = persistedMarkdownFrom(editor);
+        md = persistedMarkdownFrom(editor, layoutsRef.current);
       }
     } catch {
       return;
@@ -469,7 +527,7 @@ export function DocumentEditor({
       } else {
         const editor = crepe ?? crepeRef.current;
         if (!editor) return;
-        md = persistedMarkdownFrom(editor);
+        md = persistedMarkdownFrom(editor, layoutsRef.current);
       }
       lastEditorMdRef.current = md;
       isInternalChangeRef.current = true;
@@ -494,9 +552,35 @@ export function DocumentEditor({
         [Crepe.Feature.Cursor]: { virtual: false },
       },
     });
+    const root = containerRef.current;
+    const pasteLayoutHooks = {
+      prepare: (index: number, layout: MdTableLayout) => {
+        const next = layoutsRef.current.slice();
+        while (next.length <= index) next.push({});
+        next[index] = { ...next[index], ...layout };
+        layoutsRef.current = next;
+      },
+      sync: () => {
+        const sync = () => resizeRef.current?.sync();
+        requestAnimationFrame(sync);
+        window.setTimeout(sync, 80);
+        window.setTimeout(sync, 300);
+      },
+    };
     crepe.editor.config((ctx) => {
       ctx.update(editorViewOptionsCtx, (prev) => ({
         ...prev,
+        handleDOMEvents: {
+          ...prev.handleDOMEvents,
+          copy: (view, event) => {
+            if (handleTableClipboard(event as ClipboardEvent, view, layoutsRef.current, root)) return true;
+            return prev.handleDOMEvents?.copy?.(view, event) ?? false;
+          },
+          cut: (view, event) => {
+            if (handleTableClipboard(event as ClipboardEvent, view, layoutsRef.current, root, { cut: true })) return true;
+            return prev.handleDOMEvents?.cut?.(view, event) ?? false;
+          },
+        },
         handleScrollToSelection: scrollSelectionNearest,
         handleKeyDown: (view, event) => {
           if (handleEditorKeyDown(view, event as KeyboardEvent)) return true;
@@ -505,7 +589,7 @@ export function DocumentEditor({
         handlePaste: (view, event, slice) => {
           if ((event as ClipboardEvent).defaultPrevented) return true;
           const data = (event as ClipboardEvent).clipboardData;
-          if (pasteClipboardTable(view, crepe, data)) return true;
+          if (pasteClipboardTable(view, crepe, data, pasteLayoutHooks)) return true;
           if (insertTextWithHardbreaks(view, clipboardTextWithBreaks(data))) return true;
           return prev.handlePaste?.(view, event, slice) ?? false;
         },
@@ -524,21 +608,36 @@ export function DocumentEditor({
       try {
         const latest = contentRef.current || "";
         beginHydrate();
-        loadMarkdownInto(crepe, latest);
+        layoutsRef.current = loadMarkdownInto(crepe, latest);
         lastEditorMdRef.current = latest;
+        const syncHandles = () => resizeRef.current?.sync();
+        syncHandles();
+        requestAnimationFrame(syncHandles);
+        window.setTimeout(syncHandles, 80);
+        window.setTimeout(syncHandles, 300);
         const view = crepe.editor.ctx.get(editorViewCtx);
         const focus = view.dom.focus.bind(view.dom);
         view.dom.focus = (opts?: FocusOptions) => focus({ preventScroll: true, ...opts });
       } catch { /* 视图未就绪 */ }
       crepe.on((listener) => {
         const persistNow = () => commitFromEditor(crepe);
-        listener.updated(persistNow);
+        listener.updated((_ctx, doc, prevDoc) => {
+          if (prevDoc && doc.eq(prevDoc)) return;
+          resizeRef.current?.sync();
+          persistNow();
+        });
         listener.markdownUpdated(persistNow);
         listener.blur(persistNow);
       });
       setReady(true);
     });
-    const root = containerRef.current;
+    const resize = attachMdTableResize(root, {
+      getLayouts: () => layoutsRef.current,
+      setLayouts: (next) => { layoutsRef.current = next; },
+      onCommit: () => commitFromEditor(crepeRef.current),
+      busy: () => hydratingRef.current || isStreamingRef.current,
+    });
+    resizeRef.current = resize;
     let dragged = false;
     const onDown = (e: Event) => {
       if (!isBlockDragHandle(e.target)) return;
@@ -547,17 +646,16 @@ export function DocumentEditor({
     const onDragStart = () => { dragged = true; };
     const onUp = (e: Event) => {
       if (dragged || !isBlockDragHandle(e.target)) return;
-      requestAnimationFrame(() => {
-        requestAnimationFrame(() => {
-          const view = crepeRef.current?.editor.ctx.get(editorViewCtx);
-          if (view) selectHandleBlock(view);
-        });
-      });
+      // 马上改成全格选中，不要等两帧，否则会先闪整表描边再出现选中态
+      const view = crepeRef.current?.editor.ctx.get(editorViewCtx);
+      if (!view) return;
+      selectHandleBlock(view);
+      if (!(view.state.selection instanceof CellSelection)) selectTableBesideHandle(view, e.target);
     };
     const onPaperDown = (e: Event) => {
       const t = e.target as HTMLElement | null;
       if (!t) return;
-      if (t.closest(".ProseMirror, .milkdown-block-handle, .milkdown-toolbar, .milkdown-slash-menu, .handle")) return;
+      if (t.closest(".ProseMirror, .milkdown-block-handle, .milkdown-toolbar, .milkdown-slash-menu, .handle, .work-md-col-resize, .work-md-row-resize")) return;
       const view = crepeRef.current?.editor.ctx.get(editorViewCtx);
       view?.focus();
     };
@@ -578,6 +676,16 @@ export function DocumentEditor({
         });
       });
     };
+    const onCopy = (e: Event) => {
+      const view = editorView();
+      if (!view) return;
+      handleTableClipboard(e as ClipboardEvent, view, layoutsRef.current, root);
+    };
+    const onCut = (e: Event) => {
+      const view = editorView();
+      if (!view) return;
+      handleTableClipboard(e as ClipboardEvent, view, layoutsRef.current, root, { cut: true });
+    };
     const onPaste = (e: Event) => {
       if (!crepeRef.current) return;
       const ev = e as ClipboardEvent;
@@ -585,7 +693,7 @@ export function DocumentEditor({
       if (!t?.closest(".ProseMirror")) return;
       const view = editorView();
       if (!view) return;
-      if (pasteClipboardTable(view, crepeRef.current, ev.clipboardData)) {
+      if (pasteClipboardTable(view, crepeRef.current, ev.clipboardData, pasteLayoutHooks)) {
         e.preventDefault();
         e.stopPropagation();
         return;
@@ -602,6 +710,8 @@ export function DocumentEditor({
     root.addEventListener("dragstart", onDragStart, true);
     root.addEventListener("pointerup", onUp, true);
     root.addEventListener("pointerup", onTableCellUp, true);
+    root.addEventListener("copy", onCopy, true);
+    root.addEventListener("cut", onCut, true);
     root.addEventListener("paste", onPaste, true);
     const mountedPath = filePath;
     const onPageHide = () => flushEditor(crepe, mountedPath, true);
@@ -617,7 +727,11 @@ export function DocumentEditor({
       root.removeEventListener("dragstart", onDragStart, true);
       root.removeEventListener("pointerup", onUp, true);
       root.removeEventListener("pointerup", onTableCellUp, true);
+      root.removeEventListener("copy", onCopy, true);
+      root.removeEventListener("cut", onCut, true);
       root.removeEventListener("paste", onPaste, true);
+      resize.destroy();
+      resizeRef.current = null;
       try { crepe.destroy(); } catch {}
       crepeRef.current = null;
     };
@@ -650,7 +764,8 @@ export function DocumentEditor({
     isInternalChangeRef.current = false;
     lastEditorMdRef.current = content;
     beginHydrate();
-    loadMarkdownInto(crepeRef.current, content || "");
+    layoutsRef.current = loadMarkdownInto(crepeRef.current, content || "");
+    requestAnimationFrame(() => resizeRef.current?.sync());
   }, [content, isStreaming, ready, filePath]);
 
   // Toggle preview <-> source
@@ -658,7 +773,7 @@ export function DocumentEditor({
     if (!sourceView) {
       let md = "";
       try {
-        md = crepeRef.current ? persistedMarkdownFrom(crepeRef.current) : "";
+        md = crepeRef.current ? persistedMarkdownFrom(crepeRef.current, layoutsRef.current) : "";
       } catch { /* 编辑器未就绪时用已保存的 markdown */ }
       setSourceMd(md || lastEditorMdRef.current || content || "");
       setSourceView(true);
@@ -668,7 +783,8 @@ export function DocumentEditor({
         lastEditorMdRef.current = md;
         isInternalChangeRef.current = true;
         beginHydrate();
-        loadMarkdownInto(crepeRef.current, md);
+        layoutsRef.current = loadMarkdownInto(crepeRef.current, md);
+        requestAnimationFrame(() => resizeRef.current?.sync());
         onContentChange(md, filePath ?? undefined);
         if (filePath) onSave(filePath, md);
       }

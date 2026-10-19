@@ -4,6 +4,7 @@ import { formatFileList, normalizeTableCellBreaks, resolvePath } from "./fs";
 import { markObserved } from "./session";
 import { splitMetaNotes } from "./deliverable";
 import { maybeWrapTongshiLessonDocx } from "../../../lib/pdf/tongshi-lesson";
+import { ensureScriptTableLayout } from "../../../lib/script-table-layout";
 
 export const TOOL_DEFS: Array<Record<string, unknown>> = [
   {
@@ -158,9 +159,12 @@ export async function dispatchTool(
       const normalized = rec.kind === "workspace" ? normalizeTableCellBreaks(content) : content;
       const split = splitMetaNotes(normalized);
       const rawBody = split.document || normalized;
-      const body = rec.kind === "workspace"
+      const wrapped = rec.kind === "workspace"
         ? maybeWrapTongshiLessonDocx(rec.displayPath, rawBody, session.loadedSkills)
         : rawBody;
+      const body = rec.kind === "workspace"
+        ? ensureScriptTableLayout(rec.displayPath, wrapped)
+        : wrapped;
       await fs.write(path, body);
       markObserved(session, rec.displayPath);
       return {

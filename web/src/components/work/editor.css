@@ -7,6 +7,7 @@
 }
 
 .work-editor-paper {
+  position: relative;
   width: calc(100% - 4rem);
   max-width: 56rem;
   min-height: calc(100% - 4rem);
@@ -196,6 +197,69 @@ div.milkdown .milkdown-table-block .line-handle {
   pointer-events: none !important;
 }
 
+/* 列宽 / 行高拖动手柄叠在纸面 overlay，不进 Crepe 表格 DOM */
+.work-md-table-overlay {
+  position: absolute;
+  inset: 0;
+  z-index: 5;
+  pointer-events: none;
+}
+
+.work-md-table-overlay .work-md-col-resize,
+.work-md-table-overlay .work-md-row-resize {
+  position: absolute;
+  z-index: 4;
+  opacity: 0;
+  pointer-events: auto;
+}
+
+.work-md-table-overlay .work-md-col-resize:hover,
+.work-md-table-overlay .work-md-row-resize:hover,
+.work-md-table-overlay .work-md-col-resize.is-active,
+.work-md-table-overlay .work-md-row-resize.is-active {
+  opacity: 1;
+}
+
+.work-md-table-overlay .work-md-col-resize {
+  width: 8px;
+  margin-left: -4px;
+  cursor: col-resize;
+}
+
+.work-md-table-overlay .work-md-row-resize {
+  height: 8px;
+  margin-top: -4px;
+  cursor: row-resize;
+}
+
+.work-md-table-overlay .work-md-col-resize::after,
+.work-md-table-overlay .work-md-row-resize::after {
+  content: "";
+  position: absolute;
+  background: transparent;
+}
+
+.work-md-table-overlay .work-md-col-resize:hover::after,
+.work-md-table-overlay .work-md-row-resize:hover::after,
+.work-md-table-overlay .work-md-col-resize.is-active::after,
+.work-md-table-overlay .work-md-row-resize.is-active::after {
+  background: #6366f1;
+}
+
+.work-md-table-overlay .work-md-col-resize::after {
+  left: 3px;
+  top: 0;
+  bottom: 0;
+  width: 2px;
+}
+
+.work-md-table-overlay .work-md-row-resize::after {
+  top: 3px;
+  left: 0;
+  right: 0;
+  height: 2px;
+}
+
 div.milkdown .ProseMirror table,
 div.milkdown .milkdown-table-block table {
   table-layout: fixed;
@@ -264,6 +328,18 @@ div.milkdown .milkdown-table-block td:has(> .ProseMirror-selectednode) {
 
 div.milkdown .milkdown-table-block .ProseMirror-selectednode {
   background: transparent;
+  outline: none;
+  box-shadow: none;
+}
+
+/* 六点选中整表时 ProseMirror 会给 table-block 加 selectednode 描边，整表会闪一圈 */
+div.milkdown .milkdown-table-block.ProseMirror-selectednode,
+div.milkdown .ProseMirror-selectednode.milkdown-table-block,
+div.milkdown .milkdown-table-block:has(> .ProseMirror-selectednode),
+div.milkdown .milkdown-table-block table.ProseMirror-selectednode,
+div.milkdown table.ProseMirror-selectednode {
+  outline: none !important;
+  box-shadow: none !important;
 }
 
 [data-theme="dark"] .work-editor-canvas {
