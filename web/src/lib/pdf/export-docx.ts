@@ -188,8 +188,14 @@ function textBlock(block: PdfTextBlock, gap: number): Paragraph {
   return paragraph(block, gap);
 }
 
-function tableBlock(block: PdfTableBlock): Table {
-  const tableWidth = PAGE_W - twip(PDF_LAYOUT.bodyX) * 2;
+/** 表格宽度跟页面版心走，不能写死默认 48px 页边。通识教案左右是 74，旧算法会让表往右溢出。 */
+function pageContentWidthTwip(page?: PdfPageSetup): number {
+  const setup = pageSetup(page);
+  return Math.max(twip(80), setup.size.width - setup.margin.left - setup.margin.right);
+}
+
+function tableBlock(block: PdfTableBlock, page?: PdfPageSetup): Table {
+  const tableWidth = pageContentWidthTwip(page);
   const widths = columnWidths(block).map((ratio) => Math.round(ratio * tableWidth));
   widths[widths.length - 1] += tableWidth - widths.reduce((sum, width) => sum + width, 0);
   const padX = twip(PDF_LAYOUT.cellPadX);
@@ -227,14 +233,14 @@ function gapParagraph(): Paragraph {
   });
 }
 
-function storyChildren(blocks: PdfBlock[] | undefined): (Paragraph | Table)[] {
+function storyChildren(blocks: PdfBlock[] | undefined, page?: PdfPageSetup): (Paragraph | Table)[] {
   const children: (Paragraph | Table)[] = [];
   for (const block of blocks ?? []) {
     if (block.type === "image") {
       const drawn = imageParagraph(block);
       if (drawn) children.push(drawn);
     } else if (block.type === "text") children.push(paragraph(block, 0));
-    else if (block.type === "table") children.push(tableBlock(block));
+    else if (block.type === "table") children.push(tableBlock(block, page));
   }
   return children;
 }
@@ -269,13 +275,13 @@ export async function exportDocxDocument(doc: PdfDocument): Promise<Blob> {
       children.push(textBlock(block, last ? 0 : twip(PDF_LAYOUT.blockGap)));
       return;
     }
-    children.push(tableBlock(block));
+    children.push(tableBlock(block, doc.page));
     if (!last) children.push(gapParagraph());
   });
-  const header = [...backdropParagraphs(doc.backdrop), ...storyChildren(doc.header)];
-  const footer = storyChildren(doc.footer);
-  const firstHeader = [...backdropParagraphs(doc.firstBackdrop), ...storyChildren(doc.firstHeader)];
-  const firstFooter = storyChildren(doc.firstFooter);
+  const header = [...backdropParagraphs(doc.backdrop), ...storyChildren(doc.header, doc.page)];
+  const footer = storyChildren(doc.footer, doc.page);
+  const firstHeader = [...backdropParagraphs(doc.firstBackdrop), ...storyChildren(doc.firstHeader, doc.page)];
+  const firstFooter = storyChildren(doc.firstFooter, doc.page);
   const file = new Document({
     sections: [{
       properties: {

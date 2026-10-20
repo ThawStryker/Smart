@@ -32,4 +32,24 @@ describe("docx export", () => {
     expect(xml).toContain("教学环节");
     expect(xml).toContain("w:b");
   });
+
+  it("keeps exported tables inside the page margins", async () => {
+    const blob = await exportDocxDocument({
+      ...createPdfDocument(),
+      page: { width: 820, height: 1160, marginTop: 99, marginRight: 74, marginBottom: 99, marginLeft: 74 },
+      blocks: [{
+        id: "table",
+        type: "table",
+        colWidths: [0.171, 0.829],
+        rows: [[{ text: "认知" }, { text: "教学目标" }]],
+      }],
+    });
+    const zip = await JSZip.loadAsync(await blob.arrayBuffer());
+    const xml = await zip.file("word/document.xml")?.async("string") ?? "";
+    const pgSz = xml.match(/<w:pgSz\b([^/>]*)/)?.[1] ?? "";
+    const pgMar = xml.match(/<w:pgMar\b([^/>]*)/)?.[1] ?? "";
+    const tblW = xml.match(/<w:tblW\b([^/>]*)/)?.[1] ?? "";
+    const attr = (chunk: string, name: string) => Number(chunk.match(new RegExp(`w:${name}="(\\d+)"`))?.[1]);
+    expect(attr(tblW, "w")).toBe(attr(pgSz, "w") - attr(pgMar, "left") - attr(pgMar, "right"));
+  });
 });

@@ -127,8 +127,8 @@ export function DeployModal({
             </div>
 
             <div className="text-xs text-neutral-400 mt-4">
-              {deployStep === 1 && "等待域名注册和 DNS 解析..."}
-              {deployStep === 2 && "DNS 记录已添加，即将开始验证..."}
+              {deployStep === 1 && "正在注册域名..."}
+              {deployStep === 2 && "正在写入 DNS 解析..."}
               {deployStep === 3 && "正在验证域名，最多 5 分钟..."}
             </div>
 
@@ -174,7 +174,7 @@ export function DeployModal({
         {isError && (
           <div className="text-center py-4">
             <div className="text-red-500 text-sm mb-2">部署失败</div>
-            <div className="text-xs text-neutral-500 mb-4">{deployError}</div>
+            <div className="text-sm text-neutral-600 mb-4 whitespace-pre-wrap break-words">{deployError}</div>
             <div className="flex gap-3 justify-center">
               <button
                 onClick={onClose}

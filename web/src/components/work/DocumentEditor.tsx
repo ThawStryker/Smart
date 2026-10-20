@@ -10,7 +10,7 @@ import { clipboardTextWithBreaks, matrixToGfm, tableMatrixFromClipboard } from "
 import { brToLineSepInTables, persistTableCellBreaks, restoreLineSepBreaks, applyLiteralBoldInTableCells } from "@/lib/table-breaks";
 import { persistTableLayouts, stripTableLayouts, type MdTableLayout } from "@/lib/table-layout";
 import { attachMdTableResize, type MdTableResizeApi } from "@/lib/md-table-resize";
-import { countTables, handleTableClipboard, layoutFromClipboardHtml, recalledTableLayout, tableIndexAtSelection } from "@/lib/clipboard-table";
+import { countTables, handleEditorClipboard, layoutFromClipboardHtml, recalledTableLayout, tableIndexAtSelection } from "@/lib/clipboard-table";
 import "@milkdown/crepe/theme/common/style.css";
 import "@milkdown/crepe/theme/nord.css";
 import "./editor.css";
@@ -231,7 +231,8 @@ function handleEditorClick(view: EditorView, pos: number, event: MouseEvent): bo
   if (event.button !== 0 || event.detail >= 2) return false;
   if (isBlockDragHandle(event.target) || isTableUiChrome(event.target)) return false;
   if ((event.target as HTMLElement | null)?.closest("td, th")) {
-    return placeCaretInTableCell(view, event);
+    placeCaretInTableCell(view, event);
+    return true;
   }
   try {
     const $pos = view.state.doc.resolve(pos);
@@ -573,11 +574,11 @@ export function DocumentEditor({
         handleDOMEvents: {
           ...prev.handleDOMEvents,
           copy: (view, event) => {
-            if (handleTableClipboard(event as ClipboardEvent, view, layoutsRef.current, root)) return true;
+            if (handleEditorClipboard(event as ClipboardEvent, view, layoutsRef.current, root)) return true;
             return prev.handleDOMEvents?.copy?.(view, event) ?? false;
           },
           cut: (view, event) => {
-            if (handleTableClipboard(event as ClipboardEvent, view, layoutsRef.current, root, { cut: true })) return true;
+            if (handleEditorClipboard(event as ClipboardEvent, view, layoutsRef.current, root, { cut: true })) return true;
             return prev.handleDOMEvents?.cut?.(view, event) ?? false;
           },
         },
@@ -666,25 +667,21 @@ export function DocumentEditor({
       const view = editorView();
       if (view) placeCaretInTableCell(view, e as MouseEvent);
     };
-    const onTableCellUp = (e: Event) => {
+    const onTableCellCollapse = (e: Event) => {
       const el = e.target as HTMLElement | null;
       if (!el?.closest("td, th") || isTableUiChrome(e.target)) return;
-      requestAnimationFrame(() => {
-        requestAnimationFrame(() => {
-          const view = editorView();
-          if (view) collapseTableCellNodeSelection(view);
-        });
-      });
+      const view = editorView();
+      if (view) collapseTableCellNodeSelection(view);
     };
     const onCopy = (e: Event) => {
       const view = editorView();
       if (!view) return;
-      handleTableClipboard(e as ClipboardEvent, view, layoutsRef.current, root);
+      handleEditorClipboard(e as ClipboardEvent, view, layoutsRef.current, root);
     };
     const onCut = (e: Event) => {
       const view = editorView();
       if (!view) return;
-      handleTableClipboard(e as ClipboardEvent, view, layoutsRef.current, root, { cut: true });
+      handleEditorClipboard(e as ClipboardEvent, view, layoutsRef.current, root, { cut: true });
     };
     const onPaste = (e: Event) => {
       if (!crepeRef.current) return;
@@ -705,11 +702,11 @@ export function DocumentEditor({
     };
     root.addEventListener("pointerdown", onDown, true);
     root.addEventListener("pointerdown", onTableCellDown, true);
-    root.addEventListener("mousedown", onTableCellDown, true);
+    root.addEventListener("mousedown", onTableCellCollapse, false);
     root.addEventListener("pointerdown", onPaperDown);
     root.addEventListener("dragstart", onDragStart, true);
     root.addEventListener("pointerup", onUp, true);
-    root.addEventListener("pointerup", onTableCellUp, true);
+    root.addEventListener("pointerup", onTableCellCollapse, true);
     root.addEventListener("copy", onCopy, true);
     root.addEventListener("cut", onCut, true);
     root.addEventListener("paste", onPaste, true);
@@ -722,11 +719,11 @@ export function DocumentEditor({
       flushEditor(crepe, mountedPath, true);
       root.removeEventListener("pointerdown", onDown, true);
       root.removeEventListener("pointerdown", onTableCellDown, true);
-      root.removeEventListener("mousedown", onTableCellDown, true);
+      root.removeEventListener("mousedown", onTableCellCollapse, false);
       root.removeEventListener("pointerdown", onPaperDown);
       root.removeEventListener("dragstart", onDragStart, true);
       root.removeEventListener("pointerup", onUp, true);
-      root.removeEventListener("pointerup", onTableCellUp, true);
+      root.removeEventListener("pointerup", onTableCellCollapse, true);
       root.removeEventListener("copy", onCopy, true);
       root.removeEventListener("cut", onCut, true);
       root.removeEventListener("paste", onPaste, true);

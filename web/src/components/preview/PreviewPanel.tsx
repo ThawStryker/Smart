@@ -43,6 +43,10 @@ function stepFromStatus(status: string): number {
   }
 }
 
+function subdomainOf(domain: string): string {
+  return domain.replace(/\.torresx\.cn$/i, "");
+}
+
 export function PreviewPanel({ projectId, toolId, generatedFiles = [] }: PreviewPanelProps) {
   const [activeTab, setActiveTab] = useState("code");
   const [selectedFileIdx, setSelectedFileIdx] = useState(0);
@@ -52,6 +56,7 @@ export function PreviewPanel({ projectId, toolId, generatedFiles = [] }: Preview
   const previewPaneRef = useRef<HTMLDivElement>(null);
   const nativeFullscreen = useRef(false);
   const pollRef = useRef<AbortController | null>(null);
+  const deployLockRef = useRef(false);
   const [isPreviewFullscreen, setIsPreviewFullscreen] = useState(false);
 
   // Deploy state
@@ -86,37 +91,45 @@ export function PreviewPanel({ projectId, toolId, generatedFiles = [] }: Preview
       .catch(() => {});
   }, [projectId]);
 
+  const failDeploy = useCallback((message: string) => {
+    setDeployError(message);
+    deployLockRef.current = false;
+    setDeployMode("deploy");
+    setShowDeploy(true);
+  }, []);
+
   const startPolling = useCallback((domain: string) => {
     if (pollRef.current) pollRef.current.abort();
     const controller = new AbortController();
     pollRef.current = controller;
 
-    const subdomain = domain.replace(".torresx.cn", "");
+    const subdomain = subdomainOf(domain);
 
     (async () => {
       for (let i = 0; i < 150; i++) {
-        await new Promise(r => setTimeout(r, 2000));
+        if (i > 0) await new Promise(r => setTimeout(r, 2000));
         if (controller.signal.aborted) return;
         try {
           const res = await client.api.fetch(
-            `/api/projects/${projectId}/check-domain?domain=${subdomain}`,
+            `/api/projects/${projectId}/check-domain?domain=${encodeURIComponent(subdomain)}`,
             { signal: controller.signal }
           );
           const data = await res.json();
+          if (data.status === "failed") {
+            failDeploy(data.error || "部署失败");
+            return;
+          }
           const step = stepFromStatus(data.status);
-          setDeployStep(step);
+          if (step > 0) setDeployStep((prev) => Math.max(prev, step));
           if (step === 4) {
             setExistingDomain(domain);
             return;
           }
         } catch { /* continue polling */ }
       }
-      // Timeout
-      setDeployError("域名验证超时，请取消后重试");
+      failDeploy("域名验证超时，请取消后重试");
     })();
-  }, [projectId]);
-
-  const deployLockRef = useRef(false);
+  }, [projectId, failDeploy]);
 
   const handleDeploy = useCallback(async (subdomain: string) => {
     if (!subdomain) {
@@ -152,11 +165,11 @@ export function PreviewPanel({ projectId, toolId, generatedFiles = [] }: Preview
             setExistingDomain(data.domain);
             return;
           }
+          setDeployStep((prev) => Math.max(prev, 1));
           startPolling(data.domain);
           return;
         }
-        setDeployError(data.error || "部署失败");
-        deployLockRef.current = false;
+        failDeploy(data.error || "部署失败");
         return;
       }
 
@@ -167,12 +180,14 @@ export function PreviewPanel({ projectId, toolId, generatedFiles = [] }: Preview
         setExistingDomain(domain);
         return;
       }
+      // 注册已完成，进入 DNS；验证由轮询一拍一拍往前推
+      const step = stepFromStatus(data.status);
+      setDeployStep(data.status === "pending" ? 2 : Math.max(1, step));
       startPolling(domain);
     } catch (err) {
-      setDeployError(err instanceof Error ? err.message : "网络错误");
-      deployLockRef.current = false;
+      failDeploy(err instanceof Error ? err.message : "网络错误");
     }
-  }, [projectId, startPolling]);
+  }, [projectId, startPolling, failDeploy]);
 
   const handleCancel = useCallback(async () => {
     deployLockRef.current = false;
@@ -315,7 +330,7 @@ export function PreviewPanel({ projectId, toolId, generatedFiles = [] }: Preview
     </div>
   ) : null;
 
-  const isDeploying = deployStep > 0 && deployStep < 4;
+  const isDeploying = !deployError && deployStep > 0 && deployStep < 4;
   const deployButtonLabel = existingDomain ? "已部署" : isDeploying ? "部署中..." : "部署";
   const deployButtonStyle = existingDomain
     ? "bg-green-600 text-white rounded px-3 py-1.5 text-sm hover:bg-green-700 transition-colors"
@@ -429,7 +444,13 @@ export function PreviewPanel({ projectId, toolId, generatedFiles = [] }: Preview
           onDeploy={handleDeploy}
           onCancel={handleCancel}
           onMinimize={handleMinimize}
-          onClose={() => setShowDeploy(false)}
+          onClose={() => {
+            if (deployError) {
+              handleCancel();
+              return;
+            }
+            setShowDeploy(false);
+          }}
         />
       )}
       {showDeploy && deployMode === "deployed" && (

@@ -4,6 +4,16 @@ import { TOOL_ZONE, toolDomain } from "./tool-host";
 export type DomainAvailability = "usable" | "deploying" | "dns_only" | "unavailable";
 
 const DEPLOYING = new Set(["pending", "dns_ready", "verifying"]);
+export const IN_FLIGHT_DOMAIN = ["pending", "dns_ready", "verifying"] as const;
+const STALE_MS = 15 * 60 * 1000;
+
+/** 中途关掉弹窗留下的 pending，超过 15 分钟当失败，允许重新部署。 */
+export function isStaleDomain(createdAt: string | null | undefined, now = Date.now(), maxAge = STALE_MS): boolean {
+  if (!createdAt) return false;
+  const iso = /T/.test(createdAt) ? createdAt : `${createdAt.replace(" ", "T")}Z`;
+  const t = Date.parse(iso);
+  return Number.isFinite(t) && now - t > maxAge;
+}
 
 /** 把阿里云 RR 归到一级子域：_verify.music → music */
 export function subdomainKey(rr: string): string {
@@ -54,7 +64,19 @@ export function domainAvailability(input: {
 }
 
 export function projectOnlineLabel(availability: DomainAvailability, published: boolean): string {
-  if (published) return "已发布";
-  if (availability === "usable" || availability === "deploying") return "未发布";
-  return "未上线";
+  return listingLabel(availability, published) || "无项目";
+}
+
+/** 这个域名现在能不能打开 */
+export function siteLabel(availability: DomainAvailability): string {
+  if (availability === "usable") return "已上线";
+  if (availability === "deploying") return "部署中";
+  if (availability === "dns_only") return "残留解析";
+  return "异常";
+}
+
+/** 有绑定项目才显示市场上架；残留 DNS 不再挂「未上线」 */
+export function listingLabel(availability: DomainAvailability, published: boolean): string | null {
+  if (availability !== "usable" && availability !== "deploying") return null;
+  return published ? "已上架" : "未上架";
 }

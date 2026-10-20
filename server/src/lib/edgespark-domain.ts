@@ -1,4 +1,5 @@
 import { getPlatformAccessToken } from "./platform-auth";
+import { errorMessage } from "./platform-token";
 
 const API_BASE = "https://api.edgespark.dev";
 const PROJECT_ID = "e7f75fcc-cc9f-42f3-b87b-7c542d88f1e2";
@@ -9,38 +10,44 @@ export interface PlatformDnsRecord {
   value: string;
 }
 
+function readError(json: Record<string, unknown>, text: string, statusText: string): string {
+  return (json as { error?: string; message?: string }).error
+    || (json as { message?: string }).message
+    || text.slice(0, 200)
+    || statusText;
+}
+
+async function platformFetch(url: string, init: { method?: string; body?: string }): Promise<Record<string, unknown>> {
+  let lastErr = "平台请求失败";
+  for (const forceRefresh of [false, true]) {
+    const res = await fetch(url, {
+      method: init.method || "GET",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${await getPlatformAccessToken({ forceRefresh })}`,
+      },
+      body: init.body,
+    });
+    const text = await res.text();
+    let json: Record<string, unknown> = {};
+    try { json = JSON.parse(text) as Record<string, unknown>; } catch { /* 非 JSON */ }
+    if (res.ok) return json;
+    lastErr = readError(json, text, res.statusText);
+    if (res.status !== 401 || forceRefresh) throw new Error(lastErr);
+  }
+  throw new Error(lastErr);
+}
+
 async function platformPost(path: string, body: Record<string, unknown>): Promise<Record<string, unknown>> {
-  const res = await fetch(`${API_BASE}${path}`, {
+  return platformFetch(`${API_BASE}${path}`, {
     method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      Authorization: `Bearer ${await getPlatformAccessToken()}`,
-    },
     body: JSON.stringify({ project_id: PROJECT_ID, ...body }),
   });
-  const text = await res.text();
-  let json: Record<string, unknown> = {};
-  try { json = JSON.parse(text) as Record<string, unknown>; } catch { /* 非 JSON */ }
-  if (!res.ok) {
-    const msg = (json as { error?: string; message?: string }).error
-      || (json as { message?: string }).message
-      || text.slice(0, 200)
-      || res.statusText;
-    throw new Error(msg);
-  }
-  return json;
 }
 
 async function platformGet(path: string, query: Record<string, string>): Promise<Record<string, unknown>> {
   const q = new URLSearchParams({ project_id: PROJECT_ID, ...query });
-  const res = await fetch(`${API_BASE}${path}?${q}`, {
-    headers: { Authorization: `Bearer ${await getPlatformAccessToken()}` },
-  });
-  const text = await res.text();
-  let json: Record<string, unknown> = {};
-  try { json = JSON.parse(text) as Record<string, unknown>; } catch { /* 非 JSON */ }
-  if (!res.ok) throw new Error((json as { message?: string }).message || text.slice(0, 200) || res.statusText);
-  return json;
+  return platformFetch(`${API_BASE}${path}?${q}`, {});
 }
 
 function domainPayload(json: Record<string, unknown>): Record<string, unknown> {
@@ -69,7 +76,7 @@ export async function platformAddDomain(hostname: string): Promise<{ status: str
     const d = domainPayload(json);
     return { status: String(d.status || "pending"), records: readRecords(d) };
   } catch (err) {
-    const msg = err instanceof Error ? err.message : String(err);
+    const msg = errorMessage(err);
     if (!/exist|already|conflict|409/i.test(msg)) throw err;
     return platformDomainStatus(hostname);
   }

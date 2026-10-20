@@ -1,10 +1,18 @@
 import { secret } from "edgespark";
 
+const ALIYUN_MISSING = "未配置阿里云 DNS 密钥，无法写入域名解析。";
+
+export function assertAliyunConfigured(): void {
+  if (!secret.get("ALIYUN_ACCESS_KEY_ID") || !secret.get("ALIYUN_ACCESS_KEY_SECRET")) {
+    throw new Error(ALIYUN_MISSING);
+  }
+}
+
 async function callAliyunApi(params: Record<string, string>): Promise<Record<string, unknown>> {
   const accessKeyId = secret.get("ALIYUN_ACCESS_KEY_ID");
   const accessKeySecret = secret.get("ALIYUN_ACCESS_KEY_SECRET");
   if (!accessKeyId || !accessKeySecret) {
-    throw new Error("Aliyun credentials not configured");
+    throw new Error(ALIYUN_MISSING);
   }
 
   const allParams: Record<string, string> = {
@@ -83,7 +91,7 @@ function readAliyunRecords(result: Record<string, unknown>): AliyunDnsRecord[] {
   }).filter((r) => r.recordId);
 }
 
-export async function listDnsRecords(rr: string): Promise<Array<{ recordId: string; type: string; rr: string }>> {
+export async function listDnsRecords(rr: string): Promise<Array<{ recordId: string; type: string; rr: string; value: string }>> {
   const result = await callAliyunApi({
     Action: "DescribeDomainRecords",
     DomainName: "torresx.cn",
@@ -93,6 +101,7 @@ export async function listDnsRecords(rr: string): Promise<Array<{ recordId: stri
     recordId: r.recordId,
     type: r.type,
     rr: r.rr,
+    value: r.value,
   }));
 }
 

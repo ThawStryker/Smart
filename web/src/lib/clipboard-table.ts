@@ -1,7 +1,10 @@
 /** 复制表格时写出钉钉/Word 认的像素列宽，避免贴出去变回等分。 */
 
+import type { Node as PMNode } from "@milkdown/kit/prose/model";
+import { NodeSelection, TextSelection } from "@milkdown/kit/prose/state";
 import { CellSelection, TableMap } from "@milkdown/kit/prose/tables";
 import type { EditorView } from "@milkdown/kit/prose/view";
+import { serializeCellInlines } from "./table-breaks";
 import { formatLayoutComment, isEqualCols, normalizeCols, parseLayoutComment, type MdTableLayout } from "./table-layout";
 
 export interface CopiedTableLayout {
@@ -244,10 +247,130 @@ export function layoutFromClipboardHtml(html: string): MdTableLayout | undefined
   return { cols: ratios };
 }
 
+function tsvCell(text: string): string {
+  const value = (text || "").replace(/\t/g, " ").replace(/\r\n/g, "\n").replace(/\r/g, "\n");
+  if (/[\n"]/.test(value)) return `"${value.replace(/"/g, '""')}"`;
+  return value;
+}
+
 function tableToTsv(table: HTMLTableElement): string {
   return Array.from(table.rows)
-    .map((row) => Array.from(row.cells).map((cell) => (cell.innerText || "").replace(/\t/g, " ").replace(/\n/g, " ")).join("\t"))
+    .map((row) => Array.from(row.cells).map((cell) => tsvCell(cell.innerText || "")).join("\t"))
     .join("\n");
+}
+
+function tableCellDepth($pos: { depth: number; node: (d: number) => { type: { name: string } } }): number | null {
+  for (let d = $pos.depth; d > 0; d--) {
+    const name = $pos.node(d).type.name;
+    if (name === "table_cell" || name === "table_header") return d;
+  }
+  return null;
+}
+
+/** 选区里的 hardbreak 还原成真换行，不要交给 GFM 收成空格 */
+export function rangeToPlainWithBreaks(doc: PMNode, from: number, to: number): string {
+  if (from >= to) return "";
+  const parts: string[] = [];
+  doc.nodesBetween(from, to, (node, pos) => {
+    if (node.type.name === "hardbreak" || node.type.name === "hard_break") {
+      if (pos >= from && pos + node.nodeSize <= to) parts.push("\n");
+      return false;
+    }
+    if (node.isText && node.text) {
+      const start = Math.max(from, pos);
+      const end = Math.min(to, pos + node.nodeSize);
+      if (end > start) parts.push(node.text.slice(start - pos, end - pos));
+      return false;
+    }
+    return true;
+  });
+  return parts.join("");
+}
+
+function escapeHtml(text: string): string {
+  return text.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+}
+
+/** 单格台词的 HTML：只有 br，不包成一张表 */
+export function cellPlainToClipboardHtml(text: string): string {
+  const inner = escapeHtml(text).replace(/\n/g, "<br>");
+  return `<html><head><meta charset="utf-8"></head><body><!--StartFragment-->${inner}<!--EndFragment--></body></html>`;
+}
+
+function writePlainClipboard(event: ClipboardEvent, text: string): boolean {
+  const data = event.clipboardData;
+  if (!data) return false;
+  event.preventDefault();
+  event.stopPropagation();
+  event.stopImmediatePropagation();
+  try { data.clearData(); } catch { /* 部分浏览器不允许 clearData */ }
+  data.setData("text/plain", text);
+  data.setData("text/html", cellPlainToClipboardHtml(text));
+  return true;
+}
+
+function countSelectedCells(sel: CellSelection): number {
+  let n = 0;
+  sel.forEachCell(() => { n += 1; });
+  return n;
+}
+
+function firstSelectedCell(sel: CellSelection): PMNode | null {
+  let found: PMNode | null = null;
+  sel.forEachCell((node) => { if (!found) found = node; });
+  return found;
+}
+
+/** 复制单格/格内文字：带换行的纯文本，不要 GFM 的 | 和 --- */
+export function handleCellTextClipboard(
+  event: ClipboardEvent,
+  view: EditorView,
+  opts?: { cut?: boolean },
+): boolean {
+  if (!event.clipboardData) return false;
+  const sel = view.state.selection;
+  const cells = cellSel(sel);
+  if (cells) {
+    if (cellSelectionCoversTable(cells) || countSelectedCells(cells) !== 1) return false;
+    const node = firstSelectedCell(cells);
+    if (!node) return false;
+    const text = serializeCellInlines(node).replace(/\r\n/g, "\n");
+    if (!writePlainClipboard(event, text)) return false;
+    if (opts?.cut) view.dispatch(view.state.tr.deleteSelection());
+    return true;
+  }
+  let depth: number | null = null;
+  try { depth = tableCellDepth(sel.$from); } catch { return false; }
+  if (depth == null) return false;
+  if (sel instanceof NodeSelection) {
+    const text = serializeCellInlines(sel.$from.node(depth)).replace(/\r\n/g, "\n");
+    if (!writePlainClipboard(event, text)) return false;
+    if (opts?.cut) view.dispatch(view.state.tr.deleteSelection());
+    return true;
+  }
+  if (!(sel instanceof TextSelection)) return false;
+  if (sel.empty) {
+    if (opts?.cut) return false;
+    const text = serializeCellInlines(sel.$from.node(depth)).replace(/\r\n/g, "\n");
+    if (!text) return false;
+    return writePlainClipboard(event, text);
+  }
+  const text = rangeToPlainWithBreaks(view.state.doc, sel.from, sel.to);
+  if (!writePlainClipboard(event, text)) return false;
+  if (opts?.cut) view.dispatch(view.state.tr.deleteSelection());
+  return true;
+}
+
+/** 整表走列宽 HTML；单格走纯文本换行。 */
+export function handleEditorClipboard(
+  event: ClipboardEvent,
+  view: EditorView,
+  layouts: MdTableLayout[],
+  root: HTMLElement,
+  opts?: { cut?: boolean },
+): boolean {
+  if (handleTableClipboard(event, view, layouts, root, opts)) return true;
+  return handleCellTextClipboard(event, view, opts);
 }
 
 function editorTables(root: HTMLElement): HTMLTableElement[] {

@@ -5,10 +5,12 @@ import { eq, desc, and, inArray } from "drizzle-orm";
 import { projects, tools, domains, executionSteps, conversations, conversationStates, versions, marketListings, toolData, toolUsers, buckets } from "@defs";
 import { listDnsRecords, deleteDnsRecord } from "../lib/aliyun-dns";
 import { platformRemoveDomain } from "../lib/edgespark-domain";
+import { keepPlatformAuthWarm } from "../lib/platform-auth";
 
 export const projectsRoutes = new Hono()
   .get("/", async (c) => {
     const userId = auth.user!.id;
+    ctx.runInBackground(keepPlatformAuthWarm());
     const rows = await db
       .select()
       .from(projects)

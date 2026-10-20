@@ -137,9 +137,11 @@ export function attachMdTableResize(
     root.dataset.mdTableCount = String(tables.length);
     overlay.dataset.mdHandleReady = String(tables.length);
     applyLayouts(tables, layouts, sheet);
+    // 点击选区会让表格矩形晃 1～2px，按像素重建手柄会整表闪一下
+    const snap = (n: number) => Math.round(n / 4);
     const paintKey = tables.map((table, index) => {
       const box = table.getBoundingClientRect();
-      return `${index}:${table.rows.length}x${table.rows[0]?.cells.length || 0}:${Math.round(box.left)}:${Math.round(box.top)}:${Math.round(box.width)}:${Math.round(box.height)}`;
+      return `${index}:${table.rows.length}x${table.rows[0]?.cells.length || 0}:${snap(box.left)}:${snap(box.top)}:${snap(box.width)}:${snap(box.height)}`;
     }).join("|");
     if (paintKey === lastPaint) return;
     lastPaint = paintKey;

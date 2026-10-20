@@ -9,7 +9,7 @@ interface AdminDomain {
   available: boolean;
   availability: string;
   availabilityLabel: string;
-  projectLabel: string;
+  projectLabel: string | null;
   projectId: number | null;
   projectName: string | null;
   published: boolean;
@@ -17,16 +17,15 @@ interface AdminDomain {
 }
 
 function availabilityClass(label: string): string {
-  if (label === "可用") return "bg-green-50 text-green-600";
+  if (label === "已上线") return "bg-green-50 text-green-600";
   if (label === "部署中") return "bg-amber-50 text-amber-600";
-  if (label === "仅解析") return "bg-neutral-100 text-neutral-500";
+  if (label === "残留解析") return "bg-neutral-100 text-neutral-500";
   return "bg-red-50 text-red-500";
 }
 
-function projectClass(label: string): string {
-  if (label === "已发布") return "bg-green-50 text-green-600";
-  if (label === "未发布") return "bg-amber-50 text-amber-600";
-  return "bg-neutral-100 text-neutral-400";
+function listingClass(label: string): string {
+  if (label === "已上架") return "bg-green-50 text-green-600";
+  return "bg-amber-50 text-amber-600";
 }
 
 export function DomainManager() {
@@ -60,7 +59,7 @@ export function DomainManager() {
   const remove = async (row: AdminDomain) => {
     if (row.protected) return;
     const ok = await confirm(
-      `删除 ${row.hostname}？对应项目会回到未上线；已发布作品会自动下架。`,
+      `删除 ${row.hostname}？绑定项目会失去这个域名，已上架作品会自动下架。`,
       { confirmText: "删除" },
     );
     if (!ok) return;
@@ -98,9 +97,11 @@ export function DomainManager() {
                   <span className={`text-[10px] px-2 py-0.5 rounded-full font-medium ${availabilityClass(row.availabilityLabel)}`}>
                     {row.availabilityLabel}
                   </span>
-                  <span className={`text-[10px] px-2 py-0.5 rounded-full font-medium ${projectClass(row.projectLabel)}`}>
-                    {row.projectLabel}
-                  </span>
+                  {row.projectLabel && (
+                    <span className={`text-[10px] px-2 py-0.5 rounded-full font-medium ${listingClass(row.projectLabel)}`}>
+                      {row.projectLabel}
+                    </span>
+                  )}
                   {row.projectName && (
                     <span className="text-[10px] text-neutral-400">项目 {row.projectName}</span>
                   )}

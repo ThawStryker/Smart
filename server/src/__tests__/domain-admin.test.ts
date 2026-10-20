@@ -3,8 +3,11 @@ import {
   domainAvailability,
   hostnameOf,
   isProtectedSubdomain,
+  isStaleDomain,
+  listingLabel,
   projectOnlineLabel,
   recordsForSubdomain,
+  siteLabel,
   shouldListSubdomain,
   subdomainKey,
 } from "../lib/domain-admin";
@@ -42,15 +45,17 @@ describe("domainAvailability", () => {
   });
 });
 
-describe("projectOnlineLabel", () => {
-  it("returns 未上线 after a domain is gone", () => {
-    expect(projectOnlineLabel("dns_only", false)).toBe("未上线");
-    expect(projectOnlineLabel("unavailable", false)).toBe("未上线");
+describe("site and listing labels", () => {
+  it("calls a live bound domain 已上线", () => {
+    expect(siteLabel("usable")).toBe("已上线");
+    expect(listingLabel("usable", false)).toBe("未上架");
+    expect(listingLabel("usable", true)).toBe("已上架");
   });
 
-  it("keeps 已发布 only while published", () => {
-    expect(projectOnlineLabel("usable", true)).toBe("已发布");
-    expect(projectOnlineLabel("usable", false)).toBe("未发布");
+  it("does not hang a listing tag on leftover DNS", () => {
+    expect(siteLabel("dns_only")).toBe("残留解析");
+    expect(listingLabel("dns_only", false)).toBeNull();
+    expect(projectOnlineLabel("dns_only", false)).toBe("无项目");
   });
 });
 
@@ -84,5 +89,14 @@ describe("hostnameOf", () => {
     expect(hostnameOf("@")).toBe("torresx.cn");
     expect(isProtectedSubdomain("@")).toBe(true);
     expect(isProtectedSubdomain("music")).toBe(false);
+  });
+});
+
+describe("isStaleDomain", () => {
+  it("treats sqlite timestamps older than 15 minutes as stale", () => {
+    const now = Date.parse("2026-10-20T07:00:00.000Z");
+    expect(isStaleDomain("2026-10-20 06:40:00", now)).toBe(true);
+    expect(isStaleDomain("2026-10-20T06:50:00.000Z", now)).toBe(false);
+    expect(isStaleDomain(null, now)).toBe(false);
   });
 });

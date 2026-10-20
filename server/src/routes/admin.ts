@@ -11,9 +11,10 @@ import {
   domainAvailability,
   hostnameOf,
   isProtectedSubdomain,
-  projectOnlineLabel,
+  listingLabel,
   recordsForSubdomain,
   shouldListSubdomain,
+  siteLabel,
   subdomainKey,
   isInfraRecord,
 } from "../lib/domain-admin";
@@ -242,11 +243,8 @@ export const adminRoutes = new Hono()
         protected: isProtectedSubdomain(sub),
         available: availability === "usable",
         availability,
-        availabilityLabel: availability === "usable" ? "可用"
-          : availability === "deploying" ? "部署中"
-          : availability === "dns_only" ? "仅解析"
-          : "不可用",
-        projectLabel: projectOnlineLabel(availability, published),
+        availabilityLabel: siteLabel(availability),
+        projectLabel: listingLabel(availability, published),
         projectId: row?.projectId ?? null,
         projectName: project?.name ?? null,
         domainStatus: row?.status ?? null,
